@@ -1,0 +1,58 @@
+name: spec
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  changes:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      config: ${{ steps.filter.outputs.config }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            config:
+              - docdag.yaml
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Name the day a scheduled run asks about
+        if: github.event_name == 'schedule'
+        shell: bash
+        run: echo "DOCDAG_AS_OF=$(date -I)" >> "$GITHUB_ENV"
+      - uses: Kaikei-e/DocDag@v0.3.0
+        with:
+          version: v0.3.0
+          args: validate --format github
+      - if: always()
+        shell: bash
+        run: docdag validate --format text >> "$GITHUB_STEP_SUMMARY"
+      - name: Conformance tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          find tests/conform -name test.sh | sort | while read -r t; do
+            echo "::group::$t"
+            sh "$t"
+            echo "::endgroup::"
+          done
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Kaikei-e/DocDag@v0.3.0
+        with:
+          version: v0.3.0
+          args: lint --format github

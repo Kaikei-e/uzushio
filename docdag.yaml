@@ -1,0 +1,15 @@
+# uzushio specification, gated by DocDag v0.3.0.
+#
+# One line adopts the spec preset: eight kinds (clause, conform, deviation,
+# measure, premise, principle, pm, topic), their edges, and the rules that
+# make a MUST without a test an error. Kind directories are read relative to
+# this file and appear as the corpus grows into them.
+preset: spec
+
+references:
+  dangling: error
+  pattern: '^(UZ-[A-Z]-\d{3}|conform/[a-z0-9-]+|dev-\d{4}|interp/.+|premise/.+|principle/.+|pm-\d{4}|topic/.+)$'
+  scan: [body, frontmatter]
+
+structural:
+  missing_frontmatter: error

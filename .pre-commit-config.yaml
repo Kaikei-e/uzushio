@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/Kaikei-e/DocDag
+    rev: v0.3.0
+    hooks:
+      - id: docdag-validate
+      - id: docdag-lint
