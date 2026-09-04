@@ -12,9 +12,10 @@ package vocab
 
 import "slices"
 
-// Kind is a uzushio document kind. The three kinds are the harness's own
+// Kind is a uzushio document kind. The four kinds are the harness's own
 // records: the edit a proposer wants to make, the failure pattern an edit
-// answers, and the evaluation run that settles whether it worked.
+// answers, the evaluation run that settles whether it worked, and the verifier
+// health check that says whether the run's answer was worth anything.
 type Kind string
 
 // The kinds uzushio adds to the spec preset.
@@ -27,6 +28,10 @@ const (
 	// KindRun is one evaluation of one edit on one split, written by the
 	// harness rather than by a person.
 	KindRun Kind = "run"
+	// KindVerifier is one health check of one task's verifier: what it did to
+	// a reference solution it should accept, and to the mutants it should
+	// reject. It is written by `uzushio task doctor` and never by a person.
+	KindVerifier Kind = "verifier"
 )
 
 // String returns the kind's name as the configuration writes it.
@@ -34,14 +39,15 @@ func (k Kind) String() string { return string(k) }
 
 // AllKinds returns the uzushio kinds, sorted by name so a generated
 // configuration and a generated listing agree on order.
-func AllKinds() []Kind { return []Kind{KindEdit, KindPattern, KindRun} }
+func AllKinds() []Kind { return []Kind{KindEdit, KindPattern, KindRun, KindVerifier} }
 
 // Kind directories, relative to the vault root. They stay relative: DocDag's
 // fixture layer reroots relative kind directories and mis-reads absolute ones.
 const (
-	DirEdits    = "spec/edits"
-	DirPatterns = "spec/patterns"
-	DirRuns     = "spec/runs"
+	DirEdits     = "spec/edits"
+	DirPatterns  = "spec/patterns"
+	DirRuns      = "spec/runs"
+	DirVerifiers = "spec/verifiers"
 )
 
 // Dir returns the directory a kind's documents live in.
@@ -53,6 +59,8 @@ func Dir(k Kind) (string, bool) {
 		return DirPatterns, true
 	case KindRun:
 		return DirRuns, true
+	case KindVerifier:
+		return DirVerifiers, true
 	}
 	return "", false
 }
@@ -95,13 +103,14 @@ func PatternStatuses() []Status {
 // nothing about a measurement to accept or withdraw. KindStatuses says so by
 // returning nothing for it, which is what "this kind has no status" has to be
 // written as for DocDag to leave it unchecked.
+// The same is true of a verifier health check.
 func KindStatuses(k Kind) []Status {
 	switch k {
 	case KindEdit:
 		return EditStatuses()
 	case KindPattern:
 		return PatternStatuses()
-	case KindRun:
+	case KindRun, KindVerifier:
 		return nil
 	}
 	return nil
@@ -151,6 +160,35 @@ func (v Verdict) String() string { return string(v) }
 // AllVerdicts returns the four verdicts, best first.
 func AllVerdicts() []Verdict {
 	return []Verdict{VerdictImprove, VerdictHold, VerdictRegress, VerdictInconclusive}
+}
+
+// Health is what a verifier health check says about a task's verifier. It is
+// spelled into the same `verdict` key a run writes, because a reader asking
+// "what did this document conclude" should not have to know which kind wrote
+// it — but it is a vocabulary of its own, and a separate Go type, because a
+// verifier is never `improve` and a run is never `healthy`.
+type Health string
+
+// The health words.
+const (
+	// HealthHealthy is a verifier that accepted the reference solution every
+	// time and killed the mutants it was supposed to kill.
+	HealthHealthy Health = "healthy"
+	// HealthUnhealthy is a verifier that rejected the reference solution, or
+	// let a hand-written mutant through, or killed too few of them.
+	HealthUnhealthy Health = "unhealthy"
+	// HealthInconclusive is a check that did not get an answer: a run that
+	// timed out, a runner that failed, a mutant that would not apply, or a task
+	// with no mutant to measure a rate over.
+	HealthInconclusive Health = "inconclusive"
+)
+
+// String returns the health word as frontmatter writes it.
+func (h Health) String() string { return string(h) }
+
+// AllHealths returns the three health words, best first.
+func AllHealths() []Health {
+	return []Health{HealthHealthy, HealthUnhealthy, HealthInconclusive}
 }
 
 // Split names the half of the task suite a run was measured on. An edit is
@@ -279,6 +317,25 @@ const (
 	FieldTrace Field = "trace"
 )
 
+// Fields of the verifier kind. The three counts and the rate are written as
+// strings rather than as numbers: DocDag compares a scalar field as text, and a
+// rate that reads back as 0.8300000000000001 because it went through a float is
+// a value no `one_of` and no eye can match. The document records what the check
+// measured; the report the `report` key names holds the numbers a machine reads.
+const (
+	// FieldKillRate is the share of the mutants expected to be killed that were
+	// killed, as a decimal string like "0.83".
+	FieldKillRate Field = "kill_rate"
+	// FieldMutants is how many mutants the check ran, as a decimal string.
+	FieldMutants Field = "mutants"
+	// FieldReferenceRuns is how many times the reference solution was verified,
+	// as a decimal string.
+	FieldReferenceRuns Field = "reference_runs"
+	// FieldReport is the path to the report.json the check wrote, relative to
+	// the task directory.
+	FieldReport Field = "report"
+)
+
 // String returns the field as frontmatter writes it.
 func (f Field) String() string { return string(f) }
 
@@ -300,6 +357,14 @@ func RunFields() []Field {
 	return sortedFields([]Field{FieldSplit, FieldVerdict, FieldSuite, FieldTrials, FieldTrace})
 }
 
+// VerifierFields returns the frontmatter keys a verifier health check
+// declares, sorted.
+func VerifierFields() []Field {
+	return sortedFields([]Field{
+		FieldVerdict, FieldKillRate, FieldMutants, FieldReferenceRuns, FieldReport,
+	})
+}
+
 // KindFields returns the frontmatter keys one kind declares.
 func KindFields(k Kind) []Field {
 	switch k {
@@ -309,6 +374,8 @@ func KindFields(k Kind) []Field {
 		return PatternFields()
 	case KindRun:
 		return RunFields()
+	case KindVerifier:
+		return VerifierFields()
 	}
 	return nil
 }

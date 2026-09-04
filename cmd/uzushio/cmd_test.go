@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +19,13 @@ type result struct {
 
 func run(t *testing.T, args ...string) result {
 	t.Helper()
+	return runContext(t, t.Context(), args...)
+}
+
+func runContext(t *testing.T, ctx context.Context, args ...string) result {
+	t.Helper()
 	var out, errOut bytes.Buffer
-	code := executeWith(args, &out, &errOut)
+	code := executeWith(ctx, args, &out, &errOut)
 	return result{code: code, stdout: out.String(), stderr: errOut.String()}
 }
 

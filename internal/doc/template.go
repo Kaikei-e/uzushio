@@ -28,6 +28,8 @@ func Template(kind vocab.Kind) (string, error) {
 		document = templatePattern()
 	case vocab.KindRun:
 		document = templateRun()
+	case vocab.KindVerifier:
+		document = templateVerifier()
 	default:
 		return "", fmt.Errorf("%w: no template for kind %q", ErrDocument, kind)
 	}
@@ -88,5 +90,21 @@ func templateRun() Run {
 		Validates: []Validation{{Edit: "he-0000", Model: "model", PassRate: 0, BaselinePassRate: 0}},
 		Body: "How the run was made: the seed, the harness revision, and anything\n" +
 			"about the measurement a reader would need to repeat it.",
+	}
+}
+
+func templateVerifier() Verifier {
+	return Verifier{
+		Task:          "example",
+		Day:           TemplateDay,
+		Title:         "What this check found out about the task's verifier",
+		Date:          TemplateDay,
+		Verdict:       vocab.HealthInconclusive,
+		KillRate:      NoKillRate,
+		Mutants:       0,
+		ReferenceRuns: 1,
+		Report:        "doctor/20000101T000000Z-0000beef/report.json",
+		Body: "Which mutants survived, and what that says about what the verifier\n" +
+			"is not testing. The numbers are in the report the report: key names.",
 	}
 }

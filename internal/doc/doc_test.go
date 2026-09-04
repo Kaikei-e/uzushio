@@ -62,7 +62,19 @@ func roundTripDocuments() []doc.Document {
 		Trials:    40,
 		Body:      "Forty tasks, one seed each, the same harness revision throughout.",
 	}.Measuring("sonnet", 0.72, 0.6)
-	return []doc.Document{edit, pattern, run}
+	verifier := doc.Verifier{
+		Task:          "hello",
+		Day:           "2026-01-01",
+		Title:         "The task-hello verifier kills every hand-written mutant",
+		Date:          "2026-01-01",
+		Verdict:       vocab.HealthHealthy,
+		KillRate:      1,
+		Mutants:       2,
+		ReferenceRuns: 3,
+		Report:        "doctor/20260101T012345Z-a1b2c3d4/report.json",
+		Body:          "Three reference runs passed and both mutants were killed.",
+	}
+	return []doc.Document{edit, pattern, run, verifier}
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -110,6 +122,7 @@ func TestPaths(t *testing.T) {
 		"he-0001":                           "spec/edits/he-0001.md",
 		"fp/round-trip":                     "spec/patterns/round-trip.md",
 		"run/he-0001@2026-01-01-sonnet-out": "spec/runs/he-0001@2026-01-01-sonnet-out.md",
+		"verifier/hello@2026-01-01":         "spec/verifiers/hello@2026-01-01.md",
 	}
 	for _, document := range roundTripDocuments() {
 		got, err := document.Path()
@@ -164,6 +177,7 @@ func TestTemplatesAreDocuments(t *testing.T) {
 		{vocab.KindEdit, "he-0000"},
 		{vocab.KindPattern, "fp/example"},
 		{vocab.KindRun, "run/he-0000@" + doc.TemplateDay + "-model-out"},
+		{vocab.KindVerifier, "verifier/example@" + doc.TemplateDay},
 	}
 	root := tempVault(t)
 	for _, template := range templates {
@@ -198,6 +212,7 @@ func TestTemplatesAreDocuments(t *testing.T) {
 func TestValidateRejects(t *testing.T) {
 	base := roundTripDocuments()
 	edit, pattern, run := base[0].(doc.Edit), base[1].(doc.Pattern), base[2].(doc.Run)
+	verifier := base[3].(doc.Verifier)
 
 	tests := []struct {
 		name    string
@@ -249,6 +264,26 @@ func TestValidateRejects(t *testing.T) {
 		})},
 		{"run validates target", "is not an edit identifier", modifyRun(run, func(r *doc.Run) {
 			r.Validates = []doc.Validation{{Edit: "fp/round-trip", Model: "sonnet"}}
+		})},
+		{"verifier task", "is not a task identifier", modifyVerifier(verifier, func(v *doc.Verifier) {
+			v.Task = "Hello"
+		})},
+		{"verifier day", "is not a 2006-01-02 day", modifyVerifier(verifier, func(v *doc.Verifier) {
+			v.Day = "2026-1-1"
+		})},
+		// The health words and the run verdicts are two vocabularies on one key,
+		// so a run's word is the plausible wrong answer and the one tested.
+		{"verifier verdict", "verdict", modifyVerifier(verifier, func(v *doc.Verifier) {
+			v.Verdict = vocab.Health(vocab.VerdictImprove)
+		})},
+		{"verifier kill rate", "is outside 0..1", modifyVerifier(verifier, func(v *doc.Verifier) {
+			v.KillRate = 1.5
+		})},
+		{"verifier mutants", "is negative", modifyVerifier(verifier, func(v *doc.Verifier) {
+			v.Mutants = -1
+		})},
+		{"verifier reference runs", "is not positive", modifyVerifier(verifier, func(v *doc.Verifier) {
+			v.ReferenceRuns = 0
 		})},
 	}
 	for _, tt := range tests {
@@ -453,4 +488,44 @@ func modifyPattern(base doc.Pattern, change func(*doc.Pattern)) doc.Pattern {
 func modifyRun(base doc.Run, change func(*doc.Run)) doc.Run {
 	change(&base)
 	return base
+}
+
+func modifyVerifier(base doc.Verifier, change func(*doc.Verifier)) doc.Verifier {
+	change(&base)
+	return base
+}
+
+// TestVerifierNumbersAreWrittenAsStrings pins the one thing about the verifier
+// writer that is a decision rather than a shape. A scalar field is compared as
+// text, so a rate is written with two decimal places and the counts are written
+// as integers, and both are quoted: `kill_rate: 0.83` read back as a float is a
+// value that renders as 0.8300000000000001 on the next machine.
+func TestVerifierNumbersAreWrittenAsStrings(t *testing.T) {
+	base := roundTripDocuments()[3].(doc.Verifier)
+	body, err := modifyVerifier(base, func(v *doc.Verifier) {
+		v.KillRate = 5.0 / 6.0
+		v.Mutants = 6
+		v.ReferenceRuns = 3
+	}).Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	for _, want := range []string{"kill_rate: \"0.83\"", "mutants: \"6\"", "reference_runs: \"3\""} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("the document does not carry %q:\n%s", want, body)
+		}
+	}
+	// A check with nothing to measure a rate over writes no kill_rate key at
+	// all, rather than a zero that reads as "everything survived".
+	body, err = modifyVerifier(base, func(v *doc.Verifier) {
+		v.KillRate = doc.NoKillRate
+		v.Mutants = 0
+		v.Verdict = vocab.HealthInconclusive
+	}).Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	if strings.Contains(string(body), "kill_rate") {
+		t.Errorf("a check with no rate wrote a kill_rate key:\n%s", body)
+	}
 }

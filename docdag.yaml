@@ -168,6 +168,22 @@ kinds:
   topic:
     dir: spec/topics
     id: ^topic/[a-z0-9/-]+$
+  verifier:
+    dir: spec/verifiers
+    id: "^verifier/[a-z0-9][a-z0-9-]{0,63}@\\d{4}-\\d{2}-\\d{2}(-\\d+)?$"
+    closed: true
+    append_only: true
+    fields:
+      kill_rate: {}
+      mutants: {}
+      reference_runs: {}
+      report: {}
+      verdict:
+        one_of:
+        - healthy
+        - unhealthy
+        - inconclusive
+        required: true
 status_field: status
 edges:
 - name: supersedes
@@ -754,7 +770,7 @@ projections:
 binding: effective
 references:
   dangling: error
-  pattern: "^(UZ-[A-Z]-\\d{3}|conform/[a-z0-9-]+|dev-\\d{4}|interp/.+|premise/.+|principle/.+|pm-\\d{4}|topic/.+|he-\\d{4}|fp/[a-z0-9-]+|run/he-\\d{4}@\\d{4}-\\d{2}-\\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\\d+)?)$"
+  pattern: "^(UZ-[A-Z]-\\d{3}|conform/[a-z0-9-]+|dev-\\d{4}|interp/.+|premise/.+|principle/.+|pm-\\d{4}|topic/.+|he-\\d{4}|fp/[a-z0-9-]+|run/he-\\d{4}@\\d{4}-\\d{2}-\\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\\d+)?|verifier/[a-z0-9][a-z0-9-]{0,63}@\\d{4}-\\d{2}-\\d{2}(-\\d+)?)$"
   scan:
   - body
   - frontmatter

@@ -1,0 +1,114 @@
+// Package probe is the syntax this package's operators have to survive: the
+// shapes an adversarial review found producing mutants that do not compile,
+// and the shapes that look mutable and are not.
+//
+// It is testdata rather than a Go file so that `go build ./...` and the linter
+// leave it alone; the test reads it as bytes and parses it itself.
+package probe
+
+import "strings"
+
+// An iota-driven const block. The literals here are tied to each other: a
+// later spec repeats the first one's expression, so bumping one changes the
+// arithmetic of the rest.
+const (
+	KiB = 1 << (10 * (iota + 1))
+	MiB
+	GiB
+)
+
+// A plain const block, whose literals are mutable.
+const (
+	Retries = 3
+	Timeout = 30
+)
+
+// An array length, which is part of a type. Bumping it stops every value of
+// the old type assigning to the new one.
+var table = [3]int{1, 2, 3}
+
+// Table returns the fixed-size array. The array type in the signature is the
+// same trap read the other way round.
+func Table() [3]int { return table }
+
+// Literals in every base the language admits.
+func Bases() int { return 0x_FF + 0o755 + 1_000 }
+
+// A short variable declaration whose name is used later. Removing it leaves
+// the use undefined.
+func Prefixed(parts []string) string {
+	prefix := "x-"
+	return prefix + strings.Join(parts, ",")
+}
+
+// A plain assignment, which may be removed, and a call, which may be removed.
+func Accumulate(xs []int) int {
+	total := 0
+	for i := 0; i < len(xs); i++ {
+		total = total + xs[i]
+	}
+	report(total)
+	return total
+}
+
+func report(int) {}
+
+// A string concatenation of variables: the subtraction mutant does not
+// compile, so the operator must not offer it.
+func Join(a, b string) string { return a + b }
+
+// An if with an init statement, and an else if.
+func Classify(n int) string {
+	if x := n * 2; x > 10 {
+		return "big"
+	} else if x == 10 {
+		return "exact"
+	}
+	return "small"
+}
+
+// A switch, whose relational expressions are still boundary sites and whose
+// head is not an if.
+func Bucket(n int) int {
+	switch {
+	case n < 10:
+		return 1
+	case n <= 100:
+		return 2
+	}
+	return 3
+}
+
+// An interface compared against nil.
+func IsNil(err error) bool { return err == nil }
+
+// A generic function: the angle brackets are type parameters, not relational
+// operators.
+type Num interface{ ~int | ~float64 }
+
+func Max[T Num](a, b T) T {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Multiple results, a named single result, and a result type this package
+// cannot resolve.
+func Two() (int, error) { return 1, nil }
+
+func Named() (out int) { return 42 }
+
+type Code int
+
+func Status() Code { return 5 }
+
+// defer, go and a labelled statement: none of them is a removable statement.
+func Background(xs []int) {
+	defer report(len(xs))
+	go report(0)
+loop:
+	for range xs {
+		break loop
+	}
+}
