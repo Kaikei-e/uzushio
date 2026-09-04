@@ -23,6 +23,11 @@ const (
 	// the model slug, the split, and a sequence number where one edit was
 	// measured twice the same day on the same model and split.
 	RunIDPattern = `^run/he-\d{4}@\d{4}-\d{2}-\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\d+)?$`
+	// VerifierIDPattern is one health check of one task's verifier: the task
+	// the verifier belongs to, the day it was checked, and a sequence number
+	// where the same task was checked twice in a day. The task part is CMoA's
+	// task id shape, because that is what the identifier names.
+	VerifierIDPattern = `^verifier/[a-z0-9][a-z0-9-]{0,63}@\d{4}-\d{2}-\d{2}(-\d+)?$`
 )
 
 // The same three shapes without their anchors, for composing the single
@@ -31,10 +36,17 @@ const (
 // and the kinds' identifiers have to stay in step; the test that rebuilds each
 // anchored pattern from its body is what keeps them there.
 const (
-	EditIDBody    = `he-\d{4}`
-	PatternIDBody = `fp/[a-z0-9-]+`
-	RunIDBody     = `run/he-\d{4}@\d{4}-\d{2}-\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\d+)?`
+	EditIDBody     = `he-\d{4}`
+	PatternIDBody  = `fp/[a-z0-9-]+`
+	RunIDBody      = `run/he-\d{4}@\d{4}-\d{2}-\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\d+)?`
+	VerifierIDBody = `verifier/[a-z0-9][a-z0-9-]{0,63}@\d{4}-\d{2}-\d{2}(-\d+)?`
 )
+
+// TaskIDPattern is the shape CMoA holds a task identifier to, and which a
+// verifier identifier carries. uzushio only reads it: it is declared in CMoA's
+// internal/task and appears here because a verifier document is named after the
+// task whose verifier it checked.
+const TaskIDPattern = `^[a-z0-9][a-z0-9-]{0,63}$`
 
 // CMoATraceIDPattern is the identifier CMoA gives one run of the harness it
 // owns: a UTC timestamp and eight hexadecimal digits, as
@@ -60,9 +72,16 @@ var ErrID = errors.New("vocab: invalid identifier")
 // The compiled matchers. Compilation failure is a programmer error in the
 // table above and there is nothing to recover from, so it panics at init.
 var (
-	editID    = regexp.MustCompile(EditIDPattern)
-	patternID = regexp.MustCompile(PatternIDPattern)
-	runID     = regexp.MustCompile(RunIDPattern)
+	editID     = regexp.MustCompile(EditIDPattern)
+	patternID  = regexp.MustCompile(PatternIDPattern)
+	runID      = regexp.MustCompile(RunIDPattern)
+	verifierID = regexp.MustCompile(VerifierIDPattern)
+	taskID     = regexp.MustCompile(TaskIDPattern)
+	// verifierShape is VerifierIDPattern with the parts named, the way
+	// runShape is RunIDPattern with the parts named, and held to the same
+	// accept/reject decisions by the same kind of test.
+	verifierShape = regexp.MustCompile(
+		`^verifier/([a-z0-9][a-z0-9-]{0,63})@(\d{4}-\d{2}-\d{2})(?:-(\d+))?$`)
 	// runShape is RunIDPattern with the parts named, which is what parsing
 	// needs and what the configuration must not carry. The test that holds the
 	// two to the same accept/reject decisions is what keeps them one shape.
@@ -87,6 +106,12 @@ func ValidPatternID(id string) bool { return patternID.MatchString(id) }
 
 // ValidRunID reports whether id is a well-formed run identifier.
 func ValidRunID(id string) bool { return runID.MatchString(id) }
+
+// ValidVerifierID reports whether id is a well-formed verifier identifier.
+func ValidVerifierID(id string) bool { return verifierID.MatchString(id) }
+
+// ValidTaskID reports whether s names a task the way CMoA spells one.
+func ValidTaskID(s string) bool { return taskID.MatchString(s) }
 
 // ValidModelSlug reports whether s names a model the way a run identifier
 // spells one: lowercase letters, digits and dots, in segments joined by single
@@ -227,6 +252,60 @@ func (r RunRef) ID() (string, error) {
 	return RunID(r.Edit, r.Day, r.ModelSlug, r.Split, r.Seq)
 }
 
+// VerifierRef is a verifier identifier taken apart: the task whose verifier was
+// checked, the day it was checked, and the sequence number that separates two
+// checks of one task on one day. Seq is zero where the identifier carries none.
+type VerifierRef struct {
+	Task string
+	Day  string
+	Seq  int
+}
+
+// VerifierID returns the identifier of one verifier health check. seq is
+// written only when it is positive, for the same reason a run's is: the first
+// check of a day needs no sequence number, and a zero would make two spellings
+// of one document.
+func VerifierID(task, day string, seq int) (string, error) {
+	if !ValidTaskID(task) {
+		return "", fmt.Errorf("%w: verifier task %q is not a task identifier (want %s)", ErrID, task, TaskIDPattern)
+	}
+	if _, err := time.Parse(DayLayout, day); err != nil {
+		return "", fmt.Errorf("%w: verifier day %q is not a %s day", ErrID, day, DayLayout)
+	}
+	if seq < 0 {
+		return "", fmt.Errorf("%w: verifier sequence %d is negative", ErrID, seq)
+	}
+	id := fmt.Sprintf("verifier/%s@%s", task, day)
+	if seq > 0 {
+		id += "-" + strconv.Itoa(seq)
+	}
+	if !ValidVerifierID(id) {
+		return "", fmt.Errorf("%w: %q is not a verifier identifier (want %s)", ErrID, id, VerifierIDPattern)
+	}
+	return id, nil
+}
+
+// ParseVerifierID takes a verifier identifier apart. Like ParseRunID it accepts
+// exactly what the pattern accepts, which is a shape rather than a calendar.
+func ParseVerifierID(id string) (VerifierRef, error) {
+	match := verifierShape.FindStringSubmatch(id)
+	if match == nil {
+		return VerifierRef{}, fmt.Errorf("%w: %q is not a verifier identifier (want %s)", ErrID, id, VerifierIDPattern)
+	}
+	ref := VerifierRef{Task: match[1], Day: match[2]}
+	if match[3] != "" {
+		seq, err := strconv.Atoi(match[3])
+		if err != nil {
+			return VerifierRef{}, fmt.Errorf("%w: %q: %w", ErrID, id, err)
+		}
+		ref.Seq = seq
+	}
+	return ref, nil
+}
+
+// ID rebuilds the identifier a verifier reference came from.
+func (v VerifierRef) ID() (string, error) { return VerifierID(v.Task, v.Day, v.Seq) }
+
 // Filename returns the file one document is written to, without its directory.
 // DocDag derives a kind's file name from the last segment of the identifier
 // and ignores the filename template wherever the kind declares an `id:`
@@ -242,9 +321,10 @@ func Path(k Kind, id string) (string, error) {
 		return "", fmt.Errorf("%w: unknown kind %q", ErrID, k)
 	}
 	valid := map[Kind]func(string) bool{
-		KindEdit:    ValidEditID,
-		KindPattern: ValidPatternID,
-		KindRun:     ValidRunID,
+		KindEdit:     ValidEditID,
+		KindPattern:  ValidPatternID,
+		KindRun:      ValidRunID,
+		KindVerifier: ValidVerifierID,
 	}[k]
 	if !valid(id) {
 		return "", fmt.Errorf("%w: %q is not a %s identifier", ErrID, id, k)
