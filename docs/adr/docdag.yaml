@@ -1,0 +1,24 @@
+# The decision records of uzushio itself, gated by DocDag v0.4.0.
+#
+# One line adopts the ADR preset: a single kind of document under docs/adr,
+# the MADR status vocabulary, and the supersedes lineage derived from a
+# "Superseded by <ref>" status line. It is deliberately separate from the
+# vault configuration at the repository root: the standard and the decisions
+# that produced it are two corpora, and neither is a document of the other.
+#
+# Written by hand, unlike the root docdag.yaml, because there is nothing here
+# to derive: it is five keys and they are all of it.
+#
+# `dir` is resolved against the working directory for a single-kind corpus, so
+# run docdag from the repository root:
+#   docdag validate --config docs/adr/docdag.yaml
+# Only `validate` applies here; the fixtures under lint/ belong to the spec vault.
+preset: adr
+preset_version: 1
+dir: docs/adr
+
+references:
+  dangling: error
+
+structural:
+  missing_frontmatter: error
