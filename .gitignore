@@ -3,3 +3,10 @@
 
 # scratch file of go generate in internal/surfaces
 *.tmp
+
+# An example task's generated git repository, and what a health check writes.
+# setup.sh builds repo/ from src/; `uzushio task doctor` writes doctor/, which
+# holds the verifier's own output and so carries absolute paths from whichever
+# machine ran it. Neither belongs in a public repository.
+/examples/*/repo/
+/examples/*/doctor/

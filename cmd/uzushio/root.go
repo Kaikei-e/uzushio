@@ -1,17 +1,22 @@
 // Package main is the uzushio command line.
 //
-// Today it is a generator: `uzushio docdag-config` writes the docdag.yaml the
-// vault is checked under, and `--check` says whether the file on disk is the
-// one the code would write. The reference CLI for task manifests and the
-// verifier runner is not written yet.
+// `uzushio docdag-config` writes the docdag.yaml the vault is checked under,
+// and `--check` says whether the file on disk is the one the code would write.
+// `uzushio task doctor` measures a CMoA task's verifier against its reference
+// solution and its mutants, and `uzushio task mutate` writes the mutants it is
+// measured with. The `run` and `improve` commands of the harness-improvement
+// loop are not written yet.
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -21,6 +26,11 @@ const (
 	exitOK      = 0
 	exitFailure = 1
 	exitUsage   = 2
+	// exitInconclusive is `task doctor` saying it did not get an answer. It is
+	// its own code because "the verifier is broken" and "the check could not
+	// tell" call for different things: the first is a bug to fix, the second is
+	// a run to repeat.
+	exitInconclusive = 3
 )
 
 // errStale is returned by `docdag-config --check` when the file on disk is not
@@ -51,21 +61,33 @@ func newRootCmd() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &flagError{err: err}
 	})
-	root.AddCommand(newDocDagConfigCmd(), newVersionCmd())
+	root.AddCommand(newDocDagConfigCmd(), newTaskCmd(), newVersionCmd())
 	return root
 }
 
 // Execute runs the CLI and returns the process exit code.
-func Execute() int { return executeWith(os.Args[1:], os.Stdout, os.Stderr) }
+//
+// The context is cancelled on an interrupt, and every long-running command
+// carries it down. Without one, Ctrl-C ends the process without running a
+// single deferred function — and `task doctor` and `task mutate` both hold a
+// git worktree open for the length of a run, whose registration in the task's
+// repository outlives the process and is only cleared by `git worktree prune`.
+// Interrupting a check that is waiting on a container is the ordinary way to
+// stop one, so the cleanup has to survive it.
+func Execute() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return executeWith(ctx, os.Args[1:], os.Stdout, os.Stderr)
+}
 
-// executeWith is Execute with injectable arguments and streams, so the mapping
-// from a failure to an exit code is testable without a subprocess.
-func executeWith(args []string, out, errOut io.Writer) int {
+// executeWith is Execute with injectable context, arguments and streams, so
+// the mapping from a failure to an exit code is testable without a subprocess.
+func executeWith(ctx context.Context, args []string, out, errOut io.Writer) int {
 	root := newRootCmd()
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.SetArgs(args)
-	err := root.Execute()
+	err := root.ExecuteContext(ctx)
 	if err != nil && err.Error() != "" {
 		fmt.Fprintf(errOut, "Error: %v\n", err)
 	}
@@ -76,9 +98,12 @@ func executeWith(args []string, out, errOut io.Writer) int {
 // and a job that ran and found something wrong are different things, and a CI
 // step that only looks at "did it exit non-zero" still gets the right answer.
 func exitCode(err error) int {
+	var coded *exitError
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.As(err, &coded):
+		return coded.code
 	case errors.Is(err, errStale):
 		return exitFailure
 	case isUsageError(err):
@@ -86,6 +111,24 @@ func exitCode(err error) int {
 	}
 	return exitFailure
 }
+
+// exitError is a failure that names the code it wants. A command that has
+// already printed what it found wraps nothing at all: executeWith prints no
+// message for an empty error, so the code travels without a second sentence
+// after the summary that explained it.
+type exitError struct {
+	code int
+	err  error
+}
+
+func (e *exitError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *exitError) Unwrap() error { return e.err }
 
 // isUsageError reports whether cobra rejected the invocation rather than the
 // command rejecting its work. A flag error is marked by the root's
