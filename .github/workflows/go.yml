@@ -1,0 +1,97 @@
+name: go
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./cmd/uzushio
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The harness surfaces are CMoA's vocabulary. `make generate` refreshes
+      # the embedded copy from the binary that owns it, so the check is
+      # against CMoA's answer rather than against a list we wrote down.
+      - name: Install cmoa
+        run: go install github.com/Kaikei-e/CMoA/cmd/cmoa@main
+      - name: Regenerate and refuse a difference
+        run: make check
+
+  docdag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The history checks below compare against origin/main, which a
+          # shallow clone cannot resolve a merge base against.
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install docdag
+        run: go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.4.0
+      - name: Validate the specification vault
+        run: docdag validate
+      # --all is the configuration, the corpus and the fixtures in one report;
+      # it subsumes a separate `lint --fixtures lint` step, which is why there
+      # is not one.
+      - name: Lint the configuration, the corpus and the fixtures
+        run: docdag lint --all
+      - name: Validate the decision records
+        run: docdag validate --config docs/adr/docdag.yaml
+
+      # The three history checks below read origin/main. `git fetch origin main`
+      # alone only guarantees FETCH_HEAD; whether refs/remotes/origin/main is
+      # written depends on the refspec actions/checkout configured for the
+      # event, so the ref is fetched explicitly into the name they use.
+      - name: Fetch the base branch
+        if: github.event_name == 'pull_request'
+        run: git fetch origin main:refs/remotes/origin/main
+
+      # Two mechanisms, because neither covers the other. append_only is what
+      # the engine understands: it reads the committed version of every
+      # accepted, superseded or withdrawn document and refuses its deletion, a
+      # rewritten frontmatter key or an edited body line. It says nothing about
+      # a document that was never accepted -- a rejected edit, or a run, which
+      # carries no status at all -- so those can vanish under it unnoticed.
+      - name: Refuse a rewritten record
+        if: github.event_name == 'pull_request'
+        run: docdag validate --immutable-since origin/main
+      # So the second mechanism is git's own: a proposal or a pattern may not
+      # be deleted, and a run or a measurement may not be deleted or modified
+      # at all. A rejected candidate that disappears is the failure this
+      # repository exists to prevent.
+      - name: Refuse a deleted proposal or pattern
+        if: github.event_name == 'pull_request'
+        run: git diff --exit-code --diff-filter=D origin/main...HEAD -- spec/edits spec/patterns
+      - name: Refuse a deleted or edited measurement
+        if: github.event_name == 'pull_request'
+        run: git diff --exit-code --diff-filter=DM origin/main...HEAD -- spec/runs spec/measures

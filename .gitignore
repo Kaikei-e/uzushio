@@ -1,0 +1,5 @@
+# The built binary. `make build` writes it; nothing reads it back.
+/bin/
+
+# scratch file of go generate in internal/surfaces
+*.tmp

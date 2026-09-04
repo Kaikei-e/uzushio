@@ -18,16 +18,26 @@ uzushio depends on both layers below it. Neither of them depends on uzushio.
 
 ## Status
 
-**Pre-alpha.** What exists today is the specification corpus under `spec/`
-and the conformance tests under `tests/conform/`. The reference CLI (task
-manifests, the verifier runner, generated `measure` and `run` documents) is
-not written yet. Expect identifiers, vocabulary and layout to change; the
-graph records those changes as `supersedes` lineage rather than by rewriting
-history.
+**Pre-alpha.** What exists today:
+
+- the specification corpus under `spec/` and the conformance tests under
+  `tests/conform/`;
+- a Go module and one command, `uzushio docdag-config`, which generates the
+  `docdag.yaml` the corpus is validated under;
+- three kinds for the harness-improvement loop — `edit` (a proposed change to
+  one harness surface), `pattern` (a recurring failure, written as an STPA
+  unsafe control action) and `run` (one evaluation of one edit on one split) —
+  declared in the configuration, with their directories still empty.
+
+What does not exist yet: the reference CLI for the loop itself — task
+manifests, the verifier runner, and the `doctor` / `run` / `improve` commands
+that would write `measure` and `run` documents. Expect identifiers, vocabulary
+and layout to change; the graph records those changes as `supersedes` lineage
+rather than by rewriting history.
 
 ## The specification is a graph
 
-The corpus is a [DocDag](https://github.com/Kaikei-e/DocDag) v0.3.0 `spec`
+The corpus is a [DocDag](https://github.com/Kaikei-e/DocDag) v0.4.0 `spec`
 graph: clauses with a BCP 14 modality, the conformance tests that enforce
 them, and the topics, principles, premises and post-mortems they rest on.
 `docdag.yaml` is `preset: spec`; kind directories live under `spec/`.
@@ -59,20 +69,59 @@ docdag new --kind conform --id conform/uz-c-006 "Check that a report names its g
 clause has to state `modality:` and `about:` before `validate` is clean.
 `enforces:` is declared on the `conform` document, not on the clause, and
 the test body lives outside Markdown at the path the document's `test:`
-names. `measure` documents are generated, never written by hand.
+names. `measure` and `run` documents are generated, never written by hand.
 
-## Install
+## The generated configuration
+
+`docdag.yaml` at the repository root is **generated** and carries a header
+saying so. It is assembled in Go under `internal/vault`, on top of DocDag's
+`spec` preset, and rendered deterministically — the same code always writes
+the same bytes.
+
+It is generated rather than hand-written because most of it is an argument.
+Why an accepted `edit` needs a non-regressing held-in run, a non-regressing
+held-out run and a strict improvement; why `touches:` is held to the seven
+harness surfaces; why a rejection is kept with the run that rejected it —
+each of those is a rule with a reason, and a reason belongs beside code that
+can test it. The vocabulary the rules are built from lives in
+`internal/vocab`, and the harness surfaces come from CMoA itself, embedded in
+`internal/surfaces` and refreshed with `go generate`.
 
 ```sh
-go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.3.0
+uzushio docdag-config                  # rewrite docdag.yaml
+uzushio docdag-config --out other.yaml # write it somewhere else
+uzushio docdag-config --check          # exit 1 and print a diff when the file is stale
+make generate                          # everything derived from code
+make check                             # regenerate, then refuse a difference
 ```
 
-This installs `docdag` into `$(go env GOPATH)/bin`. CI downloads the
-v0.3.0 release binary via `Kaikei-e/DocDag@v0.3.0`, runs `validate`, and
-runs every conformance test under `tests/conform/`. Locally,
-`pre-commit install` runs `validate` and `lint` on Markdown and
-`docdag.yaml` edits; the hook builds `docdag` from source and needs a Go
-toolchain.
+Edit `internal/vault` and regenerate; do not edit `docdag.yaml` by hand.
+
+The decision records for uzushio itself live under `docs/adr/` and are a
+separate corpus with its own `docs/adr/docdag.yaml`
+(`docdag validate --config docs/adr/docdag.yaml`).
+
+## Install / Build
+
+```sh
+go install github.com/Kaikei-e/uzushio/cmd/uzushio@latest
+go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.4.0
+```
+
+Both install into `$(go env GOPATH)/bin`. From a checkout:
+
+```sh
+make            # build, test, vet, lint
+make docdag     # validate, lint --all, and the decision records
+make conform    # the shell conformance tests
+```
+
+CI runs `go vet`, `go test`, `go build`, golangci-lint and `make check`, then
+installs DocDag v0.4.0 from source and runs `validate`, `lint --all` and every
+conformance test under `tests/conform/`. On a pull request it also refuses a
+rewritten or deleted record. Locally, `pre-commit install` runs `validate` and
+`lint` on Markdown and `docdag.yaml` edits; the hook builds `docdag` from
+source and needs a Go toolchain.
 
 ## Contributing
 
@@ -83,6 +132,7 @@ the graph, so before opening one:
 2. Replace a clause with `supersedes:` and a `reason`; do not edit an
    accepted clause's meaning in place.
 3. Give a new `MUST` its conformance test in the same change.
+4. If you changed the rules, edit `internal/vault` and run `make check`.
 
 Design notes and the papers this standard leans on are recorded in the
 corpus itself (`spec/principles/`, `spec/premises/`, `spec/pm/`), so the
