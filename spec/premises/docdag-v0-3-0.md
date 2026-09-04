@@ -2,7 +2,7 @@
 id: premise/docdag-v0-3-0
 kind: premise
 title: The vault is read by DocDag v0.3.0
-status: accepted
+status: superseded
 date: 2026-09-04
 ---
 

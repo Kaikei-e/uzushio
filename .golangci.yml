@@ -1,0 +1,29 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - exhaustive
+    - gochecksumtype
+    - errorlint
+    - misspell
+  settings:
+    errcheck:
+      # Writes to stdout/stderr in the CLI: nothing useful can be done on failure.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    exhaustive:
+      default-signifies-exhaustive: false
+    gochecksumtype:
+      default-signifies-exhaustive: false
+  exclusions:
+    rules:
+      # Test fixtures write files whose failure the test itself would surface.
+      - path: _test\.go
+        linters: [errcheck]
+
+formatters:
+  enable:
+    - gofmt

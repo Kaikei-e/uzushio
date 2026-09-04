@@ -1,0 +1,37 @@
+{
+  "surfaces": [
+    {
+      "surface": "system-prompt",
+      "autonomy": "human-approval"
+    },
+    {
+      "surface": "tool-description",
+      "autonomy": "human-approval"
+    },
+    {
+      "surface": "tool-implementation",
+      "autonomy": "propose-only"
+    },
+    {
+      "surface": "middleware",
+      "autonomy": "human-approval"
+    },
+    {
+      "surface": "skill",
+      "autonomy": "auto-accept"
+    },
+    {
+      "surface": "subagent-config",
+      "autonomy": "human-approval"
+    },
+    {
+      "surface": "memory",
+      "autonomy": "auto-accept"
+    }
+  ],
+  "read_only": [
+    "verifier",
+    "tracer",
+    "model-config"
+  ]
+}
