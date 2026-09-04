@@ -9,7 +9,7 @@ GOLANGCI ?= golangci-lint
 DOCDAG ?= docdag
 CMOA ?= cmoa
 
-.PHONY: all build test vet lint generate check docdag conform clean
+.PHONY: all build test vet lint generate check docdag conform e2e clean
 
 all: build test vet lint
 
@@ -59,6 +59,15 @@ conform:
 		echo "--- $$t"; \
 		sh "$$t"; \
 	done
+
+# e2e runs the one test `go test ./...` leaves out: `uzushio task doctor` on
+# examples/task-hello, through the real `cmoa verify` and the real container
+# verifier. It needs docker and a cmoa; both are the developer's, which is why
+# it is a target rather than a CI job.
+#
+#   make e2e CMOA=/path/to/cmoa
+e2e:
+	UZUSHIO_E2E=1 UZUSHIO_CMOA_BIN=$(CMOA) $(GO) test -count=1 -v -run TestE2E ./cmd/uzushio
 
 clean:
 	rm -f $(BIN)

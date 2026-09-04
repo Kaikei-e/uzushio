@@ -3,6 +3,7 @@ package vocab
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -11,12 +12,15 @@ import (
 // fails a test rather than a docdag run.
 func TestPatternsCompile(t *testing.T) {
 	for name, pattern := range map[string]string{
-		"EditIDPattern":    EditIDPattern,
-		"PatternIDPattern": PatternIDPattern,
-		"RunIDPattern":     RunIDPattern,
-		"EditIDBody":       EditIDBody,
-		"PatternIDBody":    PatternIDBody,
-		"RunIDBody":        RunIDBody,
+		"EditIDPattern":     EditIDPattern,
+		"PatternIDPattern":  PatternIDPattern,
+		"RunIDPattern":      RunIDPattern,
+		"VerifierIDPattern": VerifierIDPattern,
+		"TaskIDPattern":     TaskIDPattern,
+		"EditIDBody":        EditIDBody,
+		"PatternIDBody":     PatternIDBody,
+		"RunIDBody":         RunIDBody,
+		"VerifierIDBody":    VerifierIDBody,
 	} {
 		if _, err := regexp.Compile(pattern); err != nil {
 			t.Fatalf("%s does not compile: %v", name, err)
@@ -32,6 +36,7 @@ func TestBodiesAnchorToPatterns(t *testing.T) {
 		{EditIDBody, EditIDPattern},
 		{PatternIDBody, PatternIDPattern},
 		{RunIDBody, RunIDPattern},
+		{VerifierIDBody, VerifierIDPattern},
 	} {
 		if got := "^" + tt.body + "$"; got != tt.pattern {
 			t.Fatalf("anchored body = %q, want %q", got, tt.pattern)
@@ -238,6 +243,7 @@ func TestPathAndFilename(t *testing.T) {
 		{KindEdit, "he-0001", "spec/edits/he-0001.md"},
 		{KindPattern, "fp/retry-storm", "spec/patterns/retry-storm.md"},
 		{KindRun, "run/he-0001@2026-09-05-m-out", "spec/runs/he-0001@2026-09-05-m-out.md"},
+		{KindVerifier, "verifier/hello@2026-09-05", "spec/verifiers/hello@2026-09-05.md"},
 	}
 	for _, tt := range tests {
 		got, err := Path(tt.kind, tt.id)
@@ -262,7 +268,7 @@ func TestWritesID(t *testing.T) {
 	if WritesID(KindEdit) {
 		t.Fatal("an edit's stem carries its identifier; it need not write id:")
 	}
-	for _, k := range []Kind{KindPattern, KindRun} {
+	for _, k := range []Kind{KindPattern, KindRun, KindVerifier} {
 		if !WritesID(k) {
 			t.Fatalf("%s identifiers carry a slash and must be written in frontmatter", k)
 		}
@@ -280,5 +286,121 @@ func TestModelSlugMayEndInASplitWord(t *testing.T) {
 	}
 	if ref.ModelSlug != "gemma-held" || ref.Split != SplitHeldOut {
 		t.Fatalf("ParseRunID = %+v, want model gemma-held on the held-out split", ref)
+	}
+}
+
+func TestVerifierID(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  VerifierRef
+		want string
+	}{
+		{
+			name: "one check on one day",
+			ref:  VerifierRef{Task: "hello", Day: "2026-09-05"},
+			want: "verifier/hello@2026-09-05",
+		},
+		{
+			name: "the second check of a day",
+			ref:  VerifierRef{Task: "add-two-numbers", Day: "2026-01-31", Seq: 2},
+			want: "verifier/add-two-numbers@2026-01-31-2",
+		},
+		{
+			name: "a one-character task",
+			ref:  VerifierRef{Task: "a", Day: "2026-12-31", Seq: 11},
+			want: "verifier/a@2026-12-31-11",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.ref.ID()
+			if err != nil {
+				t.Fatalf("ID: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("ID = %q, want %q", got, tt.want)
+			}
+			if !ValidVerifierID(got) {
+				t.Fatalf("%q is rejected by VerifierIDPattern", got)
+			}
+			back, err := ParseVerifierID(got)
+			if err != nil {
+				t.Fatalf("ParseVerifierID(%q): %v", got, err)
+			}
+			if back != tt.ref {
+				t.Fatalf("ParseVerifierID(%q) = %+v, want %+v", got, back, tt.ref)
+			}
+		})
+	}
+}
+
+func TestVerifierIDRejects(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		ref  VerifierRef
+	}{
+		// The task part is CMoA's task id shape, and CMoA refuses each of these.
+		{"upper case", VerifierRef{Task: "Hello", Day: "2026-09-05"}},
+		{"leading hyphen", VerifierRef{Task: "-hello", Day: "2026-09-05"}},
+		{"a slash", VerifierRef{Task: "a/b", Day: "2026-09-05"}},
+		{"empty task", VerifierRef{Task: "", Day: "2026-09-05"}},
+		{"no day", VerifierRef{Task: "hello", Day: "2026-9-5"}},
+		{"impossible day", VerifierRef{Task: "hello", Day: "2026-13-01"}},
+		{"negative sequence", VerifierRef{Task: "hello", Day: "2026-09-05", Seq: -1}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.ref.ID(); !errors.Is(err, ErrID) {
+				t.Fatalf("ID error = %v, want ErrID", err)
+			}
+		})
+	}
+	for _, id := range []string{
+		"", "hello@2026-09-05", "verifier/hello", "verifier/hello@2026-09-05-",
+		"VERIFIER/hello@2026-09-05", "verifier/hello@2026-09-05-a",
+	} {
+		if _, err := ParseVerifierID(id); !errors.Is(err, ErrID) {
+			t.Fatalf("ParseVerifierID(%q) error = %v, want ErrID", id, err)
+		}
+	}
+}
+
+// TestVerifierShapeAgreesWithVerifierIDPattern holds the parsing expression and
+// the expression the configuration declares to one decision, the way
+// TestRunShapeAgreesWithRunIDPattern does for a run.
+func TestVerifierShapeAgreesWithVerifierIDPattern(t *testing.T) {
+	candidates := []string{
+		"verifier/hello@2026-09-05",
+		"verifier/hello@2026-09-05-2",
+		"verifier/a@2026-09-05",
+		"verifier/hello@2026-09-05-",
+		"verifier/hello@26-09-05",
+		"verifier/-hello@2026-09-05",
+		"verifier/hello-@2026-09-05",
+		"hello@2026-09-05",
+		"verifier/hello@2026-09-05-x",
+	}
+	for _, id := range candidates {
+		declared := verifierID.MatchString(id)
+		parsed := verifierShape.MatchString(id)
+		if declared != parsed {
+			t.Fatalf("%q: VerifierIDPattern says %v, the parsing shape says %v", id, declared, parsed)
+		}
+	}
+}
+
+// TestTaskIDPatternIsCMoAs pins the shape uzushio reads a task identifier with.
+// It is CMoA's, declared in CMoA's internal/task, and a verifier document is
+// named after the task whose verifier it checked — so a task CMoA accepts has
+// to be a task uzushio can name.
+func TestTaskIDPatternIsCMoAs(t *testing.T) {
+	for _, id := range []string{"hello", "a", "task-hello", "a0", strings.Repeat("a", 64)} {
+		if !ValidTaskID(id) {
+			t.Fatalf("ValidTaskID(%q) = false, and CMoA accepts it", id)
+		}
+	}
+	for _, id := range []string{"", "-a", "A", "a_b", "a/b", strings.Repeat("a", 65)} {
+		if ValidTaskID(id) {
+			t.Fatalf("ValidTaskID(%q) = true, and CMoA refuses it", id)
+		}
 	}
 }

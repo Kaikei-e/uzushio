@@ -75,15 +75,18 @@ func TestKindsAreDeclared(t *testing.T) {
 			t.Fatalf("kind %s status_values = %v, want %v", k, spec.StatusValues, want)
 		}
 	}
-	// A run is a measurement and answers to no status vocabulary.
-	if run, _ := cfg.Kind(vocab.KindRun.String()); len(run.StatusValues) != 0 {
-		t.Fatalf("run declares statuses %v", run.StatusValues)
+	// A run and a verifier health check are measurements and answer to no
+	// status vocabulary.
+	for _, k := range []vocab.Kind{vocab.KindRun, vocab.KindVerifier} {
+		if spec, _ := cfg.Kind(k.String()); len(spec.StatusValues) != 0 {
+			t.Fatalf("%s declares statuses %v", k, spec.StatusValues)
+		}
 	}
 	// Only the edit has a lifetime; a pattern and a run are always in force.
 	if _, ok := cfg.KindPeriod(vocab.KindEdit.String()); !ok {
 		t.Fatal("the edit kind declares no period")
 	}
-	for _, k := range []vocab.Kind{vocab.KindPattern, vocab.KindRun} {
+	for _, k := range []vocab.Kind{vocab.KindPattern, vocab.KindRun, vocab.KindVerifier} {
 		if _, ok := cfg.KindPeriod(k.String()); ok {
 			t.Fatalf("kind %s declares a period", k)
 		}
@@ -119,6 +122,7 @@ func TestRequiredScalarFields(t *testing.T) {
 		{vocab.KindRun, vocab.FieldSplit},
 		{vocab.KindRun, vocab.FieldVerdict},
 		{vocab.KindRun, vocab.FieldSuite},
+		{vocab.KindVerifier, vocab.FieldVerdict},
 	}
 	for _, want := range required {
 		spec, ok := cfg.Field(want.kind.String(), want.field.String())
@@ -365,13 +369,16 @@ func TestReferencePatternCoversEveryKind(t *testing.T) {
 		"premise/x", "principle/x", "pm-0001", "topic/x",
 		"he-0001", "fp/retry-storm", "run/he-0001@2026-09-05-gemma-3-12b-out",
 		"run/he-0001@2026-09-05-m-in-2",
+		"verifier/hello@2026-09-05", "verifier/task-hello@2026-09-05-2",
 	}
 	for _, token := range accepted {
 		if !shape.MatchString(token) {
 			t.Fatalf("references.pattern rejects %q", token)
 		}
 	}
-	for _, token := range []string{"", "not-an-id", "he-1", "fp/Retry", "run/he-0001"} {
+	for _, token := range []string{
+		"", "not-an-id", "he-1", "fp/Retry", "run/he-0001", "verifier/hello", "verifier/Hello@2026-09-05",
+	} {
 		if shape.MatchString(token) {
 			t.Fatalf("references.pattern accepts %q", token)
 		}
@@ -487,5 +494,60 @@ func TestSelfCheckAdmitsAKindScopedField(t *testing.T) {
 	})
 	if err := SelfCheck(cfg); err != nil {
 		t.Fatalf("SelfCheck: %v", err)
+	}
+}
+
+// TestVerifierKind pins the shape of the kind `uzushio task doctor` writes: a
+// verdict out of the health vocabulary, the numbers as unconstrained scalars,
+// and no edge and no rule of its own. The last is the part worth stating: a
+// health check points at nothing in this vault — the task it is about is
+// CMoA's — so an edge would have no far end to declare.
+func TestVerifierKind(t *testing.T) {
+	cfg := mustConfig(t)
+	spec, ok := cfg.Kind(vocab.KindVerifier.String())
+	if !ok {
+		t.Fatal("the verifier kind is not declared")
+	}
+	if spec.ID != vocab.VerifierIDPattern {
+		t.Fatalf("verifier id = %q, want %q", spec.ID, vocab.VerifierIDPattern)
+	}
+	verdict, ok := cfg.Field(vocab.KindVerifier.String(), vocab.FieldVerdict.String())
+	if !ok {
+		t.Fatal("the verifier kind declares no verdict")
+	}
+	if !slices.Equal(verdict.OneOf, vocab.Strings(vocab.AllHealths())) {
+		t.Fatalf("verifier verdict one_of = %v, want %v", verdict.OneOf, vocab.Strings(vocab.AllHealths()))
+	}
+	// A run's verdict vocabulary and a verifier's share a key and share nothing
+	// else. Declaring either vocabulary on the other kind is the mistake this
+	// checks for.
+	runVerdict, ok := cfg.Field(vocab.KindRun.String(), vocab.FieldVerdict.String())
+	if !ok {
+		t.Fatal("the run kind declares no verdict")
+	}
+	for _, word := range runVerdict.OneOf {
+		if word != vocab.VerdictInconclusive.String() && slices.Contains(verdict.OneOf, word) {
+			t.Fatalf("the verifier verdict admits %q, which is a run's word", word)
+		}
+	}
+	// Every key the writer emits has to be declared: the kind is closed, so an
+	// undeclared key is an undeclared_field error on every document.
+	for _, field := range vocab.VerifierFields() {
+		if _, ok := cfg.Field(vocab.KindVerifier.String(), field.String()); !ok {
+			t.Fatalf("the verifier kind does not declare %s", field)
+		}
+	}
+	// No edge admits a verifier at either end, and no rule is about one.
+	for _, edge := range cfg.Edges {
+		if slices.Contains(edge.From, vocab.KindVerifier.String()) ||
+			slices.Contains(edge.To, vocab.KindVerifier.String()) {
+			t.Fatalf("edge %s admits a verifier; this step declares none", edge.Name)
+		}
+	}
+	for _, rule := range cfg.Rules {
+		if match, ok := rule.When.Attr[config.KeyKind]; ok && match.Eq != nil &&
+			*match.Eq == vocab.KindVerifier.String() {
+			t.Fatalf("rule %s is about a verifier; this step declares none, so it would need a fixture", rule.Name)
+		}
 	}
 }

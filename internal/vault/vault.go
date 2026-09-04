@@ -1,10 +1,11 @@
 // Package vault assembles uzushio's DocDag configuration in Go and writes it
 // out as docdag.yaml. The file on disk is generated: it is long, every one of
 // its rules is an argument, and an argument belongs beside the code that can
-// test it. What lives here is the spec preset plus the three kinds uzushio
-// adds — the edit a proposer writes, the failure pattern it answers, and the
-// evaluation run that settles it — with the edges, projections and rules that
-// make an accepted edit mean something.
+// test it. What lives here is the spec preset plus the four kinds uzushio
+// adds — the edit a proposer writes, the failure pattern it answers, the
+// evaluation run that settles it, and the health check that says whether the
+// verifier behind the run was worth believing — with the edges, projections and
+// rules that make an accepted edit mean something.
 package vault
 
 import (
@@ -23,7 +24,7 @@ import (
 var ErrConfig = errors.New("vault: invalid configuration")
 
 // referencePattern is the wikilink shape the reference layer gates on. It is
-// the shape the vault had before uzushio's kinds existed, with the three new
+// the shape the vault had before uzushio's kinds existed, with the four new
 // identifiers added: a token the pattern rejects is dropped without a finding,
 // so a kind missing from here is a kind whose wikilinks are never checked.
 func referencePattern() string {
@@ -39,6 +40,7 @@ func referencePattern() string {
 		vocab.EditIDBody,
 		vocab.PatternIDBody,
 		vocab.RunIDBody,
+		vocab.VerifierIDBody,
 	}
 	pattern := "^("
 	for i, alternative := range alternatives {
@@ -133,9 +135,9 @@ func Config() (config.Config, error) {
 	return cfg, nil
 }
 
-// addKinds declares the three uzushio kinds.
+// addKinds declares the four uzushio kinds.
 //
-// All three are append_only. The history check reads only kinds that opt in,
+// All four are append_only. The history check reads only kinds that opt in,
 // and it exempts the status field, so marking an edit append_only does not
 // stand in the way of its status moving from proposed to accepted; what it
 // forbids is rewriting a decision after the fact. It protects less than it
@@ -221,6 +223,33 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 			vocab.FieldTrials.String(): {},
 			vocab.FieldTrace.String():  {},
 		},
+	}
+
+	cfg.Kinds[vocab.KindVerifier.String()] = config.KindSpec{
+		Dir: vocab.DirVerifiers,
+		ID:  vocab.VerifierIDPattern,
+		// Like a run, a verifier health check answers to no status
+		// vocabulary: what it says is a measurement of the verifier, and a
+		// measurement is not accepted or withdrawn. What it concluded is the
+		// verdict, and the verdict is a reading rather than a decision.
+		Closed:     true,
+		AppendOnly: true,
+		Fields: map[string]config.FieldSpec{
+			vocab.FieldVerdict.String(): {
+				OneOf:    vocab.Strings(vocab.AllHealths()),
+				Required: true,
+			},
+			// The rate and the two counts are strings: a scalar field is
+			// compared as text, and the numbers a machine reads are in the
+			// report the `report` key names.
+			vocab.FieldKillRate.String():      {},
+			vocab.FieldMutants.String():       {},
+			vocab.FieldReferenceRuns.String(): {},
+			vocab.FieldReport.String():        {},
+		},
+		// No edges and no rules this step. A verifier check has nothing to
+		// point at yet: the task it is about is CMoA's, not a document in this
+		// vault, and the clause that will require one is Step 4's work.
 	}
 }
 

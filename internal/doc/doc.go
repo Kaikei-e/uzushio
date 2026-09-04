@@ -1,12 +1,12 @@
 // Package doc writes the documents uzushio generates. An edit, a failure
-// pattern and an evaluation run are written by the harness rather than by a
-// person, and a machine writer that guesses at a frontmatter key is a corpus
-// that fails validation on the day nobody is watching. So each kind is a Go
-// struct whose fields are exactly the keys the generated docdag.yaml declares
-// for it, Validate answers before anything is written, and Bytes produces the
-// document DocDag reads back.
+// pattern, an evaluation run and a verifier health check are written by the
+// harness rather than by a person, and a machine writer that guesses at a
+// frontmatter key is a corpus that fails validation on the day nobody is
+// watching. So each kind is a Go struct whose fields are exactly the keys the
+// generated docdag.yaml declares for it, Validate answers before anything is
+// written, and Bytes produces the document DocDag reads back.
 //
-// All three kinds are closed, so a writer here emits only the keys the
+// All four kinds are closed, so a writer here emits only the keys the
 // configuration declares, plus the engine's own — id, kind, title, date and
 // status — and the edge keys. The vocabulary comes from internal/vocab and the
 // surfaces from internal/surfaces, so there is one place a word is spelled.
@@ -41,11 +41,12 @@ type Document interface {
 	Bytes() ([]byte, error)
 }
 
-// The three writers are Documents.
+// The four writers are Documents.
 var (
 	_ Document = Edit{}
 	_ Document = Pattern{}
 	_ Document = Run{}
+	_ Document = Verifier{}
 )
 
 // Prediction is one claim an edit makes about a failure pattern: the pattern,
