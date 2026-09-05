@@ -186,11 +186,10 @@ type Aggregates struct {
 	// It is not, when the verifier rejected the reference solution. Every
 	// mutant is then verified against a verifier that says no to everything,
 	// so every mutant is `killed` and a rate of 1.00 measures the false
-	// positive rather than the verifier's reach. The 2026-09-05 check of
-	// task-plecto-gate is the case this field exists for: 5 of 5 reference
-	// runs failed on the same four bands, and all seven mutants came back
-	// killed — including the two the task declares equivalent, which is what
-	// gives the game away.
+	// positive rather than the verifier's reach. The first banded example task
+	// is the case this field exists for: every reference run failed on the
+	// same bands, and every mutant came back killed — including the ones the
+	// task declares equivalent, which is what gives the game away.
 	//
 	// It is also false where no reference run reached a verdict at all: there
 	// is then nothing saying the verifier accepts anything.

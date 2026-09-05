@@ -159,8 +159,18 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 			// scalar check behind `required`, so declaring it required would
 			// report every edit that writes one. The obligation is carried by
 			// the edit_touches_readonly rule instead.
-			vocab.FieldTouches.String():   {},
-			vocab.FieldRootCause.String(): {},
+			vocab.FieldTouches.String(): {},
+			// paths is a list too, and DocDag has no path arithmetic: it
+			// cannot test that memory/note.md belongs to the memory surface.
+			// The check is uzushio's, in `harness render` and `run`, which
+			// refuse an edit with no paths and an edit whose paths and
+			// touches disagree. Declaring the key keeps the kind closed.
+			vocab.FieldPaths.String(): {},
+			// diff_sha256 is written only by a system-prompt edit, whose
+			// content is a sidecar .diff rather than the document body, so it
+			// is optional here and required by the renderer.
+			vocab.FieldDiffSHA256.String(): {},
+			vocab.FieldRootCause.String():  {},
 			// approved_by is the person's name, which is free text and so
 			// cannot be tested for presence; approval is its closed companion,
 			// and it is the one the rule reads.

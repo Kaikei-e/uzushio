@@ -75,8 +75,10 @@ kinds:
         - subagent-config
         - memory
         required: true
+      diff_sha256: {}
       in_force_from: {}
       in_force_until: {}
+      paths: {}
       root_cause: {}
       touches: {}
     period:

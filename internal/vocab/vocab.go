@@ -278,6 +278,21 @@ const (
 	// scalar required check. The edit_touches_readonly rule carries the
 	// obligation instead.
 	FieldTouches Field = "touches"
+	// FieldPaths lists the files under the rendered harness directory the
+	// edit owns. It is a list, so like touches it is never declared required:
+	// a list value reads as absent to DocDag's scalar required check, and
+	// DocDag has no path arithmetic to check the entries against the
+	// component either. The obligation is uzushio's — `uzushio harness
+	// render` and `uzushio run` refuse an edit that writes no paths, and
+	// refuse one whose paths do not map onto its component and its touches.
+	FieldPaths Field = "paths"
+	// FieldDiffSHA256 is the SHA-256 of the sidecar unified diff a
+	// system-prompt edit carries, as 64 lowercase hexadecimal digits. It is
+	// the tripwire on the sidecar: DocDag parses only .md and its append-only
+	// check skips everything else, so a rewritten .diff is invisible to the
+	// vault — but rewriting it forces this key to change, and that is an
+	// immutable_violation on an accepted edit.
+	FieldDiffSHA256 Field = "diff_sha256"
 	// FieldRootCause is prose: why the pattern happened, not what to do.
 	FieldRootCause Field = "root_cause"
 	// FieldApprovedBy names the person who approved the edit.
@@ -342,7 +357,8 @@ func (f Field) String() string { return string(f) }
 // EditFields returns the frontmatter keys an edit declares, sorted.
 func EditFields() []Field {
 	return sortedFields([]Field{
-		FieldComponent, FieldTouches, FieldRootCause, FieldApprovedBy,
+		FieldComponent, FieldTouches, FieldPaths, FieldDiffSHA256,
+		FieldRootCause, FieldApprovedBy,
 		FieldApproval, FieldInForceFrom, FieldInForceUntil,
 	})
 }
