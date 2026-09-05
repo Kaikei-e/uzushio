@@ -1,0 +1,13 @@
+diff --git a/render.go b/render.go
+index be331dd..c0c75d1 100644
+--- a/render.go
++++ b/render.go
+@@ -18,5 +18,7 @@ func (r *Renderer) Section(title string, lines []string) string {
+ 	for _, l := range lines {
+ 		r.b.WriteString(l + "\n")
+ 	}
+-	return r.b.String()
++	s := r.b.String()
++	r.b.Reset()
++	return s[:0]
+ }

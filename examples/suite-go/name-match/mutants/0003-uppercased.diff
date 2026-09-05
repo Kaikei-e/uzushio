@@ -1,0 +1,11 @@
+diff --git a/match.go b/match.go
+index 72b7869..3d65d8d 100644
+--- a/match.go
++++ b/match.go
+@@ -9,5 +9,5 @@ import "strings"
+ // match the same word written with a medial one; it is not the same as
+ // lowering both names, and it keeps letters that only look alike apart.
+ func Same(a, b string) bool {
+-	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
++	return strings.ToUpper(strings.TrimSpace(a)) == strings.ToUpper(strings.TrimSpace(b))
+ }

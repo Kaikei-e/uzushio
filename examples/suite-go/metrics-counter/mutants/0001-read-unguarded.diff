@@ -1,0 +1,12 @@
+diff --git a/counter.go b/counter.go
+index 60f13f5..98d665e 100644
+--- a/counter.go
++++ b/counter.go
+@@ -24,7 +24,5 @@ func (c *Counter) Inc(name string) {
+ 
+ // Get returns how many events called name have been recorded.
+ func (c *Counter) Get(name string) int {
+-	c.mu.Lock()
+-	defer c.mu.Unlock()
+ 	return c.n[name]
+ }

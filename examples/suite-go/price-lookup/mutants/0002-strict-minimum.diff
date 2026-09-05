@@ -1,0 +1,13 @@
+diff --git a/tier.go b/tier.go
+index 7c1eadd..51ec495 100644
+--- a/tier.go
++++ b/tier.go
+@@ -12,7 +12,7 @@ func Tier(mins []int, qty int) int {
+ 	best := -1
+ 	for lo <= hi {
+ 		mid := (lo + hi) / 2
+-		if mins[mid] <= qty {
++		if mins[mid] < qty {
+ 			best = mid
+ 			lo = mid + 1
+ 		} else {

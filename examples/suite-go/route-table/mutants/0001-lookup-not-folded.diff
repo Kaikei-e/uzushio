@@ -1,0 +1,12 @@
+diff --git a/table.go b/table.go
+index 8c6b77b..1e30184 100644
+--- a/table.go
++++ b/table.go
+@@ -24,6 +24,6 @@ func (t *Table) Add(method, path, handler string) {
+ 
+ // Lookup returns the handler registered for the method and path.
+ func (t *Table) Lookup(method, path string) (string, bool) {
+-	h, ok := t.byRoute[key(method, path)]
++	h, ok := t.byRoute[method+" "+path]
+ 	return h, ok
+ }

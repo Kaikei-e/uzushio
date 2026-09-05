@@ -1,0 +1,11 @@
+diff --git a/rounding.go b/rounding.go
+index d3c411f..cc570a5 100644
+--- a/rounding.go
++++ b/rounding.go
+@@ -7,5 +7,5 @@ import "math"
+ // ToCents converts an amount expressed in currency units into whole cents.
+ // A value exactly halfway between two cents rounds away from zero.
+ func ToCents(amount float64) int64 {
+-	return int64(math.Round(amount * 100))
++	return int64(math.Floor(amount * 100))
+ }

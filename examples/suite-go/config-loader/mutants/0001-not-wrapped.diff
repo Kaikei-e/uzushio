@@ -1,0 +1,13 @@
+diff --git a/config.go b/config.go
+index 669a9f3..3211216 100644
+--- a/config.go
++++ b/config.go
+@@ -16,7 +16,7 @@ var ErrMissing = errors.New("config: missing key")
+ func Get(m map[string]string, key string) (string, error) {
+ 	v, ok := m[key]
+ 	if !ok {
+-		return "", fmt.Errorf("%w: %q", ErrMissing, key)
++		return "", fmt.Errorf("%v: %q", ErrMissing, key)
+ 	}
+ 	return v, nil
+ }

@@ -22,21 +22,27 @@ uzushio depends on both layers below it. Neither of them depends on uzushio.
 
 - the specification corpus under `spec/` and the conformance tests under
   `tests/conform/`;
-- a Go module and four commands: `uzushio docdag-config`, which generates the
+- a Go module and its commands: `uzushio docdag-config`, which generates the
   `docdag.yaml` the corpus is validated under; `uzushio task doctor`, which
   measures a CMoA task's verifier; `uzushio task mutate`, which writes the
-  mutants it is measured with; and `uzushio task calibrate`, which re-centres a
-  banded verifier's tolerances on the host that runs it;
+  mutants it is measured with; `uzushio task calibrate`, which re-centres a
+  banded verifier's tolerances on the host that runs it; `uzushio harness
+  render`, which materialises the harness a day's binding edits describe;
+  `uzushio improve`, which mines failure patterns out of recorded traces and
+  proposes the edits that answer them; `uzushio run`, which measures a
+  candidate edit against that harness; and `uzushio version`;
 - four kinds for the harness-improvement loop — `edit` (a proposed change to
   one harness surface), `pattern` (a recurring failure, written as an STPA
   unsafe control action), `run` (one evaluation of one edit on one split) and
   `verifier` (one health check of one task's verifier) — declared in the
-  configuration. Only `verifier` has a writer that fills its directory so far.
+  configuration, and a writer for each.
 
-What does not exist yet: the `run` and `improve` commands that drive the loop
-and write `run` documents. Expect identifiers, vocabulary and layout to change;
-the graph records those changes as `supersedes` lineage rather than by
-rewriting history.
+`uzushio improve` mines the `pattern` documents out of CMoA's traces and, with
+`--propose`, writes the `edit` documents that answer them. `uzushio run`
+measures one of those edits and writes the `run` documents that settle it.
+
+Expect identifiers, vocabulary and layout to change; the graph records those
+changes as `supersedes` lineage rather than by rewriting history.
 
 ## Task doctor
 
@@ -323,6 +329,253 @@ the task's. `examples/task-plecto-gate` is the first such task, and the first
 banded one — its README says what a banded verifier costs and what it does not
 prove.
 
+## Mining patterns and proposing edits
+
+`uzushio improve` is the half of the loop that reads. It walks CMoA's recorded
+runs, evaluates fifteen deterministic rules over them, and writes one
+`pattern` document per recurring failure.
+
+```sh
+uzushio improve --traces <dir>... --vault .
+uzushio improve --traces <dir> --vault . --dry-run    # say what it would write
+uzushio improve --traces <dir> --vault . --min-support 3 --min-proposers 2
+```
+
+Every rule is a predicate over JSON fields and a small closed set of regular
+expressions over the text `git apply` and the runner produced. No model is
+asked anything, so a second pass over the same traces writes the same bytes —
+and where a pattern already exists and is still `open`, the pass **appends** the
+new run identifiers to its `evidence:` and leaves the reading somebody wrote
+alone. A pattern that has been `resolved` or `withdrawn` is never rewritten;
+the runs it refused are reported instead.
+
+Two thresholds decide what becomes a document: `--min-support` (distinct runs,
+default 2) and `--min-proposers` (default 1). One occurrence is noise, and a
+vault of singletons is a vault nobody reads. Three of the rules carry a floor
+of their own on top: a claim about the *pool* — some proposers failed where
+others passed, exactly one ever passes — says nothing about a corpus run with
+a single proposer, whatever the flags say. What falls below is printed rather
+than dropped: "two runs short of a pattern" is the honest answer to "why did
+nothing come out".
+
+Not every failure becomes a pattern, and the line is drawn on what an edit could
+change. A model server that could not be reached, or that answered 5xx, is an
+infrastructure fact: no edit to any surface can fix it, and a document for it
+would be one the vault nags about forever. Those are counted, their error texts
+reported, and never written. A **4xx** is the other thing — the server read a
+request the harness built and refused it, usually because the prompt the harness
+poured its surfaces into did not fit the context window — and that *is* a
+control action of the harness's own, so it becomes a pattern like any other.
+
+Each pattern is an STPA unsafe control action: the controller is the harness,
+the control action is what the harness gives the proposer — an instruction, a
+file, a format rule, a time budget — and `context:` says the situation that
+control action was unsafe in. A component is a rule's *attribution* and not an
+observation, which the document says of itself.
+
+With `--propose`, the second half asks the harness to improve itself, in the
+same way the harness is asked to do anything else:
+
+```sh
+uzushio improve --traces <dir> --vault . \
+  --propose --harness-from-vault \
+  --cmoa ./cmoa --config cmoa.json --out runs/improve-1
+```
+
+The vault's binding edits are rendered into a harness directory, that directory
+becomes the repository of a generated CMoA task, and the instruction is the
+pattern plus the rules a harness edit has to obey. `cmoa propose` answers with
+unified diffs, and each diff that applies becomes a proposed `edit`:
+
+- a diff under `memory/` or `skills/` becomes an edit whose **body is the
+  file** — the content, not a patch, because a patch against a harness state
+  cannot be replayed "as of a day";
+- a diff to `system-prompt.md` becomes an edit with a sidecar
+  `spec/edits/<id>.diff` and its `diff_sha256:`, which is the one surface where
+  at most one edit is ever in force;
+- a diff touching two surfaces, or any path outside the three, is refused with
+  the reason, and the other proposers' answers still land.
+
+Nothing `improve` writes is accepted. A pattern is a claim about the harness
+and an edit is a proposal about what to do; `uzushio run` is what settles
+either of them.
+
+## Rendering the harness
+
+The vault is the source and the harness directory is derived. `harness render`
+asks DocDag which edits are binding on a day, applies them to the seed in
+ascending edit id order, and writes the tree with a `render.json` beside it.
+
+```sh
+uzushio harness render --vault . --out /tmp/harness
+uzushio harness render --vault . --out /tmp/candidate --with-edit he-0007
+uzushio harness render --vault . --out /tmp/ablation --without-edit he-0003
+```
+
+The tree is three surfaces and nothing else, because those are the three the
+harness has an injection point for:
+
+```
+system-prompt.md            appended verbatim after the harness's own template
+memory/<name>.md            one note per file, rendered in sorted order
+skills/<name>/SKILL.md      one line each: the name and the description
+```
+
+`memory/` and `skills/` are always present even when empty — the empty
+directories are part of the contract, because they are what tell a proposer
+where it is allowed to act.
+
+A `memory` or `skill` edit carries its content in the document body: the body
+*is* the file, and changing it is a new edit that `supersedes` the old one. A
+`system-prompt` edit carries a sidecar unified diff at `spec/edits/<id>.diff`
+with its `diff_sha256:` in the frontmatter — DocDag parses only `.md`, so the
+digest in the frontmatter is the one thing that makes rewriting those bytes
+visible to the vault's append-only check.
+
+A sidecar diff is enumerated before it is applied — `git apply --numstat
+--summary --check` — and refused if it writes a path the edit does not declare,
+a path outside the three surfaces, a symlink, a submodule, a mode other than
+0644, or a binary patch. These diffs are model-generated: without the check, a
+`system-prompt` edit could add skills nobody reviewed as skills, and a planted
+symlink would make `tree_sha256` a fact about the machine rather than about the
+vault.
+
+`render.json` records the day, the vault revision, the ordered edits, the
+digest of every file, and `tree_sha256` — SHA-256 over the concatenation of
+`<path>\n<sha256>\n` for every file, sorted by path. The harness recomputes
+that number from the directory it was handed, and `run` refuses a trial where
+the two disagree: a paired comparison between two things nobody checked were
+the same is not a comparison.
+
+## Running an edit
+
+`uzushio run` is the half of the loop that decides. It renders the baseline
+harness and the same harness with the candidate in it, runs every task of the
+suite on both at the same seeds, and compares the pairs.
+
+```sh
+uzushio run --edit he-0007 --suite examples/suite-go/suite.json --vault . \
+  --cmoa ./cmoa --config cmoa.json
+uzushio run --edit he-0007 ... --dry-run    # render, check and plan; run nothing
+uzushio run --edit he-0007 ... --aa         # calibrate: the baseline against itself
+uzushio run --replay <run-dir>/run.json     # recompute the verdicts from the journal
+```
+
+| flag | |
+|---|---|
+| `--edit`, `--suite`, `--vault`, `--cmoa`, `--config` | all required. `--config` names the fleet, which is the model slug in every document the run writes and part of the baseline cache's key: a run without one is not reproducible |
+| `--mode screening\|confirm` | the budget; see the table below. Default `screening` |
+| `--out` | the run directory. Default `<suite dir>/runs/<run-id>`, with the shared baseline cache beside it at `<suite dir>/cache` |
+| `--as-of YYYY-MM-DD` | the day the baseline's binding set is read for. Default today, UTC |
+| `--parallel N` | pairs in flight at once. The statistic is read after each batch, so a larger number buys wall-clock and may overshoot the stopping point by up to `N-1` pairs. Default 1 |
+| `--no-cache` | draw the baseline fresh instead of reusing remembered outcomes |
+| `--docdag` | the engine binary that answers which edits are binding |
+
+It exits 2, having spent nothing, when the thing it was asked to measure is not
+measurable: the edit is not `proposed`, its component has no injection point,
+its `paths` and `touches` disagree, it predicts nothing, a suite split is under
+the floor, the proposer ids do not make a legal model slug, or adding the edit
+leaves the rendered harness unchanged.
+
+**Read the interval, not the verdict.** At tens of tasks a ten-point pass-rate
+difference is not reliably detectable, and `inconclusive` is the modal
+outcome — that is the design working, not a bug. What the run publishes per
+split is an anytime-valid interval on the pass-rate difference; the verdict is
+a word read off it.
+
+The unit of observation is the **matched pair**: one task, one repeat index,
+one seed, run once against each harness, scored `+1` where only the edited arm
+passed, `−1` where only the baseline did, `0` where they agreed. Pairing is not
+a refinement — at this budget it is the difference between a usable gate and a
+useless one. Baseline outcomes are cached per (task, seed, baseline digest), so
+a candidate costs *n* trials rather than 2*n*.
+
+The test is a beta-mixture e-process on the discordant pairs, one per split and
+direction. An e-process satisfies Ville's inequality, so the run may look after
+every pair and stop the moment a split is decided, or at its cap, with no alpha
+spending and no correction for having looked. Per split *s*:
+
+    regress       if E_harm_s >= 1/alpha or lost_tasks_s > k_s
+    improve       if delta_lo_s >= -m_s and lost_tasks_s <= k_s
+                                        and E_gain_s >= 2/alpha
+    hold          if delta_lo_s >= -m_s and lost_tasks_s <= k_s
+    inconclusive  otherwise
+
+and the edit is promoted when both splits are `improve` or `hold` and at least
+one is `improve`. `regress` is checked first, so a harmful edit is never
+reported as a hold. The superiority arm is thresholded at `2/alpha` rather than
+`1/alpha` because "a gain on at least one split" is a union of rejection
+regions; the non-inferiority and harm arms are asked of both splits, which is
+an intersection–union test and needs no correction.
+
+`lost_tasks_s` is the count gate, and it is independent of the statistics: the
+number of held-out tasks whose repeats are **all** in and **every one** of
+which the baseline won, with `k = 0`. It is a catastrophe detector — a
+sequential test at this budget will not notice one task going from always
+passing to always failing, and a count will. Both halves of the definition are
+load-bearing. Counting a task that is merely net worse, or counting one whose
+remaining repeats have not run yet, turns the gate into the dominant verdict:
+at twelve tasks and a discordance of 0.2 the looser reading rejects an edit
+that changes nothing about four times in five.
+
+| | screening (default) | confirm |
+|---|---|---|
+| repeats per task | 3 | 5 |
+| cap, pairs per split | 60 | 150 |
+| published margin `m` | 0.15 | 0.10 |
+| certifiable at that cap, `d₀ = 0.2` | ≈ 0.30 | ≈ 0.18 |
+
+**The published margins are not reachable at the published caps.** They were
+chosen against an interval that treated the observed discordance as known;
+δ = d·(2θ − 1) has *two* unknowns, and plugging the observed d in is not a
+level-α statement about δ — it also puts a floor on `delta_lo` at −d̂, so an
+edit that lost every discordant pair it had came back certified as no worse
+than the baseline. What `run` computes instead bounds both, each at α/2, and
+takes the range of d·(2θ − 1) over the product. That interval is about twice as
+wide, and it is the one that is true.
+
+The margins and the caps are the owner's, so the consequence is left where it
+belongs: `hold` requires the certified bound, and a run that cannot certify its
+margin ends `inconclusive`. In practice that means `hold` needs most of the
+screening cap — around sixty concordant pairs at `m = 0.15` — and the honest
+reading of a shorter run is that it did not settle anything.
+
+`--aa` runs the baseline against itself and reports how often it disagrees with
+itself. That number is the parameter every sample-size calculation needs, a
+self-test that the harness reproduces itself at all, and the floor on any
+effect that can ever be detected. Above 0.4 no verdict but `inconclusive` means
+anything, and the run says so.
+
+A run refuses before it spends anything on: an edit that is not `proposed`, a
+surface the rendered harness has no injection point for, an edit whose `paths`
+and `touches` disagree, an edit that predicts nothing, a suite split under the
+floor, and a candidate that leaves the rendered tree unchanged.
+
+A trial that produced no answer — a verifier that could not run, a timeout, the
+fleet going away — is not a loss. It is journalled as `pending`, it is not
+folded into the evidence, and it is never written to the baseline cache, where
+it would be replayed as a baseline *failure* by every candidate measured
+afterwards. Five unanswered pairs in a row stop the run.
+
+It leaves behind `run.json` (every parameter, both renders, the decision rule
+as a literal string, and the verdicts), `trials.jsonl` (one line per trial,
+two per pair), and one `run` document per split in the vault, whose
+`pass_rate` and `baseline_pass_rate` are what each arm scored over the pairs
+that ran. `--replay` recomputes the pairing *and* the verdicts from the journal
+and reports any disagreement with the header: the claim the record makes is
+that it is sufficient to re-derive every decision offline, and the replay is
+the only thing that can falsify it.
+
+`run.json` and the run documents are written before the vault's edit is
+touched, and the status transition is the last thing the run does — so a
+failure leaves the edit `proposed` with the measurement on disk, never
+accepted or rejected with no record behind it.
+
+What the run does to the edit afterwards is the surface's business, not the
+run's: `memory` and `skill` are accepted without asking anybody, every other
+surface is left `proposed` with the instruction a reviewer needs, and a
+regression is rejected either way.
+
 ## The specification is a graph
 
 The corpus is a [DocDag](https://github.com/Kaikei-e/DocDag) v0.4.0 `spec`
@@ -424,6 +677,9 @@ the graph, so before opening one:
    accepted clause's meaning in place.
 3. Give a new `MUST` its conformance test in the same change.
 4. If you changed the rules, edit `internal/vault` and run `make check`.
+5. One pull request is one roadmap step. Claim it in the title or body as
+   `Step N` — the marker convention clause UZ-C-007 is checked against;
+   two different steps in one pull request fail the check.
 
 Design notes and the papers this standard leans on are recorded in the
 corpus itself (`spec/principles/`, `spec/premises/`, `spec/pm/`), so the

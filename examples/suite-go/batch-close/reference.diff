@@ -1,0 +1,14 @@
+diff --git a/batch.go b/batch.go
+index 0d77f35..6e83a29 100644
+--- a/batch.go
++++ b/batch.go
+@@ -30,8 +30,8 @@ func Total(names []string, open func(string) (*Batch, error)) (int, error) {
+ 		if err != nil {
+ 			return n, err
+ 		}
+-		defer b.Close()
+ 		n += b.Size()
++		b.Close()
+ 	}
+ 	return n, nil
+ }

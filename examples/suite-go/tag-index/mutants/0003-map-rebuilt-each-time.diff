@@ -1,0 +1,15 @@
+diff --git a/index.go b/index.go
+index 6384d4e..91526f8 100644
+--- a/index.go
++++ b/index.go
+@@ -10,9 +10,7 @@ type Index struct {
+ // Add records that the document id carries the tag. Ids are kept in the
+ // order they were added.
+ func (ix *Index) Add(tag, id string) {
+-	if ix.byTag == nil {
+-		ix.byTag = map[string][]string{}
+-	}
++	ix.byTag = map[string][]string{}
+ 	ix.byTag[tag] = append(ix.byTag[tag], id)
+ }
+ 

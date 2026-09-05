@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "id": "session-lru",
+  "repo": "repo",
+  "rev": "HEAD",
+  "files": [
+    "lru.go",
+    "lru_test.go"
+  ],
+  "verify": {
+    "compose_file": "compose.yaml",
+    "service": "verify",
+    "kind": "exit-code",
+    "timeout_seconds": 600
+  },
+  "reference": {
+    "diff": "reference.diff"
+  },
+  "mutants": [
+    {
+      "diff": "mutants/0001-reading-does-not-count.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "lru.go: a read does not count as a use, so the cache evicts in arrival order"
+    },
+    {
+      "diff": "mutants/0002-writing-does-not-count.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "lru.go: rewriting a record no longer counts as using it"
+    },
+    {
+      "diff": "mutants/0003-newest-evicted.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "lru.go: the most recently used record is the one dropped"
+    }
+  ],
+  "doctor": {
+    "kill_rate_min": 0.8,
+    "reference_runs": 2
+  }
+}

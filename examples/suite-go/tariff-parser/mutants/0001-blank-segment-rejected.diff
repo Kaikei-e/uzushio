@@ -1,0 +1,14 @@
+diff --git a/parse.go b/parse.go
+index 5df3e6f..8a4e26c 100644
+--- a/parse.go
++++ b/parse.go
+@@ -19,9 +19,6 @@ import (
+ func Parse(line string) (map[string]string, error) {
+ 	out := map[string]string{}
+ 	for _, seg := range strings.Split(line, ";") {
+-		if strings.TrimSpace(seg) == "" {
+-			continue
+-		}
+ 		kv := strings.SplitN(seg, "=", 2)
+ 		if len(kv) != 2 {
+ 			return nil, errSegment(seg)

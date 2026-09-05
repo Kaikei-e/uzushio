@@ -1,0 +1,13 @@
+diff --git a/counter.go b/counter.go
+index 60f13f5..b7f21ae 100644
+--- a/counter.go
++++ b/counter.go
+@@ -17,8 +17,6 @@ func New() *Counter { return &Counter{n: map[string]int{}} }
+ 
+ // Inc records one event called name.
+ func (c *Counter) Inc(name string) {
+-	c.mu.Lock()
+-	defer c.mu.Unlock()
+ 	c.n[name]++
+ }
+ 

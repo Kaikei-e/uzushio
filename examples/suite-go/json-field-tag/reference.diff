@@ -1,0 +1,16 @@
+diff --git a/invoice.go b/invoice.go
+index 58db386..78a336a 100644
+--- a/invoice.go
++++ b/invoice.go
+@@ -7,9 +7,9 @@ import "encoding/json"
+ // they are lower_snake_case throughout.
+ type Invoice struct {
+ 	Number      string `json:"number"`
+-	Customer    string `json:"custmer"`
++	Customer    string `json:"customer"`
+ 	AmountCents int64  `json:"amount_cents"`
+-	Paid        bool
++	Paid        bool   `json:"paid"`
+ }
+ 
+ // Parse decodes one invoice.

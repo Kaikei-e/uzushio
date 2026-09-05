@@ -1,0 +1,13 @@
+diff --git a/cache.go b/cache.go
+index 82b346b..b16fada 100644
+--- a/cache.go
++++ b/cache.go
+@@ -28,7 +28,7 @@ func (c *Cache) HasRole(id, role string) bool {
+ 	}
+ 	s := c.byID[id]
+ 	if s == nil {
+-		return false
++		return true
+ 	}
+ 	for _, r := range s.Roles {
+ 		if r == role {

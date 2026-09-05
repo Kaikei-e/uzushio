@@ -1,0 +1,15 @@
+diff --git a/rank.go b/rank.go
+index 0a0e3d5..92dc9a5 100644
+--- a/rank.go
++++ b/rank.go
+@@ -14,8 +14,6 @@ type Entry struct {
+ // the same submissions does not shuffle the players who are level. The
+ // argument is not modified.
+ func Rank(entries []Entry) []Entry {
+-	out := make([]Entry, len(entries))
+-	copy(out, entries)
+-	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+-	return out
++	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Score > entries[j].Score })
++	return entries
+ }

@@ -1,0 +1,15 @@
+diff --git a/row.go b/row.go
+index caac088..30abb4f 100644
+--- a/row.go
++++ b/row.go
+@@ -11,9 +11,7 @@ import "strings"
+ func Row(fields []string) string {
+ 	out := make([]string, len(fields))
+ 	for i, f := range fields {
+-		if strings.ContainsAny(f, ",\"\r\n") {
+-			f = `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
+-		}
++		f = `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
+ 		out[i] = f
+ 	}
+ 	return strings.Join(out, ",") + "\r\n"

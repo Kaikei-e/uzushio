@@ -1,0 +1,23 @@
+diff --git a/batch.go b/batch.go
+index 6e83a29..64fb182 100644
+--- a/batch.go
++++ b/batch.go
+@@ -25,13 +25,17 @@ func (b *Batch) Close() { b.closed = true }
+ // total so far with the error.
+ func Total(names []string, open func(string) (*Batch, error)) (int, error) {
+ 	n := 0
++	var prev *Batch
+ 	for _, name := range names {
++		if prev != nil {
++			prev.Close()
++		}
+ 		b, err := open(name)
+ 		if err != nil {
+ 			return n, err
+ 		}
+ 		n += b.Size()
+-		b.Close()
++		prev = b
+ 	}
+ 	return n, nil
+ }

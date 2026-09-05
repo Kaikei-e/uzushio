@@ -10,3 +10,21 @@
 # machine ran it. Neither belongs in a public repository.
 /examples/*/repo/
 /examples/*/doctor/
+
+# The suite's tasks are one level deeper than examples/task-hello, so the
+# patterns above do not reach them. runs/ is what `cmoa propose` and
+# `cmoa select` write; it carries absolute paths too.
+/examples/suite-go/*/repo/
+/examples/suite-go/*/runs/
+/examples/suite-go/*/doctor/
+
+# What `uzushio run` writes: the rendered harness trees, the per-trial journal,
+# the run header, and the baseline cache it shares between sibling runs. The
+# default --out is <suite dir>/runs/<run-id> and the cache is <suite dir>/cache,
+# so both live beside whichever suite was measured. They carry trace paths and
+# the harness's own stderr, so neither belongs in a public repository.
+/runs/
+/cache/
+/examples/*/cache/
+/examples/suite-go/cache/
+/examples/suite-go/runs/

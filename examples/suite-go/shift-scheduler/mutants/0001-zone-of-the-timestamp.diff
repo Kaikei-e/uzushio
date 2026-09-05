@@ -1,0 +1,12 @@
+diff --git a/day.go b/day.go
+index c60b198..3d8150f 100644
+--- a/day.go
++++ b/day.go
+@@ -8,6 +8,6 @@ import "time"
+ // whatever zone it was recorded in, so the day it belongs to is the one it
+ // falls on as loc reads the clock.
+ func DayStart(t time.Time, loc *time.Location) time.Time {
+-	y, m, d := t.In(loc).Date()
++	y, m, d := t.Date()
+ 	return time.Date(y, m, d, 0, 0, 0, 0, loc)
+ }

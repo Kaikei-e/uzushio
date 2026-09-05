@@ -1,0 +1,13 @@
+diff --git a/mask.go b/mask.go
+index 133a0dd..8c2970d 100644
+--- a/mask.go
++++ b/mask.go
+@@ -5,7 +5,7 @@ package perm
+ // numbered from 0, so permission 0 is the lowest bit and permission 7 is
+ // the highest bit of the byte.
+ func Has(mask uint8, n int) bool {
+-	return mask&(1<<n) != 0
++	return mask>>n != 0
+ }
+ 
+ // Grant returns the mask with permission n added. Permissions already in

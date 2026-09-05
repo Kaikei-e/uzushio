@@ -1,0 +1,13 @@
+diff --git a/invoice.go b/invoice.go
+index 78a336a..a4a6cb3 100644
+--- a/invoice.go
++++ b/invoice.go
+@@ -9,7 +9,7 @@ type Invoice struct {
+ 	Number      string `json:"number"`
+ 	Customer    string `json:"customer"`
+ 	AmountCents int64  `json:"amount_cents"`
+-	Paid        bool   `json:"paid"`
++	Paid        bool   `json:"Paid"`
+ }
+ 
+ // Parse decodes one invoice.

@@ -1,0 +1,13 @@
+diff --git a/page.go b/page.go
+index 71137c3..6c90d9e 100644
+--- a/page.go
++++ b/page.go
+@@ -5,7 +5,7 @@ package pagination
+ // the caller passes back to get the following page. When the page reaches
+ // the end of ids there is no following page and the next cursor is -1.
+ func Page(ids []string, cursor, size int) ([]string, int) {
+-	end := cursor + size
++	end := cursor + size - 1
+ 	if end > len(ids) {
+ 		end = len(ids)
+ 	}

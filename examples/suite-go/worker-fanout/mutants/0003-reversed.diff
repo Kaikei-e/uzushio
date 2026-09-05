@@ -1,0 +1,15 @@
+diff --git a/fanout.go b/fanout.go
+index c924d22..49cf746 100644
+--- a/fanout.go
++++ b/fanout.go
+@@ -6,8 +6,8 @@ package fanout
+ // outlive this call and are called long after it has returned.
+ func Handlers(shards []string) []func() string {
+ 	out := make([]func() string, 0, len(shards))
+-	for _, s := range shards {
+-		shard := s
++	for i := len(shards) - 1; i >= 0; i-- {
++		shard := shards[i]
+ 		out = append(out, func() string { return shard })
+ 	}
+ 	return out

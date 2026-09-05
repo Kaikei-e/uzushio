@@ -1,0 +1,12 @@
+diff --git a/stream.go b/stream.go
+index 7b10a74..6f6982a 100644
+--- a/stream.go
++++ b/stream.go
+@@ -8,6 +8,7 @@ package feed
+ func Stream(items []string) <-chan string {
+ 	ch := make(chan string)
+ 	go func() {
++		defer close(ch)
+ 		for _, it := range items {
+ 			ch <- it
+ 		}

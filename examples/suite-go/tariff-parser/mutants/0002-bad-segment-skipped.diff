@@ -1,0 +1,13 @@
+diff --git a/parse.go b/parse.go
+index 5df3e6f..d2bf33b 100644
+--- a/parse.go
++++ b/parse.go
+@@ -24,7 +24,7 @@ func Parse(line string) (map[string]string, error) {
+ 		}
+ 		kv := strings.SplitN(seg, "=", 2)
+ 		if len(kv) != 2 {
+-			return nil, errSegment(seg)
++			continue
+ 		}
+ 		out[kv[0]] = kv[1]
+ 	}

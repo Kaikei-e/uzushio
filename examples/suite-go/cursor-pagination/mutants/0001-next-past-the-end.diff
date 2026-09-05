@@ -1,0 +1,13 @@
+diff --git a/page.go b/page.go
+index 71137c3..406e3fa 100644
+--- a/page.go
++++ b/page.go
+@@ -10,7 +10,7 @@ func Page(ids []string, cursor, size int) ([]string, int) {
+ 		end = len(ids)
+ 	}
+ 	next := end
+-	if next >= len(ids) {
++	if next > len(ids) {
+ 		next = -1
+ 	}
+ 	return ids[cursor:end], next

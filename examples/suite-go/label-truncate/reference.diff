@@ -1,0 +1,16 @@
+diff --git a/truncate.go b/truncate.go
+index c032de9..90f6676 100644
+--- a/truncate.go
++++ b/truncate.go
+@@ -7,8 +7,9 @@ package label
+ // shortened label is n characters plus the ellipsis. A label that already
+ // fits comes back unchanged, with no ellipsis.
+ func Truncate(s string, n int) string {
+-	if len(s) <= n {
++	r := []rune(s)
++	if len(r) <= n {
+ 		return s
+ 	}
+-	return s[:n] + "…"
++	return string(r[:n]) + "…"
+ }

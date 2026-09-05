@@ -1,0 +1,15 @@
+diff --git a/lru.go b/lru.go
+index 5d058d1..1857e2f 100644
+--- a/lru.go
++++ b/lru.go
+@@ -40,7 +40,9 @@ func (c *Cache) Get(k string) (string, bool) {
+ // dropped.
+ func (c *Cache) Put(k, v string) {
+ 	c.vals[k] = v
+-	c.touch(k)
++	if _, seen := c.vals[k]; !seen {
++		c.touch(k)
++	}
+ 	for len(c.order) > c.max {
+ 		oldest := c.order[0]
+ 		c.order = c.order[1:]

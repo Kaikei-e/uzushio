@@ -1,0 +1,22 @@
+diff --git a/key.go b/key.go
+index 54fc3fc..5fc225e 100644
+--- a/key.go
++++ b/key.go
+@@ -1,15 +1,12 @@
+ // Package objectkey builds the keys an object store is addressed by.
+ package objectkey
+ 
+-import (
+-	"path"
+-	"strings"
+-)
++import "strings"
+ 
+ // Key joins the parts of an object's name into a store key. Store keys are
+ // always separated by "/" whatever the host filesystem uses, they never
+ // begin with "/", empty parts contribute nothing, and a part of ".." steps
+ // back over the part before it.
+ func Key(parts ...string) string {
+-	return strings.TrimPrefix(path.Join(parts...), "/")
++	return strings.Trim(strings.Join(parts, "/"), "/")
+ }

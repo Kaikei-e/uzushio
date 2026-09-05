@@ -1,0 +1,12 @@
+diff --git a/order.go b/order.go
+index b82c72a..49bf6dd 100644
+--- a/order.go
++++ b/order.go
+@@ -16,6 +16,6 @@ func Order(rs []Release) {
+ 		if rs[i].Day != rs[j].Day {
+ 			return rs[i].Day > rs[j].Day
+ 		}
+-		return rs[i].Name < rs[j].Name
++		return rs[i].Name > rs[j].Name
+ 	})
+ }

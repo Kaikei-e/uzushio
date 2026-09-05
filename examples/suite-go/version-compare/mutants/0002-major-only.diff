@@ -1,0 +1,13 @@
+diff --git a/compare.go b/compare.go
+index f3e7609..754cc7c 100644
+--- a/compare.go
++++ b/compare.go
+@@ -12,7 +12,7 @@ import (
+ // The components are numbers, not text, so 1.10.0 is newer than 1.9.0.
+ func Compare(a, b string) int {
+ 	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+-	for i := 0; i < 3; i++ {
++	for i := 0; i < 1; i++ {
+ 		x, _ := strconv.Atoi(pa[i])
+ 		y, _ := strconv.Atoi(pb[i])
+ 		if x < y {

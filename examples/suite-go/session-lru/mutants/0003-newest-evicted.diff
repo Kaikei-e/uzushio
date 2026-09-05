@@ -1,0 +1,15 @@
+diff --git a/lru.go b/lru.go
+index 5d058d1..b606e5f 100644
+--- a/lru.go
++++ b/lru.go
+@@ -42,8 +42,8 @@ func (c *Cache) Put(k, v string) {
+ 	c.vals[k] = v
+ 	c.touch(k)
+ 	for len(c.order) > c.max {
+-		oldest := c.order[0]
+-		c.order = c.order[1:]
++		oldest := c.order[len(c.order)-1]
++		c.order = c.order[:len(c.order)-1]
+ 		delete(c.vals, oldest)
+ 	}
+ }

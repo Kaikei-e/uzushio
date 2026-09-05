@@ -1,0 +1,35 @@
+diff --git a/counter.go b/counter.go
+index e03ee09..60f13f5 100644
+--- a/counter.go
++++ b/counter.go
+@@ -2,11 +2,14 @@
+ // requests at once.
+ package metrics
+ 
++import "sync"
++
+ // Counter counts events by name. Handlers running in different goroutines
+ // record into the same counter and read from it while others are recording,
+ // so every exported method must be safe to call concurrently.
+ type Counter struct {
+-	n map[string]int
++	mu sync.Mutex
++	n  map[string]int
+ }
+ 
+ // New returns an empty counter.
+@@ -14,10 +17,14 @@ func New() *Counter { return &Counter{n: map[string]int{}} }
+ 
+ // Inc records one event called name.
+ func (c *Counter) Inc(name string) {
++	c.mu.Lock()
++	defer c.mu.Unlock()
+ 	c.n[name]++
+ }
+ 
+ // Get returns how many events called name have been recorded.
+ func (c *Counter) Get(name string) int {
++	c.mu.Lock()
++	defer c.mu.Unlock()
+ 	return c.n[name]
+ }

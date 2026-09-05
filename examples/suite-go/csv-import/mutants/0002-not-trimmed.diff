@@ -1,0 +1,11 @@
+diff --git a/clean.go b/clean.go
+index e9d6ac7..6fb6387 100644
+--- a/clean.go
++++ b/clean.go
+@@ -9,5 +9,5 @@ import "strings"
+ // line endings — from both ends. Whitespace inside the field is left as it
+ // is.
+ func Clean(s string) string {
+-	return strings.TrimSpace(strings.TrimPrefix(s, "\ufeff"))
++	return strings.TrimPrefix(s, "\ufeff")
+ }

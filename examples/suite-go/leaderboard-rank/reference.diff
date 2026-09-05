@@ -1,0 +1,12 @@
+diff --git a/rank.go b/rank.go
+index ce52acc..0a0e3d5 100644
+--- a/rank.go
++++ b/rank.go
+@@ -16,6 +16,6 @@ type Entry struct {
+ func Rank(entries []Entry) []Entry {
+ 	out := make([]Entry, len(entries))
+ 	copy(out, entries)
+-	sort.Slice(out, func(i, j int) bool { return out[i].Score > out[j].Score })
++	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+ 	return out
+ }

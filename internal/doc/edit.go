@@ -1,8 +1,13 @@
 package doc
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"maps"
+	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/Kaikei-e/DocDag/config"
 
@@ -35,6 +40,20 @@ type Edit struct {
 	// which the vault reports as an error. Touching sets it to the component
 	// where there is nothing more to say.
 	Touches []string
+	// Paths lists the files under the rendered harness directory the edit
+	// owns, relative to that directory's root and slash separated. A memory
+	// or skill edit names exactly one file and its Body is that file's
+	// content; a system-prompt edit names system-prompt.md and carries its
+	// content as a sidecar diff instead.
+	//
+	// It is optional here and required by whatever renders the edit: an edit
+	// document is a proposal, and DocDag has no path arithmetic to check one
+	// against its component, so the obligation is carried by CheckPaths and
+	// by the two commands that call it.
+	Paths []string
+	// DiffSHA256 is the SHA-256 of the sidecar unified diff, as 64 lowercase
+	// hexadecimal digits. Only a system-prompt edit writes one.
+	DiffSHA256 string
 	// RootCause is prose: why the failure happened, not what to do about it.
 	RootCause string
 	// Approval says whether a person stood behind the acceptance.
@@ -56,7 +75,10 @@ type Edit struct {
 	Predicts []Prediction
 	// Supersedes names the edits this one replaces.
 	Supersedes []Supersession
-	// Body is the Markdown under the heading.
+	// Body is the Markdown under the heading. For a memory or a skill edit it
+	// is not commentary about the change: it *is* the content written to the
+	// single path the edit names. For a system-prompt edit the content is the
+	// sidecar diff and the body is whatever prose the proposer wrote.
 	Body string
 }
 
@@ -70,7 +92,12 @@ type EditFrontmatter struct {
 	// touches carries no omitempty: an edit with an empty list is a document
 	// the vault reports, and a writer that dropped the key would turn a
 	// validation failure here into a lint failure there.
-	Touches        []string          `yaml:"touches"`
+	Touches []string `yaml:"touches"`
+	// paths carries omitempty: an edit that names no file is a proposal
+	// nothing has rendered yet, which is a legal state for a document even
+	// though it is not a legal state for a run.
+	Paths          []string          `yaml:"paths,omitempty"`
+	DiffSHA256     string            `yaml:"diff_sha256,omitempty"`
 	RootCause      string            `yaml:"root_cause,omitempty"`
 	Approval       string            `yaml:"approval"`
 	ApprovedBy     string            `yaml:"approved_by,omitempty"`
@@ -144,6 +171,18 @@ func (e Edit) Validate() error {
 	if err := requireVocabulary("edit "+e.EditID+" approval", e.Approval, vocab.AllApprovals()); err != nil {
 		return err
 	}
+	// The paths are checked for shape here and for meaning in CheckPaths: a
+	// document that names a file outside the tree is malformed whatever it is
+	// for, while a document that names no file at all is merely unrendered.
+	for _, p := range e.Paths {
+		if err := surfaces.CheckHarnessPath(p); err != nil {
+			return fmt.Errorf("%w: edit %s: %w", ErrDocument, e.EditID, err)
+		}
+	}
+	if e.DiffSHA256 != "" && !hexDigest.MatchString(e.DiffSHA256) {
+		return fmt.Errorf("%w: edit %s diff_sha256 %q is not 64 lowercase hexadecimal digits",
+			ErrDocument, e.EditID, e.DiffSHA256)
+	}
 	if err := optionalDay("edit "+e.EditID+" in_force_from", e.InForceFrom); err != nil {
 		return err
 	}
@@ -184,6 +223,8 @@ func (e Edit) Frontmatter() (EditFrontmatter, error) {
 		Date:           e.Date,
 		Component:      e.Component,
 		Touches:        e.Touches,
+		Paths:          e.Paths,
+		DiffSHA256:     e.DiffSHA256,
 		RootCause:      e.RootCause,
 		Approval:       e.Approval.String(),
 		ApprovedBy:     e.ApprovedBy,
@@ -261,4 +302,98 @@ func validateIDs(what string, ids []string, valid func(string) bool, want string
 		}
 	}
 	return nil
+}
+
+// hexDigest is a SHA-256 as the frontmatter writes one.
+var hexDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// CheckPaths reports whether the edit says enough about files for something to
+// render it. It is deliberately not part of Validate: an edit that names no
+// path is a document DocDag accepts and a run refuses, and collapsing the two
+// would make a legal corpus unwritable.
+//
+// The rule it enforces is the one the vault cannot: every path maps to exactly
+// one surface by its shape, every path maps to the edit's own component,
+// touches says the same set of surfaces the paths do, a memory or skill edit
+// owns exactly one file, and a system-prompt edit carries the digest of the
+// sidecar diff that holds its content while the other two carry none.
+func (e Edit) CheckPaths() error {
+	if err := e.Validate(); err != nil {
+		return err
+	}
+	if !surfaces.HasInjectionPoint(e.Component) {
+		return fmt.Errorf(
+			"%w: edit %s is about %q, which the rendered harness has no injection point for (%v)",
+			ErrDocument, e.EditID, e.Component, surfaces.Injectable())
+	}
+	if len(e.Paths) == 0 {
+		return fmt.Errorf("%w: edit %s names no paths:; an edit states the files it owns before it can be rendered",
+			ErrDocument, e.EditID)
+	}
+	seen := map[string]bool{}
+	for i, p := range e.Paths {
+		if slices.Contains(e.Paths[:i], p) {
+			return fmt.Errorf("%w: edit %s names path %q twice", ErrDocument, e.EditID, p)
+		}
+		component, err := surfaces.ComponentForPath(p)
+		if err != nil {
+			return fmt.Errorf("%w: edit %s: %w", ErrDocument, e.EditID, err)
+		}
+		if component != e.Component {
+			return fmt.Errorf("%w: edit %s is about %q but owns %q, which is %q",
+				ErrDocument, e.EditID, e.Component, p, component)
+		}
+		seen[component] = true
+	}
+	derived := slices.Sorted(maps.Keys(seen))
+	touches := slices.Clone(e.Touches)
+	slices.Sort(touches)
+	touches = slices.Compact(touches)
+	if !slices.Equal(derived, touches) {
+		return fmt.Errorf("%w: edit %s touches %v but its paths say %v; touches is derived from paths and must match",
+			ErrDocument, e.EditID, touches, derived)
+	}
+	switch e.Component {
+	case componentSystemPrompt:
+		if e.DiffSHA256 == "" {
+			return fmt.Errorf("%w: edit %s is a system-prompt edit and writes no diff_sha256:; its content is the sidecar diff",
+				ErrDocument, e.EditID)
+		}
+	default:
+		if len(e.Paths) != 1 {
+			return fmt.Errorf("%w: edit %s owns %d files; a %s edit owns exactly one, whose content is the document body",
+				ErrDocument, e.EditID, len(e.Paths), e.Component)
+		}
+		if e.DiffSHA256 != "" {
+			return fmt.Errorf("%w: edit %s is a %s edit and writes diff_sha256:; only a system-prompt edit carries a sidecar diff",
+				ErrDocument, e.EditID, e.Component)
+		}
+		if strings.TrimSpace(e.Body) == "" {
+			return fmt.Errorf("%w: edit %s has an empty body; a %s edit's body is the content of %s",
+				ErrDocument, e.EditID, e.Component, e.Paths[0])
+		}
+	}
+	return nil
+}
+
+// componentSystemPrompt is the one surface whose content lives beside the
+// document rather than inside it.
+const componentSystemPrompt = "system-prompt"
+
+// DiffPath returns where a system-prompt edit's sidecar unified diff is
+// written, relative to the vault root. The sidecar is not a document: DocDag
+// parses only .md, so the file is invisible to the graph and the frontmatter
+// digest is what stands guard over its bytes.
+func DiffPath(editID string) (string, error) {
+	if !vocab.ValidEditID(editID) {
+		return "", fmt.Errorf("%w: %q is not an edit identifier (want %s)", ErrDocument, editID, vocab.EditIDPattern)
+	}
+	return vocab.DirEdits + "/" + editID + ".diff", nil
+}
+
+// DiffSHA256Of returns the digest an edit's diff_sha256 has to carry for these
+// bytes, so a writer and a checker compute it the same way.
+func DiffSHA256Of(diff []byte) string {
+	sum := sha256.Sum256(diff)
+	return hex.EncodeToString(sum[:])
 }

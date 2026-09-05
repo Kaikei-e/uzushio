@@ -1,0 +1,14 @@
+diff --git a/render.go b/render.go
+index be331dd..3072407 100644
+--- a/render.go
++++ b/render.go
+@@ -13,8 +13,8 @@ type Renderer struct {
+ // What it returns is that section and nothing else — a renderer that has
+ // already rendered a section must not carry it into the next one.
+ func (r *Renderer) Section(title string, lines []string) string {
+-	r.b.Reset()
+ 	r.b.WriteString("## " + title + "\n")
++	r.b.Reset()
+ 	for _, l := range lines {
+ 		r.b.WriteString(l + "\n")
+ 	}
