@@ -30,12 +30,15 @@ uzushio depends on both layers below it. Neither of them depends on uzushio.
   render`, which materialises the harness a day's binding edits describe;
   `uzushio improve`, which mines failure patterns out of recorded traces and
   proposes the edits that answer them; `uzushio run`, which measures a
-  candidate edit against that harness; and `uzushio version`;
-- four kinds for the harness-improvement loop — `edit` (a proposed change to
+  candidate edit against that harness; `uzushio judge`, which derives a
+  calibration suite from pairwise human judgments, measures a judge model over
+  it and says which calibrations still bind; and `uzushio version`;
+- five kinds for the harness-improvement loop — `edit` (a proposed change to
   one harness surface), `pattern` (a recurring failure, written as an STPA
-  unsafe control action), `run` (one evaluation of one edit on one split) and
-  `verifier` (one health check of one task's verifier) — declared in the
-  configuration, and a writer for each.
+  unsafe control action), `run` (one evaluation of one edit on one split),
+  `verifier` (one health check of one task's verifier) and `calibration` (one
+  measurement of one judge model) — declared in the configuration, and a
+  writer for each.
 
 `uzushio improve` mines the `pattern` documents out of CMoA's traces and, with
 `--propose`, writes the `edit` documents that answer them. `uzushio run`
@@ -328,6 +331,118 @@ A task does not have to be a toy, and its repository does not have to live here:
 the task's. `examples/task-plecto-gate` is the first such task, and the first
 banded one — its README says what a banded verifier costs and what it does not
 prove.
+
+## Calibrating a judge
+
+A verifier says whether an answer is right. On tasks where nothing can say
+that — an explanation, a rewrite, a piece of advice — the harness asks a
+**judge** model to choose between the proposers' answers instead. That makes
+the judge an instrument, and an instrument nobody has checked against a
+reference is a number generator.
+
+`uzushio judge` is the three commands that check one.
+
+```sh
+uzushio judge import-mtbench --out examples/suite-chat --target 200 --seed 1
+uzushio judge calibrate --suite examples/suite-chat/suite.json \
+  --cmoa ./cmoa --config cmoa.json --vault . --rerun 2
+uzushio judge status --vault .
+```
+
+### Three coefficients, not one
+
+The command reports three numbers and refuses to average them, because they
+are three different claims:
+
+| | what it compares | what it says |
+|---|---|---|
+| `swap_kappa` | the judge against itself with the two candidates in the other order | position bias |
+| `rerun_kappa` | the judge against itself on another seed | sampling noise |
+| `human_kappa` | the judge against people | **validity** |
+
+Only the third is validity. The first two are the judge against itself, so the
+two readings are not independent, which pushes their agreement up; a judge can
+be perfectly self-consistent and consistently wrong, and the published work
+that measures both finds exactly that pair. A calibration with no human labels
+therefore writes `human_kappa: unmeasured` and `verdict: unmeasured` rather
+than borrowing a number from the other two.
+
+Each coefficient is stored with `p_o`, `p_e`, PABAK, both marginal
+distributions, the sample size and a jackknife interval, in the `report.json`
+the document names. That is not thoroughness: a kappa is a function of the
+marginals as well as of the agreement, so the coefficient alone cannot be
+read — two raters biased in *opposite* directions score higher than two
+well-calibrated ones, and high observed agreement collapses to a low kappa
+wherever one answer dominates.
+
+### The tie handling is part of the number
+
+What is done with the answers that are not a choice — the judge returning no
+candidate, a person saying "tie" or "none of these" — is a choice of estimand
+rather than a preprocessing detail. The same verdicts scored two defensible
+ways move a reported accuracy from 0.55 to 0.90 and take kappa across zero.
+So every number carries the name of the handling it was computed under, in the
+report and in the document:
+
+- `abstain-as-category` (primary) keeps every item and scores abstention as a
+  category of its own;
+- `decided-only` (secondary) drops the items either side abstained on and
+  scores the rest.
+
+### A calibration expires
+
+The `calibration` document carries force from the day it was written until
+thirty days after its measurement window closes, and then stops binding — no
+document is edited and nobody has to remember. `uzushio judge status` turns
+that into the warning:
+
+```
+binding calibrations as of 2026-10-20: 0
+last measurement against people: 2026-09-06 (44 day(s) ago), kappa 0.512 over 200 item(s)
+warning: validity not measured for 44 days: the last comparison with people closed on
+  2026-09-06 and a calibration carries force for 30 days
+warning: no calibration is binding today: whatever the judge is deciding, it is
+  deciding it on a measurement that has expired or was never made
+```
+
+It exits non-zero when there is a warning, so a pipeline can gate on it.
+
+### Where the items come from
+
+`import-mtbench` derives the corpus from a public set of **pairwise** human
+judgments: two answers to one prompt and a person's verdict on which is
+better. A judge that picks one of three answers cannot be measured on those
+directly, so each item is a triple of systems whose three pairwise majorities
+are all present and do not contradict each other, labelled with the system
+that beat both others.
+
+- A triple with a pair nobody compared is dropped, not completed by
+  transitivity — transitivity is the assumption under test.
+- A triple whose majorities cycle is dropped, not resolved. It has no true
+  answer, and a label invented for it is noise put straight into the
+  coefficient. **The cycle rate is written into `DERIVATION.md`**: it is a
+  measurement of the human labels, and a floor under the disagreement any
+  judge will show.
+- Items are banded by the Bradley-Terry margin between the best and the
+  second-best of the three and sampled in a fixed 40/40/20 mix, because kappa
+  is sensitive to how obvious the answer is.
+- The whole import is deterministic given `--seed`.
+
+The derived suite is `examples/suite-chat`. Its `ATTRIBUTION.md` names the
+source and its licence and `DERIVATION.md` states every count; the candidate
+answers are reproduced byte for byte, because a corpus whose answers have been
+tidied is not the corpus the human labels were collected on.
+
+`--labels <file.jsonl>` adds labels a person gave directly, one JSON object per
+line. Where two people labelled the same items the report also carries the
+**ceiling** — how far two people agree with each other — which is what a
+judge's agreement should be read against, rather than against 1.0.
+
+### How many items
+
+At three categories, a 95% interval of half-width ±0.10 around a kappa near 0.6
+needs about 170 items; 200 gives about ±0.09 and 50 gives ±0.18. Fifty items is
+a smoke test, not a calibration. The default `--target 200` is that arithmetic.
 
 ## Mining patterns and proposing edits
 
