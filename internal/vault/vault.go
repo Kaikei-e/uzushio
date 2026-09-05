@@ -11,6 +11,7 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/Kaikei-e/DocDag/config"
@@ -375,6 +376,14 @@ func extendEdges(cfg *config.Config) error {
 		spec.To = appendKinds(spec.To, w.to)
 		cfg.Edges[index] = spec
 	}
+	// One word added to the reason a supersession gives. The preset's four are
+	// about why a clause was rewritten; a measurement is not rewritten for a
+	// reason, it is replaced because somebody measured again, and `conflict`
+	// would be a lie on the ordinary case where the second measurement agrees
+	// with the first.
+	if err := widenSupersedesReason(cfg); err != nil {
+		return err
+	}
 
 	cfg.Edges = append(cfg.Edges,
 		config.EdgeSpec{
@@ -437,6 +446,28 @@ func extendEdges(cfg *config.Config) error {
 	return nil
 }
 
+// widenSupersedesReason adds uzushio's word to the preset's vocabulary.
+func widenSupersedesReason(cfg *config.Config) error {
+	index := slices.IndexFunc(cfg.Edges, func(spec config.EdgeSpec) bool {
+		return spec.Name == config.EdgeSupersedes.String()
+	})
+	if index < 0 {
+		return fmt.Errorf("%w: the spec preset declares no supersedes edge", ErrConfig)
+	}
+	spec := cfg.Edges[index]
+	reason, ok := spec.Attrs[config.AttrReason]
+	if !ok {
+		return fmt.Errorf("%w: the supersedes edge declares no reason attribute", ErrConfig)
+	}
+	if !slices.Contains(reason.OneOf, vocab.ReasonRemeasured) {
+		reason.OneOf = append(slices.Clone(reason.OneOf), vocab.ReasonRemeasured)
+	}
+	spec.Attrs = maps.Clone(spec.Attrs)
+	spec.Attrs[config.AttrReason] = reason
+	cfg.Edges[index] = spec
+	return nil
+}
+
 // appendKinds adds kinds to an endpoint list, skipping the ones already there
 // so widening an edge twice is the same as widening it once.
 func appendKinds(have, add []string) []string {
@@ -480,40 +511,6 @@ func extendProjections(cfg *config.Config) error {
 		validated(vocab.ProjectionValidatedIn, vocab.SplitHeldIn),
 		validated(vocab.ProjectionValidatedOut, vocab.SplitHeldOut),
 		config.ProjectionSpec{
-			// A later measurement of the same judge, itself still in force.
-			//
-			// The preset's has_inforce_successor cannot be reused: it asks the
-			// superseding document for `status: accepted`, and a calibration
-			// has no status at all — it is a measurement, and a measurement is
-			// not accepted. What replaces that clause here is the kind and the
-			// day, which is the whole of what "there is a newer one and it is
-			// still standing" means for a measurement.
-			//
-			// The old document is never edited. It is append-only history, and
-			// the vault has no way to mark it retired that would not be a
-			// rewrite; the edge the new one declares plus this projection is
-			// what takes it out of `binding`. That is the mechanism by which a
-			// judge measured `uncalibrated` today stops the vault answering
-			// `calibrated` from last month's document.
-			Name: vocab.ProjectionNewerCalibration.String(),
-			When: config.Condition{
-				// Scoped to the kind on both sides. The far end has to be a
-				// calibration because an edit that supersedes an edit is a
-				// different relation; the near end has to be one so that a
-				// vault holding no calibration reports nothing about a
-				// projection that has nothing to be true of, the way a
-				// kind-scoped rule does.
-				Attr: ofKind(vocab.KindCalibration),
-				ViaInbound: &config.ViaCondition{
-					Edge: config.EdgeSupersedes.String(),
-					Attr: map[string]config.AttrCondition{
-						config.KeyKind:     eq(vocab.KindCalibration.String()),
-						config.AttrInForce: isTrue(),
-					},
-				},
-			},
-		},
-		config.ProjectionSpec{
 			// A strict gain on either split. Held-out is the one that matters
 			// for generalisation, but an edit that improves the held-in split
 			// and holds the held-out one has still shown a gain, and the
@@ -541,7 +538,9 @@ func extendProjections(cfg *config.Config) error {
 	// calibrations of one judge a fortnight apart, the first `calibrated` and
 	// the second `uncalibrated`, would otherwise both bind for a month, and
 	// "does a binding calibration say this judge is calibrated" would answer
-	// yes for thirty days after the measurement that says otherwise.
+	// yes for thirty days after the measurement that says otherwise. The old
+	// document is never edited — it is append-only history — so what retires
+	// it is the edge the new one declares and this clause reading it.
 	//
 	// What binding means for an edit: accepted, in force today, not already
 	// replaced, and carrying the three things a run can show. Alternatives are
@@ -559,8 +558,24 @@ func extendProjections(cfg *config.Config) error {
 			config.KeyKind:     eq(vocab.KindCalibration.String()),
 			config.AttrInForce: isTrue(),
 		},
-		Not: &config.Condition{Attr: map[string]config.AttrCondition{
-			vocab.ProjectionNewerCalibration.String(): isTrue(),
+		// "and nothing newer has replaced it", written inline rather than as a
+		// projection of its own.
+		//
+		// The preset's has_inforce_successor cannot be reused: it asks the
+		// superseding document for `status: accepted`, and a calibration has
+		// no status at all — it is a measurement, and a measurement is not
+		// accepted. A named projection of uzushio's own would work, and did,
+		// but DocDag reports a projection that holds nowhere in the corpus as
+		// a warning with no way to say "it has a fixture and the corpus simply
+		// has not needed it yet" — which is the state a vault is in until its
+		// second calibration of one judge. The condition is one clause; it
+		// lives where it is read.
+		Not: &config.Condition{ViaInbound: &config.ViaCondition{
+			Edge: config.EdgeSupersedes.String(),
+			Attr: map[string]config.AttrCondition{
+				config.KeyKind:     eq(vocab.KindCalibration.String()),
+				config.AttrInForce: isTrue(),
+			},
 		}},
 	}}, config.ProjectionAlt{When: config.Condition{
 		Attr: map[string]config.AttrCondition{

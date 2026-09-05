@@ -390,6 +390,9 @@ func TestJudgeImportMTBench(t *testing.T) {
 func TestJudgeStatus(t *testing.T) {
 	engine := requireDocDag(t)
 	vault := harnessVault(t)
+	if err := os.RemoveAll(filepath.Join(vault, "spec", "calibrations")); err != nil {
+		t.Fatalf("clear the calibrations: %v", err)
+	}
 	// A calibration whose window closed inside the period, and one whose
 	// window closed long before it.
 	for _, day := range []string{"2026-09-01", "2026-01-01"} {
@@ -454,9 +457,7 @@ func TestCalibrationDocumentValidatesInTheVault(t *testing.T) {
 	engine := requireDocDag(t)
 	// The repository's own configuration and corpus, and nothing else: the
 	// point is that a generated calibration is at home in the real vault.
-	vault := t.TempDir()
-	copyTree(t, filepath.Join("..", ".."), vault, "docdag.yaml")
-	copyTree(t, filepath.Join("..", "..", "spec"), filepath.Join(vault, "spec"), "")
+	vault := judgeVault(t)
 	dir := t.TempDir()
 	got := run(t, "judge", "calibrate",
 		"--suite", judgeSuite(t, filepath.Join(dir, "suite")),
@@ -474,6 +475,24 @@ func TestCalibrationDocumentValidatesInTheVault(t *testing.T) {
 	if !strings.Contains(string(out), "OK") {
 		t.Fatalf("docdag validate said:\n%s", out)
 	}
+}
+
+// judgeVault copies the repository's configuration and corpus into a
+// temporary vault and empties the calibration directory.
+//
+// The emptying is the point. The repository now carries a real calibration of
+// a real judge, and a test about what `status` says has to own the documents
+// it is asking about — otherwise it passes or fails on whether somebody
+// re-measured the fleet this month.
+func judgeVault(t *testing.T) string {
+	t.Helper()
+	vault := t.TempDir()
+	copyTree(t, filepath.Join("..", ".."), vault, "docdag.yaml")
+	copyTree(t, filepath.Join("..", "..", "spec"), filepath.Join(vault, "spec"), "")
+	if err := os.RemoveAll(filepath.Join(vault, "spec", "calibrations")); err != nil {
+		t.Fatalf("clear the calibrations: %v", err)
+	}
+	return vault
 }
 
 // copyTree copies one file, or a directory's files, into a temporary vault.
@@ -620,9 +639,7 @@ func TestJudgeCalibrateNeedsTheAnswers(t *testing.T) {
 // binds. The day itself is what this checks.
 func TestJudgeStatusBoundaryDay(t *testing.T) {
 	engine := requireDocDag(t)
-	vault := t.TempDir()
-	copyTree(t, filepath.Join("..", ".."), vault, "docdag.yaml")
-	copyTree(t, filepath.Join("..", "..", "spec"), filepath.Join(vault, "spec"), "")
+	vault := judgeVault(t)
 	dir := t.TempDir()
 	got := run(t, "judge", "calibrate",
 		"--suite", judgeSuite(t, filepath.Join(dir, "suite")),
@@ -654,5 +671,110 @@ func TestJudgeStatusBoundaryDay(t *testing.T) {
 	}
 	if !strings.Contains(past.stdout, "validity not measured for 31 days") {
 		t.Fatalf("stdout:\n%s", past.stdout)
+	}
+}
+
+// TestCalibrateWritesNoAbsolutePath is the guard on the files that get
+// committed. The fake harness writes its traces into a directory outside the
+// vault, which is what a real one does when its configuration points there,
+// and nothing in the report or the journal may name that directory.
+func TestCalibrateWritesNoAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	vault := t.TempDir()
+	suite := judgeSuite(t, filepath.Join(vault, "examples", "suite-chat"))
+	// The harness's run directories live under dir, which is not under the
+	// vault and not under the suite.
+	bin := fakeJudgeCMoA(t, dir)
+
+	got := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", bin,
+		"--config", judgeConfig(t, dir, "gpt-oss-20b"), "--vault", vault,
+		"--rerun", "1", "--as-of", "2026-09-06")
+	if got.code != exitOK {
+		t.Fatalf("calibrate exit = %d\n%s", got.code, got.stderr)
+	}
+	out := filepath.Join(vault, "calibrations", "gpt-oss-20b@2026-09-06")
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	for _, name := range []string{judge.ReportFile, judge.ItemsFile} {
+		body := readFile(t, filepath.Join(out, name))
+		for _, forbidden := range []string{dir, vault, home} {
+			if forbidden == "" || forbidden == "/" {
+				continue
+			}
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("%s carries the absolute path %s", name, forbidden)
+			}
+		}
+	}
+	// And the journal's own field says so rather than the test inferring it
+	// from a string search.
+	var item judge.ItemResult
+	line, _, _ := strings.Cut(readFile(t, filepath.Join(out, judge.ItemsFile)), "\n")
+	if err := json.Unmarshal([]byte(line), &item); err != nil {
+		t.Fatalf("journal line: %v", err)
+	}
+	if len(item.Runs) == 0 {
+		t.Fatal("the journal records no run")
+	}
+	for _, r := range item.Runs {
+		if filepath.IsAbs(r.RunDir) {
+			t.Fatalf("run_dir = %q, which is absolute", r.RunDir)
+		}
+		if r.RunID == "" {
+			t.Fatal("a trace outside the vault lost its identifier as well as its path")
+		}
+	}
+	// The document the vault keeps names its report relative to the vault too.
+	body := judgeRead(t, vault, strings.TrimSpace(got.stdout))
+	if strings.Contains(body, vault) || strings.Contains(body, home) {
+		t.Fatalf("the calibration document carries an absolute path:\n%s", body)
+	}
+}
+
+// TestJudgeStatusExitsNonZeroOnAWarning is the contract the README states: a
+// pipeline can gate on this command. A binding calibration that says the judge
+// does not agree with people is the case that used to print a line and exit
+// zero — which is a gate that passes while saying the thing it gates on is
+// wrong.
+func TestJudgeStatusExitsNonZeroOnAWarning(t *testing.T) {
+	engine := requireDocDag(t)
+	vault := judgeVault(t)
+
+	// A calibration in force, whose verdict is that the judge does not agree
+	// with people. Nothing else is wrong: it is fresh, it is binding, and its
+	// validity was measured.
+	id := "calibration/test-judge@2026-09-05"
+	relative, err := vocab.Path(vocab.KindCalibration, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	judgeWrite(t, filepath.Join(vault, "calibrations", "x", "report.json"), "{}\n")
+	judgeWrite(t, filepath.Join(vault, filepath.FromSlash(relative)), strings.Join([]string{
+		"---", "id: " + id, "kind: calibration", "title: a calibration",
+		"date: \"2026-09-05\"", "judge: test-judge", "pool: external",
+		"window_from: \"2026-09-05\"", "window_to: \"2026-09-05\"",
+		"in_force_until: \"2026-10-06\"", "n_items: \"200\"",
+		"tie_handling: abstain-as-category", "swap_kappa: \"0.589\"",
+		"rerun_kappa: \"0.820\"", "human_kappa: \"0.281\"", "n_human: \"200\"",
+		"verdict: uncalibrated", "report: calibrations/x/report.json", "---", "",
+		"# a calibration", "", "body", "",
+	}, "\n"))
+
+	got := run(t, "judge", "status", "--vault", vault, "--docdag", engine, "--as-of", "2026-09-20")
+	if !strings.Contains(got.stdout, "is binding and says `uncalibrated`") {
+		t.Fatalf("no warning about a judge measured and rejected:\n%s", got.stdout)
+	}
+	if got.code == exitOK {
+		t.Fatalf("status printed a warning and exited zero:\n%s", got.stdout)
+	}
+
+	// The same vault a day after the calibration expires: still non-zero, for
+	// the other reason.
+	expired := run(t, "judge", "status", "--vault", vault, "--docdag", engine, "--as-of", "2026-10-07")
+	if expired.code == exitOK {
+		t.Fatalf("an expired calibration exited zero:\n%s", expired.stdout)
 	}
 }

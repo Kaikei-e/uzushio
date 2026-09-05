@@ -3,6 +3,7 @@ package judge
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sort"
 	"sync"
@@ -75,6 +76,9 @@ type Options struct {
 	// Alpha and MinKappa are the level and the threshold. Zero is the default.
 	Alpha    float64
 	MinKappa float64
+	// Vault is the root every path in the report is written relative to.
+	// Empty is the working directory.
+	Vault string
 	// Parallel is how many items are judged at once. Zero is one.
 	Parallel int
 	// MaxUnmeasured is the share of items that may fail before the
@@ -122,11 +126,16 @@ type RunResult struct {
 	Category string `json:"category"`
 	Reason   string `json:"reason,omitempty"`
 	// Measured says the run produced a judgement rather than a failure.
-	Measured       bool   `json:"measured"`
-	SwapConsistent int    `json:"swap_consistent_pairs"`
-	InvalidRetries int    `json:"invalid_output_retries"`
-	LatencyMS      int64  `json:"latency_ms"`
-	RunDir         string `json:"run_dir,omitempty"`
+	Measured       bool  `json:"measured"`
+	SwapConsistent int   `json:"swap_consistent_pairs"`
+	InvalidRetries int   `json:"invalid_output_retries"`
+	LatencyMS      int64 `json:"latency_ms"`
+	// RunID is the trace's own identifier and RunDir where to find it,
+	// relative to the vault. Neither is ever an absolute path: this file is
+	// committed, and the harness writes its traces wherever its configuration
+	// says, which is often outside the repository entirely.
+	RunID  string `json:"run_id,omitempty"`
+	RunDir string `json:"run_dir,omitempty"`
 }
 
 // Calibrate runs the judge over the suite and computes what it found.
@@ -288,7 +297,7 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 
 		runs := judged[i]
 		if failures[i] != nil {
-			item.Error = scrub(failures[i].Error())
+			item.Error = scrub(failures[i].Error(), opts.Vault, opts.Suite.Dir)
 		}
 		itemFlips, itemDecided := 0, 0
 		for _, run := range runs {
@@ -296,7 +305,9 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 				Seed: run.Seed, Outcome: run.Outcome, Category: category(run),
 				Reason: run.Reason, SwapConsistent: run.SwapConsistent,
 				InvalidRetries: run.InvalidRetries, LatencyMS: run.LatencyMS,
-				RunDir: run.RunDir, Measured: run.Measured(),
+				RunID:    filepath.Base(run.RunDir),
+				RunDir:   RecordPath(run.RunDir, opts.Vault, opts.Suite.Dir),
+				Measured: run.Measured(),
 			})
 			latencies = append(latencies, run.LatencyMS)
 			report.Outcomes.ByKind[run.Outcome]++

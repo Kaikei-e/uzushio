@@ -645,30 +645,43 @@ func TestCalibrationKind(t *testing.T) {
 				"would never retire a better one")
 		}
 	}
-	// And the projection that reads the edge has to reach the effective one,
-	// or a superseded calibration keeps binding for the rest of its period.
-	newer := slices.IndexFunc(cfg.Projections, func(spec config.ProjectionSpec) bool {
-		return spec.Name == vocab.ProjectionNewerCalibration.String()
-	})
-	if newer < 0 {
-		t.Fatal("no has_newer_calibration projection")
-	}
+	// The calibration's effective alternative has to refuse a document a
+	// newer measurement replaced, or a judge measured `uncalibrated` today
+	// leaves last month's `calibrated` binding for the rest of its period.
 	retired := false
 	for _, alternative := range cfg.Projections[index].AnyOf {
 		kind, ok := alternative.When.Attr[config.KeyKind]
 		if !ok || kind.Eq == nil || *kind.Eq != vocab.KindCalibration.String() {
 			continue
 		}
-		if alternative.When.Not == nil {
+		not := alternative.When.Not
+		if not == nil || not.ViaInbound == nil {
 			continue
 		}
-		if match, ok := alternative.When.Not.Attr[vocab.ProjectionNewerCalibration.String()]; ok &&
-			match.Eq != nil && *match.Eq == config.ProjectionTrue {
+		if not.ViaInbound.Edge != config.EdgeSupersedes.String() {
+			continue
+		}
+		successor, ok := not.ViaInbound.Attr[config.KeyKind]
+		if !ok || successor.Eq == nil || *successor.Eq != vocab.KindCalibration.String() {
+			continue
+		}
+		if force, ok := not.ViaInbound.Attr[config.AttrInForce]; ok &&
+			force.Eq != nil && *force.Eq == config.ProjectionTrue {
 			retired = true
 		}
 	}
 	if !retired {
 		t.Fatal("a calibration keeps binding after a newer one replaces it")
+	}
+	// And the word a re-measurement gives as its reason has to be in the
+	// vocabulary, or every superseding calibration is an edge_attr_invalid.
+	reason, ok := cfg.Edges[supersedes].Attrs[config.AttrReason]
+	if !ok {
+		t.Fatal("the supersedes edge declares no reason")
+	}
+	if !slices.Contains(reason.OneOf, vocab.ReasonRemeasured) {
+		t.Fatalf("supersedes reason one_of = %v, which has no word for a re-measurement",
+			reason.OneOf)
 	}
 	for _, rule := range cfg.Rules {
 		if match, ok := rule.When.Attr[config.KeyKind]; ok && match.Eq != nil &&

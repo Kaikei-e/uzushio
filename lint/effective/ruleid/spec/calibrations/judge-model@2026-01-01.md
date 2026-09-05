@@ -20,5 +20,5 @@ report: calibrations/judge-model@2026-01-01/report.json
 
 # The measurement that was replaced
 
-A later calibration of the same judge supersedes it and is itself in
-force, so the projection holds here and this document stops binding.
+A later calibration of the same judge is in force, so this one no longer
+binds — and nothing about this document says so, which is the point.

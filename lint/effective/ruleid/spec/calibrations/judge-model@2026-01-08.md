@@ -18,10 +18,10 @@ verdict: uncalibrated
 report: calibrations/judge-model@2026-01-08/report.json
 supersedes:
 - ref: calibration/judge-model@2026-01-01
-  reason: re-measured on the same suite
+  reason: remeasured
 ---
 
 # The measurement that took the first one's place
 
-A second window on the same judge, still in force, so the first one has a
-successor rather than merely a declared one.
+A second window on the same judge, still in force. It binds, and the one
+it supersedes stops binding without being edited.

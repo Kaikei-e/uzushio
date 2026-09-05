@@ -1,6 +1,7 @@
 package doc_test
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -580,4 +581,137 @@ func TestVerifierStillRefusesARateOutsideTheRange(t *testing.T) {
 			t.Errorf("Validate accepted kill_rate %v", rate)
 		}
 	}
+}
+
+// TestOneCalibrationLintsClean is a regression on the lint layer rather than
+// on a document.
+//
+// A vault holding exactly one calibration is the state every vault is in the
+// day its first judge is measured, and it used to fail `docdag lint --all`.
+// The reason was structural: "a newer calibration has replaced this one" was a
+// named projection, DocDag reports a projection that holds nowhere in the
+// corpus as a warning, and a projection about *replacement* cannot hold until
+// there are two documents to replace one another. The condition is written
+// inline in `effective` now, so there is no named unit to be vacuous — the
+// semantics are unchanged and the finding has nowhere to come from.
+//
+// DocDag v0.4.0 offers no way to say a projection may be vacuous: the
+// projection spec carries only a name and a condition, and while `lint`
+// downgrades a rule that never fired to INFO when a fixture shows it can fire,
+// the equivalent check for projections has no such clause. `--corpus` turns
+// the whole layer on or off and `--strict` only makes warnings fatal.
+func TestOneCalibrationLintsClean(t *testing.T) {
+	root := tempVault(t)
+	writeText(t, filepath.Join(root, "calibrations", "j@2026-09-05", "report.json"), "{}\n")
+	writeCalibration(t, root, aTestCalibration("2026-09-05", vocab.CalibratedNo, 0.281, nil))
+
+	findings := lintVault(t, root)
+	for _, f := range findings {
+		if f.Severity == model.SeverityError || f.Severity == model.SeverityWarn {
+			t.Errorf("a vault with one calibration reported %s %s %s: %s",
+				f.Severity, f.Rule, f.ID, f.Detail)
+		}
+	}
+}
+
+// TestANewerCalibrationRetiresTheOlder is the semantics the inlining had to
+// keep: the day a judge is measured again, the older measurement stops being
+// what the vault answers with — without the older document being edited, since
+// it is append-only history.
+func TestANewerCalibrationRetiresTheOlder(t *testing.T) {
+	root := tempVault(t)
+	for _, day := range []string{"2026-09-05", "2026-09-20"} {
+		writeText(t, filepath.Join(root, "calibrations", "j@"+day, "report.json"), "{}\n")
+	}
+	older := aTestCalibration("2026-09-05", vocab.CalibratedYes, 0.71, nil)
+	newer := aTestCalibration("2026-09-20", vocab.CalibratedNo, 0.28,
+		[]doc.Supersession{{Edit: older.ID(), Reason: vocab.ReasonRemeasured}})
+	writeCalibration(t, root, older)
+	writeCalibration(t, root, newer)
+
+	for _, f := range lintVault(t, root) {
+		if f.Severity == model.SeverityError || f.Severity == model.SeverityWarn {
+			t.Errorf("a vault with two calibrations reported %s %s %s: %s",
+				f.Severity, f.Rule, f.ID, f.Detail)
+		}
+	}
+
+	// What binds is the engine's answer, so it is the engine that is asked.
+	// Both are inside their thirty days; only the one nothing replaced binds.
+	binary, ok := docdagBinary()
+	if !ok {
+		t.Skip("docdag is not installed; what binds is its answer and nothing substitutes for it")
+	}
+	cmd := exec.Command(binary, "query", "--binding", "--fields", "id",
+		"--format", "json", "--as-of", "2026-09-25")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("docdag query: %v\n%s", err, out)
+	}
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(out, &rows); err != nil {
+		t.Fatalf("docdag query returned %s: %v", out, err)
+	}
+	binding := map[string]bool{}
+	for _, row := range rows {
+		binding[row.ID] = true
+	}
+	if !binding[newer.ID()] {
+		t.Fatalf("the newer measurement does not bind: %s", out)
+	}
+	if binding[older.ID()] {
+		t.Fatalf("the replaced measurement still binds, so the vault answers "+
+			"`calibrated` a fortnight after the measurement that says otherwise: %s", out)
+	}
+}
+
+// lintVault runs every lint layer over a vault, the way CI does.
+//
+// The repository's own fixtures are read rather than nothing: a rule that
+// fires nowhere in a young corpus is a warning until a fixture shows it can
+// fire, and passing no fixtures would make this test complain about twelve
+// rules that have nothing to do with what it is checking.
+func lintVault(t *testing.T, root string) []model.Finding {
+	t.Helper()
+	cfg, err := vault.Config()
+	if err != nil {
+		t.Fatalf("vault.Config() error = %v", err)
+	}
+	findings, err := lint.Check(cfg, root, filepath.Join(repoRoot(t), "lint"))
+	if err != nil {
+		t.Fatalf("lint.Check() error = %v", err)
+	}
+	return findings
+}
+
+// aTestCalibration is one measurement of one judge, with everything that is
+// not the argument held constant.
+func aTestCalibration(day string, verdict vocab.Calibrated, human float64,
+	supersedes []doc.Supersession,
+) doc.Calibration {
+	return doc.Calibration{
+		Judge: "j", Day: day, Title: "judged on " + day, Date: day,
+		Pool: doc.PoolExternal, WindowFrom: day, WindowTo: day, NItems: 200,
+		TieHandling: vocab.TieAbstainAsCategory,
+		SwapKappa:   0.589, RerunKappa: 0.820, HumanKappa: human, NHuman: 200,
+		Verdict: verdict, Report: "calibrations/j@" + day + "/report.json",
+		Supersedes: supersedes,
+		Body:       "What the judge was measured on, and what it agreed with.",
+	}
+}
+
+func writeCalibration(t *testing.T, root string, calibration doc.Calibration) {
+	t.Helper()
+	relative, err := calibration.Path()
+	if err != nil {
+		t.Fatalf("Path: %v", err)
+	}
+	body, err := calibration.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	writeText(t, filepath.Join(root, filepath.FromSlash(relative)), string(body))
 }

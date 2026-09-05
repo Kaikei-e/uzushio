@@ -20,5 +20,5 @@ report: calibrations/judge-model@2026-01-15/report.json
 
 # A judge measured once
 
-Nothing supersedes it, so there is no newer measurement to stand in
-its way.
+In force and unreplaced, which is the whole of what a measurement has
+to be to bind.

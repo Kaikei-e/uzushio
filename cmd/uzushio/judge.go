@@ -363,10 +363,7 @@ func supersededBy(vault, judgeModel, day string) ([]doc.Supersession, error) {
 	if newest == nil {
 		return nil, nil
 	}
-	return []doc.Supersession{{
-		Edit:   newest.ID(),
-		Reason: "re-measured on " + day,
-	}}, nil
+	return []doc.Supersession{{Edit: newest.ID(), Reason: vocab.ReasonRemeasured}}, nil
 }
 
 // writeDocument puts a calibration in the vault and answers with where it went.

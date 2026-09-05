@@ -244,6 +244,7 @@ edges:
       - premise-collapse
       - conflict
       - vocabulary
+      - remeasured
 - name: enforces
   key: enforces
   acyclic: false
@@ -751,9 +752,13 @@ projections:
         kind:
           eq: calibration
       not:
-        attr:
-          has_newer_calibration:
-            eq: "true"
+        via_inbound:
+          edge: supersedes
+          attr:
+            in_force:
+              eq: "true"
+            kind:
+              eq: calibration
   - when:
       attr:
         improved:
@@ -808,18 +813,6 @@ projections:
             eq: held-out
           verdict:
             eq: hold
-- name: has_newer_calibration
-  when:
-    via_inbound:
-      edge: supersedes
-      attr:
-        in_force:
-          eq: "true"
-        kind:
-          eq: calibration
-    attr:
-      kind:
-        eq: calibration
 - name: improved
   when:
     via_inbound:

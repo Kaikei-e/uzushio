@@ -326,6 +326,16 @@ func (o Outcome) String() string { return string(o) }
 // AllOutcomes returns the outcomes of a prediction.
 func AllOutcomes() []Outcome { return []Outcome{OutcomeConfirmed, OutcomeRefuted} }
 
+// ReasonRemeasured is the supersedes reason a calibration gives, and it is a
+// word uzushio adds to the preset's four.
+//
+// The preset's vocabulary — recurrence, premise-collapse, conflict,
+// vocabulary — is about why a *clause* was rewritten, and a measurement is not
+// rewritten for a reason. It is replaced because somebody measured again. None
+// of the four says that, and `conflict` would be a lie on the ordinary case
+// where the second measurement agrees with the first.
+const ReasonRemeasured = "remeasured"
+
 // Approval says whether a person stood behind an edit's acceptance. It is a
 // closed scalar vocabulary rather than a free-text name because DocDag can
 // require a scalar field and compare it, and cannot test a free-text field for
@@ -590,15 +600,6 @@ const (
 	ProjectionValidatedOut Projection = "validated_out"
 	// ProjectionImproved holds where some run showed a strict gain.
 	ProjectionImproved Projection = "improved"
-	// ProjectionNewerCalibration holds where a later calibration, itself still
-	// in force, supersedes this one.
-	//
-	// It is uzushio's rather than the preset's `has_inforce_successor` because
-	// that one asks the successor for `status: accepted`, and a calibration
-	// answers to no status vocabulary — it is a measurement. The condition
-	// that matters here is the same in spirit and different in its test: is
-	// there a newer measurement of this judge that is itself still standing.
-	ProjectionNewerCalibration Projection = "has_newer_calibration"
 )
 
 // String returns the projection name as an attribute condition reads it.
@@ -606,10 +607,7 @@ func (p Projection) String() string { return string(p) }
 
 // AllProjections returns the projections uzushio adds.
 func AllProjections() []Projection {
-	return []Projection{
-		ProjectionValidatedIn, ProjectionValidatedOut, ProjectionImproved,
-		ProjectionNewerCalibration,
-	}
+	return []Projection{ProjectionValidatedIn, ProjectionValidatedOut, ProjectionImproved}
 }
 
 // Rule is the name of a finding uzushio's configuration reports. The name is

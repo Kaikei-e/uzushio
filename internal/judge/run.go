@@ -165,7 +165,6 @@ func (r CMoARunner) Judge(ctx context.Context, suite Suite, task Task, seed int)
 		return Judged{}, err
 	}
 	judged.Seed = seed
-	judged.RunDir = relativeTo(suite.Dir, dir)
 	if r.Log != nil {
 		r.Log(fmt.Sprintf("judge %s seed=%d -> %s", task.ID, seed, judged.Outcome))
 	}
@@ -238,14 +237,21 @@ func firstLine(text string) string {
 	return ""
 }
 
-// scrub replaces the running user's home directory with a tilde.
+// scrub takes the machine out of text this package did not write.
 //
-// It is the last line of defence for the one thing that must not reach a
-// public repository: text this package did not write. A harness's error
-// message is copied into the journal, and it names configuration files by
-// absolute path, so a report committed from a developer's machine would
-// otherwise carry that machine's home directory into the corpus.
-func scrub(text string) string {
+// A harness's error message is copied into the journal verbatim, and it names
+// configuration files and task directories by absolute path, so a report
+// committed from a developer's machine would otherwise carry that machine's
+// layout into the corpus. Paths under one of the bases become relative; the
+// home directory becomes a tilde.
+func scrub(text string, bases ...string) string {
+	for _, base := range bases {
+		root, err := filepath.Abs(base)
+		if err != nil || root == "" || root == "/" {
+			continue
+		}
+		text = strings.ReplaceAll(text, root+string(filepath.Separator), "")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" || home == "/" {
 		return text
@@ -253,17 +259,43 @@ func scrub(text string) string {
 	return strings.ReplaceAll(text, home, "~")
 }
 
-// relativeTo expresses a path under base as a relative one, and leaves it
-// alone where it is not under base. A calibration report is committed, so a
-// trace path in it must not carry the home directory of whichever machine ran
-// the judge.
-func relativeTo(base, name string) string {
-	if base == "" || name == "" {
-		return name
+// RecordPath is how a trace directory is written into a report.
+//
+// It answers with a path relative to the first base the directory lies under,
+// and with the directory's own name where it lies under none. It never answers
+// with an absolute path, and that is the whole of its job: a calibration report
+// is committed, the traces are written wherever the harness's configuration
+// points, and the two facts together used to put the home directory of
+// whichever machine ran the judge into a public file. The earlier version
+// asked filepath.Rel to relate a relative base to an absolute target, which
+// fails, and fell back to the absolute path — so the leak happened exactly
+// when the caller passed `--suite examples/…` rather than a full path, which
+// is how anyone would type it.
+//
+// Losing the prefix loses nothing a reader needs: the last element is the run
+// identifier, which is what names the trace.
+func RecordPath(dir string, bases ...string) string {
+	if dir == "" {
+		return ""
 	}
-	relative, err := filepath.Rel(base, name)
-	if err != nil || strings.HasPrefix(relative, "..") {
-		return name
+	target, err := filepath.Abs(dir)
+	if err != nil {
+		return filepath.Base(dir)
 	}
-	return filepath.ToSlash(relative)
+	for _, base := range bases {
+		if base == "" {
+			continue
+		}
+		root, err := filepath.Abs(base)
+		if err != nil {
+			continue
+		}
+		relative, err := filepath.Rel(root, target)
+		if err != nil || relative == ".." ||
+			strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			continue
+		}
+		return filepath.ToSlash(relative)
+	}
+	return filepath.Base(dir)
 }

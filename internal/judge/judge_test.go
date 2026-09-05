@@ -816,3 +816,42 @@ func TestAlphaLabelsTheInterval(t *testing.T) {
 		t.Fatalf("an 80%% interval %v is not narrower than a 95%% one %v", a, b)
 	}
 }
+
+// TestRecordedPathsAreNeverAbsolute is the hygiene rule as arithmetic. A
+// calibration report is committed; the harness writes its traces wherever its
+// configuration points, which is routinely outside the repository; and the two
+// together put a home directory into a public file.
+func TestRecordedPathsAreNeverAbsolute(t *testing.T) {
+	vault := t.TempDir()
+	suite := filepath.Join(vault, "examples", "suite-chat")
+	outside := t.TempDir()
+
+	for _, tt := range []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{"under the vault", filepath.Join(suite, "i1", "runs", "20260905T000000Z-abcd1234"),
+			"examples/suite-chat/i1/runs/20260905T000000Z-abcd1234"},
+		{"under the suite only", filepath.Join(outside, "runs", "20260905T000000Z-abcd1234"),
+			"20260905T000000Z-abcd1234"},
+		{"nothing at all", "", ""},
+	} {
+		if got := judge.RecordPath(tt.dir, vault, suite); got != tt.want {
+			t.Fatalf("%s: RecordPath(%q) = %q, want %q", tt.name, tt.dir, got, tt.want)
+		}
+	}
+
+	// The failure that actually happened: a relative base and an absolute
+	// target. filepath.Rel refuses to relate them, and the old code answered
+	// with the absolute path — which is how a suite named
+	// `examples/suite-chat/suite.json` leaked a home directory.
+	relative := judge.RecordPath(filepath.Join(suite, "i1", "runs", "r1"),
+		"examples/suite-chat", suite)
+	if filepath.IsAbs(relative) {
+		t.Fatalf("RecordPath answered %q, which is absolute", relative)
+	}
+	if strings.Contains(relative, vault) {
+		t.Fatalf("RecordPath answered %q, which carries the machine's layout", relative)
+	}
+}

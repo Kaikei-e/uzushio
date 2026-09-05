@@ -258,7 +258,6 @@ func corpora() ([]corpus, error) {
 		improved(s),
 		effective(s),
 		hasInforceSuccessor(s),
-		hasNewerCalibration(),
 	}, nil
 }
 
@@ -548,9 +547,26 @@ func improved(s exemplars) corpus {
 	}
 }
 
-// effective: what binds. uzushio adds one kind-scoped alternative to the preset
-// projection, and this is the pair that shows it.
+// effective: what binds. uzushio adds two kind-scoped alternatives to the
+// preset projection, and this is the corpus that shows them.
+//
+// The second alternative is the calibration's, and it is the reason there are
+// three calibrations here rather than one. A measurement binds while it is in
+// force and nothing newer has replaced it, so the argument needs a pair — the
+// replaced one and its replacement — and a lone one that nothing replaced. All
+// three are in the firing corpus because a projection's `ruleid` side asks
+// that it hold *somewhere*, and the replaced one is exactly the document it
+// must not hold for.
 func effective(s exemplars) corpus {
+	replacement := aCalibration(fixtureLaterDay, vocab.CalibratedNo, 0.31,
+		"The measurement that took the first one's place",
+		"A second window on the same judge, still in force. It binds, and the one\n"+
+			"it supersedes stops binding without being edited.")
+	replacement.Supersedes = []doc.Supersession{{
+		Edit:   "calibration/" + fixtureJudge + "@" + fixtureDay,
+		Reason: vocab.ReasonRemeasured,
+	}}
+
 	return corpus{
 		name: config.ProjectionEffective,
 		fires: append([]written{
@@ -558,6 +574,15 @@ func effective(s exemplars) corpus {
 				"Accepted, measured, in force and unreplaced",
 				"All of what uzushio's alternative asks: accepted, in force today, no\n"+
 					"successor, and the three projections a run can make hold."),
+			replacement,
+			aCalibration(fixtureLoneDay, vocab.CalibratedYes, 0.68,
+				"A judge measured once",
+				"In force and unreplaced, which is the whole of what a measurement has\n"+
+					"to be to bind."),
+			aCalibration(fixtureDay, vocab.CalibratedYes, 0.71,
+				"The measurement that was replaced",
+				"A later calibration of the same judge is in force, so this one no longer\n"+
+					"binds — and nothing about this document says so, which is the point."),
 		}, validating("he-9024")...),
 		silent: []written{
 			anEdit("he-9025", vocab.StatusProposed, s.auto,
@@ -613,39 +638,5 @@ func aCalibration(day string, verdict vocab.Calibrated, human float64, title, bo
 		Verdict:     verdict,
 		Report:      "calibrations/" + fixtureJudge + "@" + day + "/report.json",
 		Body:        body,
-	}
-}
-
-// has_newer_calibration: a judge measured twice, the second time worse.
-//
-// The pair is the argument for the projection existing at all. Without it both
-// documents bind for the whole of their periods, and the vault answers "yes, a
-// binding calibration says this judge is calibrated" for a month after the
-// measurement that says it is not.
-func hasNewerCalibration() corpus {
-	replacement := aCalibration(fixtureLaterDay, vocab.CalibratedNo, 0.31,
-		"The measurement that took the first one's place",
-		"A second window on the same judge, still in force, so the first one has a\n"+
-			"successor rather than merely a declared one.")
-	replacement.Supersedes = []doc.Supersession{{
-		Edit:   "calibration/" + fixtureJudge + "@" + fixtureDay,
-		Reason: "re-measured on the same suite",
-	}}
-
-	return corpus{
-		name: vocab.ProjectionNewerCalibration.String(),
-		fires: []written{
-			aCalibration(fixtureDay, vocab.CalibratedYes, 0.71,
-				"The measurement that was replaced",
-				"A later calibration of the same judge supersedes it and is itself in\n"+
-					"force, so the projection holds here and this document stops binding."),
-			replacement,
-		},
-		silent: []written{
-			aCalibration(fixtureLoneDay, vocab.CalibratedYes, 0.68,
-				"A judge measured once",
-				"Nothing supersedes it, so there is no newer measurement to stand in\n"+
-					"its way."),
-		},
 	}
 }
