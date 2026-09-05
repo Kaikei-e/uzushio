@@ -110,10 +110,19 @@ func (r *Report) Summary() []string {
 		fmt.Sprintf("task %s at %s", r.Task, short(r.Rev)),
 		fmt.Sprintf("reference: %d run(s), %d failed, %d inconclusive",
 			counts.ReferenceRuns, counts.ReferenceFailures, counts.ReferenceInconclusive),
+	}
+	// A reference block that was not run in this check is the one thing a
+	// reader of the record cannot infer from the counts, and it is what decides
+	// how much they are worth: those runs are evidence about this verifier only
+	// because the environment fingerprint matched.
+	if from, ok := r.ReusedReference(); ok {
+		lines = append(lines, "reference runs reused from "+from)
+	}
+	lines = append(lines,
 		fmt.Sprintf("mutants: %d killed, %d survived, %d inconclusive, %d equivalent",
 			counts.Killed, counts.Survived, counts.Inconclusive, counts.Equivalent),
 		killRateLine(counts),
-	}
+	)
 	for _, run := range r.Runs {
 		switch {
 		case run.Kind == RunReference && run.Status != "pass":
@@ -139,8 +148,8 @@ func (r *Report) Summary() []string {
 //
 // A summary that said only "reference-2: fail" would leave the reader to open
 // report.json to learn which of eight measurements moved, and a mutant that
-// survived because its invariant reported `skipped` — no k6 in the image, say —
-// would look identical to one the verifier is simply blind to. The rows
+// survived because its invariant reported `skipped` — a generator missing from
+// the image, say — would look identical to one the verifier is blind to. The rows
 // themselves stay in the report; this is the one line that says where to look.
 func bandText(band *verifyrunner.Band) string {
 	if band == nil {

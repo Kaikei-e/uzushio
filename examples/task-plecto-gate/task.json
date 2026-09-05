@@ -25,31 +25,31 @@
       "diff": "mutants/0001-dispatch-sleep.diff",
       "expect": "killed",
       "origin": "hand",
-      "note": "plecto/crates/host/src/filter.rs:110 — 50us sleep in run_on_request; band dispatch_floor_us"
+      "note": "plecto/crates/host/src/filter.rs:110 — 50us sleep in run_on_request; band dispatch_floor_us. Sizing rule: a mutant must shift its invariant by at least 5x the calibrated half-width. Measured shift +1.59 us/req against a half-width of 0.2641 = 6.0x, so it is kept at 50us. The 50us sleep costs 1.59 us/req and not 50 because the gate measures closed-loop at -c 50 and the blocking sleeps overlap across tokio workers: size a sleep against its measured effect on the delta, never against the sleep"
     },
     {
       "diff": "mutants/0002-apikey-extra-kv.diff",
       "expect": "killed",
       "origin": "hand",
-      "note": "plecto/examples/filters/filter-apikey/src/lib.rs:98 — a second host_kv::get per request; band apikey_cost_us"
+      "note": "plecto/examples/filters/filter-apikey/src/lib.rs:98 — eight extra host_kv::get per request; band apikey_cost_us. Sizing rule: at least 5x the calibrated half-width of 0.2038. One extra get buys 0.128 us, so a single one shifts 0.6x and is not detectable here — under the uncalibrated bands of run 20260905T002350Z-e13205e7 it came back killed like every other mutant, but that run rejected the reference too, so nothing it said about any mutant was evidence (kill_rate_meaningful: false). Eight gets were predicted to buy 1.02 us = 5.0x, and against the calibrated bands they did: killed by apikey_cost_us alone at 3.1985 in run 20260905T025554Z-31045463 and 3.0723 in run 20260905T044952Z-53e8bb94, both against a band of 1.8544-2.262 centred on 2.0582 — a shift of +1.14 and +1.01 us, 5.6x and 5.0x the half-width"
     },
     {
       "diff": "mutants/0003-rr-no-advance.diff",
       "expect": "killed",
       "origin": "hand",
-      "note": "plecto/crates/control/src/upstream/lb.rs:178 — fetch_add -> load, the cursor never advances; aimed at rr_spread_req, which stayed 0 on 2026-09-05: what caught it was ejection_transition_s at 6 s, never settling"
+      "note": "plecto/crates/control/src/upstream/lb.rs:178 — fetch_add -> load, the cursor never advances; aimed at rr_spread_req, which stayed 0 on 2026-09-05: what caught it was ejection_transition_s at 6, saturating gate_verdict.py's horizon. Needs no sizing: it is caught by a host-independent band"
     },
     {
       "diff": "mutants/0004-health-slow-tick.diff",
       "expect": "killed",
       "origin": "hand",
-      "note": "plecto/crates/server/src/health.rs:71 — probe floor 20ms -> 1200ms; aimed at ejection_transition_s, which it only moved to 2 on 2026-09-05, inside the 0-2 band: on a host where the reference holds this one may survive"
+      "note": "plecto/crates/server/src/health.rs:71 — probe floor 20ms -> 3000ms; band ejection_transition_s. At 1200ms it moved the measurement from 1 to 2 on 2026-09-05, one bucket, still inside the 0-2 band: the timeline is quantised to 1 s and the band's headroom is one quantum, so no sub-2 s regression is expressible. 3000ms makes the supervisor probe every 3 s, so unhealthy_threshold=2 takes ~6 s and saturates gate_verdict.py's 6-bucket horizon"
     },
     {
       "diff": "mutants/0005-ratelimit-probe.diff",
       "expect": "killed",
       "origin": "hand",
-      "note": "plecto/crates/host/src/state.rs:563 — an extra kv.get in try_acquire; band ratelimit_tax_us, which is skipped without k6"
+      "note": "plecto/crates/host/src/state.rs:563 — 1200 extra kv.get in try_acquire, key and sum both through std::hint::black_box; band ratelimit_tax_us, which is skipped without k6. Two failures produced this shape. (1) `let _probe = self.kv.get(&nskey);` x32 discarded the result, the optimiser deleted the loop, and it measured 9.20 against a reference mean of 10.08 on 2026-09-05 — it survived. (2) x32 with the sum black_boxed still measured 9.14, because 32 gets is far too small: a direct 1024-get probe measured ratelimit_tax_us at 24.63 against a reference median of 9.7719, which puts one get at 14.5 ns and not the 0.50 us that had been inferred from a 0.7-sigma noise reading. Sizing rule, at least 5x the calibrated half-width of 3.0238: 5x = 15.12 us needs 1042 gets, so 1200 gives 17.4 us = 5.8x. 1200 kv reads per request is not a plausible refactor, and that is the finding rather than a defect in the mutant: ratelimit_tax_us has 7.4 percent run-to-run spread because it is a difference of two k6 throughputs over only 2 interleave rounds, so nothing smaller is resolvable here. Lowering that noise upstream is worth more than this mutant"
     },
     {
       "diff": "mutants/0006-metrics-render.diff",

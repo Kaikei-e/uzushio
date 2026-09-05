@@ -2,12 +2,14 @@ diff --git a/plecto/examples/filters/filter-apikey/src/lib.rs b/plecto/examples/
 index 9b27db5..41532bc 100644
 --- a/plecto/examples/filters/filter-apikey/src/lib.rs
 +++ b/plecto/examples/filters/filter-apikey/src/lib.rs
-@@ -95,6 +95,8 @@ impl Guest for FilterApiKey {
+@@ -95,6 +95,10 @@ impl Guest for FilterApiKey {
  
          // Authenticated: count the call per user (host-native counter) and stamp the identity so
          // the upstream — and any later filter — sees who the caller is.
-+        // second lookup: a plausible "re-validate before counting" refactor
-+        let _recheck = host_kv::get(&kv_key(api_key));
++        // re-validate before counting: eight lookups, one per configured key shard
++        for _ in 0..8 {
++            let _recheck = host_kv::get(&kv_key(api_key));
++        }
          let total = host_counter::increment(&format!("requests:{user}"), 1);
          host_log::log(
              host_log::Level::Info,

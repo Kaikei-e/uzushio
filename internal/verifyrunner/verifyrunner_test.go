@@ -228,7 +228,7 @@ func TestErrorsCarryNoArgv(t *testing.T) {
 // row measured nothing and a zero would read as a measurement of zero.
 func TestDecodeReadsABand(t *testing.T) {
 	got, err := verifyrunner.Decode([]byte(`{
-  "schema_version": 1, "task": "plecto-gate", "status": "fail", "exit_code": 1,
+  "schema_version": 1, "task": "banded-gate", "status": "fail", "exit_code": 1,
   "band": {
     "judged": 2,
     "failed": ["rr_spread_req"],

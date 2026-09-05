@@ -16,7 +16,8 @@ func newTaskCmd() *cobra.Command {
 		Use:   "task",
 		Short: "Work on a CMoA task directory",
 		Long: "task holds the commands that read a CMoA task: doctor measures the task's\n" +
-			"verifier, and mutate writes the mutants doctor measures it with.",
+			"verifier, mutate writes the mutants doctor measures it with, and calibrate\n" +
+			"re-centres a banded verifier's tolerances on the host that runs it.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cmd.Help(); err != nil {
@@ -25,6 +26,6 @@ func newTaskCmd() *cobra.Command {
 			return &exitError{code: exitUsage}
 		},
 	}
-	cmd.AddCommand(newTaskDoctorCmd(), newTaskMutateCmd())
+	cmd.AddCommand(newTaskDoctorCmd(), newTaskMutateCmd(), newTaskCalibrateCmd())
 	return cmd
 }
