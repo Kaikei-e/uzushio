@@ -4,8 +4,11 @@
 // and `--check` says whether the file on disk is the one the code would write.
 // `uzushio task doctor` measures a CMoA task's verifier against its reference
 // solution and its mutants, and `uzushio task mutate` writes the mutants it is
-// measured with. The `run` and `improve` commands of the harness-improvement
-// loop are not written yet.
+// measured with. `uzushio harness render` materialises the harness a day's
+// binding edits describe. `uzushio improve` mines failure patterns out of
+// CMoA's traces and, with `--propose`, asks the proposers for the harness
+// edits that answer them; `uzushio run` measures one of those edits against
+// the baseline harness on a suite and writes what it found into the vault.
 package main
 
 import (
@@ -61,7 +64,8 @@ func newRootCmd() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &flagError{err: err}
 	})
-	root.AddCommand(newDocDagConfigCmd(), newTaskCmd(), newVersionCmd())
+	root.AddCommand(newDocDagConfigCmd(), newHarnessCmd(), newImproveCmd(), newRunCmd(),
+		newTaskCmd(), newVersionCmd())
 	return root
 }
 
@@ -139,7 +143,12 @@ func isUsageError(err error) bool {
 	if errors.As(err, &flagErr) {
 		return true
 	}
-	return strings.HasPrefix(err.Error(), "unknown command")
+	// cobra builds two more usage failures itself and exports a type for
+	// neither: an unknown subcommand, and a required flag left off. Both are
+	// the invocation being wrong rather than the command finding something
+	// wrong, so both take the usage exit code.
+	text := err.Error()
+	return strings.HasPrefix(text, "unknown command") || strings.HasPrefix(text, "required flag")
 }
 
 // flagError marks an invocation cobra refused. cobra does not export a type
