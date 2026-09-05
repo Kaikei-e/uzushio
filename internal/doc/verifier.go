@@ -39,8 +39,9 @@ type Verifier struct {
 	// Verdict is what the check concluded about the verifier.
 	Verdict vocab.Health
 	// KillRate is the share of the mutants expected to be killed that were
-	// killed. It is written with two decimal places. Negative means "no rate":
-	// a task with nothing to measure a rate over writes no kill_rate key.
+	// killed. It is written with two decimal places. Every real rate is in
+	// 0..1, so the two negative sentinels are unambiguous: NoKillRate writes
+	// no kill_rate key at all, and KillRateNotEvidence writes "n/a".
 	KillRate float64
 	// Mutants is how many mutants the check ran.
 	Mutants int
@@ -58,6 +59,26 @@ type Verifier struct {
 // inconclusive. It is negative because every real rate is in 0..1, so no
 // measured value can be mistaken for it.
 const NoKillRate float64 = -1
+
+// KillRateNotEvidence is the KillRate of a check that measured a rate which is
+// not evidence of anything, and is written `n/a`.
+//
+// The case it exists for is a verifier that rejected the reference solution:
+// every mutant is then killed, the rate is 1.00, and the number says the
+// verifier says no to everything rather than that it catches everything. A
+// record is read long after the run, usually by whoever is deciding whether the
+// task is worth using, and `kill_rate: "1.00"` under `verdict: unhealthy` is
+// the pair most likely to be half-read. The word refuses to be half-read.
+//
+// It is a distinct value from NoKillRate because the two are different facts —
+// nothing was measured, against something was measured and means nothing — and
+// a reader who cannot tell them apart cannot tell whether the task has mutants.
+const KillRateNotEvidence float64 = -2
+
+// killRateNotEvidenceText is what KillRateNotEvidence writes. The field is
+// declared with no vocabulary in the vault configuration, so DocDag compares it
+// as text and any word would validate; this one is the word the summary uses.
+const killRateNotEvidenceText = "n/a"
 
 // VerifierFrontmatter is a verifier's frontmatter in the order it is written.
 type VerifierFrontmatter struct {
@@ -109,7 +130,7 @@ func (v Verifier) Validate() error {
 	if err := requireVocabulary("verifier "+id+" verdict", v.Verdict, vocab.AllHealths()); err != nil {
 		return err
 	}
-	if v.KillRate != NoKillRate && (v.KillRate < 0 || v.KillRate > 1) {
+	if !isKillRateSentinel(v.KillRate) && (v.KillRate < 0 || v.KillRate > 1) {
 		return fmt.Errorf("%w: verifier %s kill_rate %v is outside 0..1", ErrDocument, id, v.KillRate)
 	}
 	if v.Mutants < 0 {
@@ -138,10 +159,21 @@ func (v Verifier) Frontmatter() (VerifierFrontmatter, error) {
 		ReferenceRuns: strconv.Itoa(v.ReferenceRuns),
 		Report:        v.Report,
 	}
-	if v.KillRate != NoKillRate {
+	switch v.KillRate {
+	case NoKillRate:
+		// No key: there was no rate to write.
+	case KillRateNotEvidence:
+		front.KillRate = killRateNotEvidenceText
+	default:
 		front.KillRate = strconv.FormatFloat(v.KillRate, 'f', 2, 64)
 	}
 	return front, nil
+}
+
+// isKillRateSentinel reports whether a rate is one of the two values that are
+// not rates.
+func isKillRateSentinel(rate float64) bool {
+	return rate == NoKillRate || rate == KillRateNotEvidence
 }
 
 // Bytes returns the document as it is written to disk.

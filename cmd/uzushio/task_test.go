@@ -80,6 +80,9 @@ func newTaskDir(t *testing.T) string {
 type canned struct {
 	status verifyrunner.Status
 	mutant verifyrunner.Status
+	// band is what a banded verifier reported, attached to every answer. Nil
+	// is an exit-code verifier, which reports none.
+	band *verifyrunner.Band
 }
 
 func (c canned) Verify(_ context.Context, req verifyrunner.Request) (verifyrunner.Result, error) {
@@ -93,9 +96,13 @@ func (c canned) Verify(_ context.Context, req verifyrunner.Request) (verifyrunne
 	}
 	return verifyrunner.Result{
 		SchemaVersion: 1, Task: "hello", Label: req.Label, Status: status,
+		Band:     c.band,
 		ExitCode: exit, DurationMS: 5, CMoAVersion: "v0.0.0-test",
 	}, nil
 }
+
+// number is a JSON number that may be absent, for a band row written by hand.
+func number(f float64) *float64 { return &f }
 
 func withRunner(t *testing.T, runner verifyrunner.Runner) {
 	t.Helper()
@@ -251,8 +258,9 @@ func TestDoctorRefusesAVersionOneTask(t *testing.T) {
 	}
 }
 
-func TestDoctorRefusesABandVerifier(t *testing.T) {
-	withRunner(t, canned{status: verifyrunner.StatusPass, mutant: verifyrunner.StatusFail})
+// bandTaskDir is newTaskDir with verify.kind set to band.
+func bandTaskDir(t *testing.T) string {
+	t.Helper()
 	dir := newTaskDir(t)
 	body, err := os.ReadFile(filepath.Join(dir, "task.json"))
 	if err != nil {
@@ -261,12 +269,80 @@ func TestDoctorRefusesABandVerifier(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "task.json"), strings.Replace(string(body),
 		`"reference":`, `"verify": {"kind": "band"},
   "reference":`, 1))
-	got := run(t, "task", "doctor", "--task", dir)
-	if got.code != exitUsage {
-		t.Fatalf("exit = %d, want %d; stderr = %s", got.code, exitUsage, got.stderr)
+	return dir
+}
+
+// killedBand is the answer a banded verifier gives about a mutant it caught:
+// one invariant out of band, one it could not measure at all.
+var killedBand = &verifyrunner.Band{
+	Judged:  2,
+	Failed:  []string{"rr_spread_req"},
+	Skipped: []string{"ratelimit_tax_us"},
+	Rows: []verifyrunner.BandRow{
+		{Invariant: "rr_spread_req", Value: number(120000), BandLo: number(0), BandHi: number(0), Verdict: "fail"},
+		{Invariant: "ratelimit_tax_us", BandLo: number(2.2), BandHi: number(4.2), Verdict: "skipped"},
+	},
+}
+
+// TestDoctorRunsABandVerifier is what changed when band stopped being reserved:
+// the check runs, and the rows the verifier measured reach the report, so a
+// reader learns which invariant answered rather than only that one did.
+func TestDoctorRunsABandVerifier(t *testing.T) {
+	withRunner(t, canned{
+		status: verifyrunner.StatusPass, mutant: verifyrunner.StatusFail, band: killedBand,
+	})
+	dir := bandTaskDir(t)
+	out := filepath.Join(t.TempDir(), "check")
+	got := run(t, "task", "doctor", "--task", dir, "--out", out)
+	if got.code != exitOK {
+		t.Fatalf("exit = %d, want %d; stderr = %s", got.code, exitOK, got.stderr)
 	}
-	if !strings.Contains(got.stderr, "band is not implemented") {
-		t.Errorf("stderr = %q", got.stderr)
+	// Not asked for, and printed anyway: --parallel was left at its default,
+	// and a banded verifier's numbers are only worth reading one at a time.
+	if !strings.Contains(got.stderr, "verify.kind is band, so this check runs 1 verification at a time") {
+		t.Errorf("stderr = %q, which does not say the check was held to one at a time", got.stderr)
+	}
+	body, err := os.ReadFile(filepath.Join(out, "report.json"))
+	if err != nil {
+		t.Fatalf("read report.json: %v", err)
+	}
+	var report struct {
+		Runs []struct {
+			Kind string             `json:"kind"`
+			Band *verifyrunner.Band `json:"band"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(body, &report); err != nil {
+		t.Fatalf("decode report.json: %v", err)
+	}
+	for _, r := range report.Runs {
+		if r.Band == nil {
+			t.Fatalf("the %s run carries no band; report = %s", r.Kind, body)
+		}
+		if len(r.Band.Rows) != 2 || r.Band.Rows[0].Invariant != "rr_spread_req" {
+			t.Fatalf("the %s run's band rows = %+v", r.Kind, r.Band.Rows)
+		}
+		if r.Band.Rows[1].Value != nil {
+			t.Errorf("a skipped row carries a value %v; it measured nothing", *r.Band.Rows[1].Value)
+		}
+	}
+}
+
+// TestDoctorKeepsAnExplicitParallel is the other half of the rule: a person who
+// typed --parallel meant it, and is told what it costs rather than overruled.
+func TestDoctorKeepsAnExplicitParallel(t *testing.T) {
+	withRunner(t, canned{
+		status: verifyrunner.StatusPass, mutant: verifyrunner.StatusFail, band: killedBand,
+	})
+	got := run(t, "task", "doctor", "--task", bandTaskDir(t), "--parallel", "3")
+	if got.code != exitOK {
+		t.Fatalf("exit = %d, want %d; stderr = %s", got.code, exitOK, got.stderr)
+	}
+	if !strings.Contains(got.stderr, "--parallel 3 on a task whose verify.kind is band") {
+		t.Errorf("stderr = %q, which does not warn about the parallelism asked for", got.stderr)
+	}
+	if strings.Contains(got.stderr, "runs 1 verification at a time") {
+		t.Errorf("stderr = %q: the flag was typed, so it is not overruled", got.stderr)
 	}
 }
 
@@ -470,5 +546,195 @@ func TestTheContextReachesTheCommand(t *testing.T) {
 	}
 	if listed := git(t, filepath.Join(dir, "repo"), "worktree", "list"); strings.Count(listed, "\n") != 1 {
 		t.Errorf("a worktree was left registered:\n%s", listed)
+	}
+}
+
+// --- replay -----------------------------------------------------------------
+
+// TestDoctorReplayRecomputesInPlace is the whole of what a replay is for: a
+// report written by an older build carries the runs but not the conclusions
+// this build draws from them, and the runs are all a conclusion needs.
+func TestDoctorReplayRecomputesInPlace(t *testing.T) {
+	withRunner(t, canned{
+		status: verifyrunner.StatusFail, mutant: verifyrunner.StatusFail, band: killedBand,
+	})
+	dir := bandTaskDir(t)
+	out := filepath.Join(t.TempDir(), "check")
+	// A live check first, to produce a report honestly. Its reference failed,
+	// so it is the case the new fields exist for.
+	if got := run(t, "task", "doctor", "--task", dir, "--out", out); got.code != exitFailure {
+		t.Fatalf("exit = %d, want %d; stderr = %s", got.code, exitFailure, got.stderr)
+	}
+	reportFile := filepath.Join(out, "report.json")
+	before, err := os.ReadFile(reportFile)
+	if err != nil {
+		t.Fatalf("read report.json: %v", err)
+	}
+	var first struct {
+		RunID string `json:"run_id"`
+	}
+	if err := json.Unmarshal(before, &first); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// Strip everything a replay is supposed to put back, the way a report from
+	// a build without them would look.
+	stripped := strings.NewReplacer(
+		`"kill_rate_meaningful": false,`, "",
+		`"outcome_note": "reference also failed",`, "",
+	).Replace(string(before))
+	if stripped == string(before) {
+		t.Fatal("the report did not carry the fields a replay recomputes")
+	}
+	writeFile(t, reportFile, stripped)
+
+	got := run(t, "task", "doctor", "--task", dir, "--replay", reportFile)
+	if got.code != exitFailure {
+		t.Fatalf("exit = %d, want %d; stderr = %s", got.code, exitFailure, got.stderr)
+	}
+	after, err := os.ReadFile(reportFile)
+	if err != nil {
+		t.Fatalf("read report.json: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("the replay did not reproduce the live report:\n--- live\n%s\n--- replay\n%s", before, after)
+	}
+	// The run id is the check's identity. A replay that minted a new one would
+	// turn one measurement into two.
+	if !strings.Contains(string(after), `"run_id": "`+first.RunID+`"`) {
+		t.Errorf("the replay changed the run id")
+	}
+	if !strings.Contains(got.stderr, "not evidence: the reference itself failed") {
+		t.Errorf("stderr = %q", got.stderr)
+	}
+}
+
+// TestDoctorReplayRecordsAsALiveRunWould checks the record a replay writes: the
+// same identifier rule, the report named relative to the task, and a second
+// replay landing on the next sequence number rather than overwriting.
+func TestDoctorReplayRecordsAsALiveRunWould(t *testing.T) {
+	withRunner(t, canned{
+		status: verifyrunner.StatusFail, mutant: verifyrunner.StatusFail, band: killedBand,
+	})
+	dir := bandTaskDir(t)
+	out := filepath.Join(dir, "doctor", "run-1")
+	if got := run(t, "task", "doctor", "--task", dir, "--out", out); got.code != exitFailure {
+		t.Fatalf("exit = %d; stderr = %s", got.code, got.stderr)
+	}
+	reportFile := filepath.Join(out, "report.json")
+	vault := t.TempDir()
+
+	got := run(t, "task", "doctor", "--task", dir, "--replay", reportFile, "--vault", vault)
+	if got.code != exitFailure {
+		t.Fatalf("exit = %d; stderr = %s", got.code, got.stderr)
+	}
+	record := findRecord(t, vault)
+	body, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatalf("read the record: %v", err)
+	}
+	// The rate is a word, and the report is named relative to the task so the
+	// record carries no machine path.
+	if !strings.Contains(string(body), "kill_rate: n/a\n") {
+		t.Fatalf("the record does not write n/a:\n%s", body)
+	}
+	if !strings.Contains(string(body), "report: doctor/run-1/report.json") {
+		t.Fatalf("the record does not name the report relatively:\n%s", body)
+	}
+	if strings.Contains(string(body), vault) || strings.Contains(string(body), dir) {
+		t.Fatalf("the record carries an absolute path:\n%s", body)
+	}
+	// A second replay does not overwrite the first record; it takes the next
+	// sequence number, exactly as a second live check on one day does.
+	if got := run(t, "task", "doctor", "--task", dir, "--replay", reportFile, "--vault", vault); got.code != exitFailure {
+		t.Fatalf("exit = %d; stderr = %s", got.code, got.stderr)
+	}
+	entries, err := os.ReadDir(filepath.Join(vault, "spec", "verifiers"))
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("the vault holds %d record(s), want 2", len(entries))
+	}
+	sequenced := false
+	for _, entry := range entries {
+		sequenced = sequenced || strings.HasSuffix(entry.Name(), "-1.md")
+	}
+	if !sequenced {
+		t.Errorf("neither record took the next sequence number: %v", entries)
+	}
+}
+
+// findRecord returns the one record in a vault.
+func findRecord(t *testing.T, vault string) string {
+	t.Helper()
+	dir := filepath.Join(vault, "spec", "verifiers")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("the vault holds %d record(s), want 1", len(entries))
+	}
+	return filepath.Join(dir, entries[0].Name())
+}
+
+// TestDoctorReplayRefusesRunFlags records that the flags saying how to run
+// something are refused rather than ignored: a replay runs nothing.
+func TestDoctorReplayRefusesRunFlags(t *testing.T) {
+	withRunner(t, canned{status: verifyrunner.StatusPass, mutant: verifyrunner.StatusFail})
+	dir := newTaskDir(t)
+	out := filepath.Join(t.TempDir(), "check")
+	if got := run(t, "task", "doctor", "--task", dir, "--out", out); got.code != exitOK {
+		t.Fatalf("exit = %d; stderr = %s", got.code, got.stderr)
+	}
+	reportFile := filepath.Join(out, "report.json")
+	for _, flag := range [][]string{
+		{"--parallel", "3"},
+		{"--timeout", "5s"},
+		{"--out", out},
+	} {
+		args := append([]string{"task", "doctor", "--task", dir, "--replay", reportFile}, flag...)
+		got := run(t, args...)
+		if got.code != exitUsage {
+			t.Errorf("%s: exit = %d, want %d", flag[0], got.code, exitUsage)
+		}
+		if !strings.Contains(got.stderr, "--replay recomputes a report and verifies nothing") {
+			t.Errorf("%s: stderr = %q", flag[0], got.stderr)
+		}
+	}
+}
+
+// TestDoctorReplayRefusesAReportItCannotRead covers the three ways the file is
+// not a report: missing, another schema, and one with no runs to recompute.
+func TestDoctorReplayRefusesAReportItCannotRead(t *testing.T) {
+	dir := newTaskDir(t)
+	tmp := t.TempDir()
+	tests := []struct {
+		name   string
+		body   string
+		phrase string
+	}{
+		{"another schema", `{"schema_version": 2, "run_id": "a", "runs": [{"label": "x"}]}`, "schema_version 2"},
+		{"no runs", `{"schema_version": 1, "run_id": "a", "runs": []}`, "holds no runs"},
+		{"no run id", `{"schema_version": 1, "runs": [{"label": "x"}]}`, "carries no run_id"},
+		{"not json", `{`, "decode"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(tmp, "report.json")
+			writeFile(t, path, tt.body)
+			got := run(t, "task", "doctor", "--task", dir, "--replay", path)
+			if got.code != exitUsage {
+				t.Fatalf("exit = %d, want %d; stderr = %s", got.code, exitUsage, got.stderr)
+			}
+			if !strings.Contains(got.stderr, tt.phrase) {
+				t.Errorf("stderr = %q, want it to say %q", got.stderr, tt.phrase)
+			}
+		})
+	}
+	got := run(t, "task", "doctor", "--task", dir, "--replay", filepath.Join(tmp, "gone.json"))
+	if got.code != exitUsage {
+		t.Errorf("a missing report: exit = %d, want %d", got.code, exitUsage)
 	}
 }

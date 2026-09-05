@@ -55,9 +55,10 @@ type Kind string
 const (
 	// KindExitCode is a verifier whose exit code is the whole answer.
 	KindExitCode Kind = "exit-code"
-	// KindBand is reserved: a verifier that answers with a score inside a
-	// band. It is accepted by the reader and refused by every command, so a
-	// task can be written before uzushio can run it.
+	// KindBand is a verifier that prints one measurement per invariant with
+	// the band it is held to, and whose answer is read off those rows rather
+	// than off the exit code. CMoA implements the reading; uzushio's part is
+	// to accept the kind and to carry the rows into the report.
 	KindBand Kind = "band"
 )
 
@@ -317,14 +318,18 @@ func (t *Task) RequireDoctorable() error {
 	return nil
 }
 
-// RequireExitCodeVerifier reports the reserved verifier kind, which every
-// command refuses before it touches docker.
-func (t *Task) RequireExitCodeVerifier() error {
+// RequireRunnableVerifier reports a verifier kind uzushio cannot run, before a
+// command touches docker.
+//
+// Both kinds are runnable, and uzushio treats them the same way on purpose:
+// `cmoa verify` decides what a verification concluded, and a health check reads
+// that status. What the band kind adds is the rows behind the status, which the
+// report carries and the verdict does not use. The check exists so that a kind
+// CMoA adds later is refused here rather than read as an exit-code verifier.
+func (t *Task) RequireRunnableVerifier() error {
 	switch t.Verify.Kind {
-	case KindExitCode:
+	case KindExitCode, KindBand:
 		return nil
-	case KindBand:
-		return fmt.Errorf("%w: verify.kind band is not implemented", ErrTask)
 	}
 	return fmt.Errorf("%w: unknown verify.kind %q", ErrTask, t.Verify.Kind)
 }

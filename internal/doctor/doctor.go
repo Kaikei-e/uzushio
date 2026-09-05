@@ -54,6 +54,41 @@ const SchemaVersion = 1
 // usually the machine being worked on.
 const DefaultParallel = 2
 
+// BandParallel is how many verifications of a banded verifier run at once.
+//
+// One, and it is not a tuning choice. A banded verifier's answer is a
+// measurement — microseconds per request, a tail latency, a transition time —
+// and two of them on one machine measure each other. Running them side by side
+// does not make the check faster in any sense that matters; it makes every
+// number in it a number about contention.
+const BandParallel = 1
+
+// ParallelFor is how many verifications may run at once, and what to say about
+// it.
+//
+// A banded verifier is held to one, and the caller's own --parallel wins over
+// that: somebody who typed it has a machine in mind, and a health check that
+// silently ignored the flag would be measuring something other than what was
+// asked for. Both cases warn, because both are worth knowing about — the first
+// says a flag's default was overruled, the second says the numbers may be
+// contention.
+func ParallelFor(kind task.Kind, requested int, explicit bool) (parallel int, warning string) {
+	if requested < 1 {
+		requested = DefaultParallel
+	}
+	if kind != task.KindBand || requested <= BandParallel {
+		return requested, ""
+	}
+	const why = "a banded verifier measures latency, and running two at once measures contention"
+	if explicit {
+		return requested, fmt.Sprintf(
+			"warning: --parallel %d on a task whose verify.kind is band: %s", requested, why)
+	}
+	return BandParallel, fmt.Sprintf(
+		"warning: verify.kind is band, so this check runs %d verification at a time: %s",
+		BandParallel, why)
+}
+
 // RunKind says which of the two questions a run answered.
 type RunKind string
 
@@ -95,21 +130,41 @@ func (o Outcome) String() string { return string(o) }
 // from the task identifier and the label, it names the compose project a
 // container ran under, and it says nothing about the machine.
 type Run struct {
-	Label      string              `json:"label"`
-	Kind       RunKind             `json:"kind"`
-	Mutant     *int                `json:"mutant_index,omitempty"`
-	Diff       string              `json:"diff,omitempty"`
-	Expect     task.Expect         `json:"expect,omitempty"`
-	Origin     task.Origin         `json:"origin,omitempty"`
-	Operator   string              `json:"operator,omitempty"`
-	Note       string              `json:"note,omitempty"`
-	Project    string              `json:"project_name,omitempty"`
-	Status     verifyrunner.Status `json:"status"`
-	Outcome    Outcome             `json:"outcome,omitempty"`
-	ExitCode   int                 `json:"exit_code"`
-	DurationMS int64               `json:"duration_ms"`
-	Out        string              `json:"out,omitempty"`
-	Error      string              `json:"error,omitempty"`
+	Label    string              `json:"label"`
+	Kind     RunKind             `json:"kind"`
+	Mutant   *int                `json:"mutant_index,omitempty"`
+	Diff     string              `json:"diff,omitempty"`
+	Expect   task.Expect         `json:"expect,omitempty"`
+	Origin   task.Origin         `json:"origin,omitempty"`
+	Operator string              `json:"operator,omitempty"`
+	Note     string              `json:"note,omitempty"`
+	Project  string              `json:"project_name,omitempty"`
+	Status   verifyrunner.Status `json:"status"`
+	// Band is what a banded verifier measured, carried straight through from
+	// `cmoa verify`. It is what turns "killed" into "killed via
+	// apikey_cost_us, 1.9 against a band ending at 1.2" — the material a
+	// person needs to re-centre a band, or to notice that the mutant nobody
+	// caught was the one whose invariant reported skipped.
+	Band    *verifyrunner.Band `json:"band,omitempty"`
+	Outcome Outcome            `json:"outcome,omitempty"`
+	// OutcomeNote qualifies the outcome where the outcome on its own would be
+	// read as more than it is. The one case so far is a check whose reference
+	// solution the verifier rejected: every mutant is then `killed`, and none
+	// of them was detected — they failed for the reason the reference did.
+	OutcomeNote string `json:"outcome_note,omitempty"`
+	// BandsBeyondReference are the invariants this mutant put out of band that
+	// the reference did not, in the order the verifier reported them.
+	//
+	// It is the differential a reader wants when the reference itself failed:
+	// a mutant that adds `ejection_transition_s` to a set of four bands that
+	// were already failing was genuinely detected, and one that adds nothing
+	// was not. It is written only where the reference failed something, since
+	// otherwise it is the mutant's own failed set spelled twice.
+	BandsBeyondReference []string `json:"bands_beyond_reference,omitempty"`
+	ExitCode             int      `json:"exit_code"`
+	DurationMS           int64    `json:"duration_ms"`
+	Out                  string   `json:"out,omitempty"`
+	Error                string   `json:"error,omitempty"`
 }
 
 // Aggregates are the counts the verdict is read off.
@@ -126,7 +181,25 @@ type Aggregates struct {
 	Inconclusive          int      `json:"inconclusive"`
 	Equivalent            int      `json:"equivalent"`
 	KillRate              *float64 `json:"kill_rate"`
-	KillRateMin           float64  `json:"kill_rate_min"`
+	// KillRateMeaningful says whether the rate is evidence of detection.
+	//
+	// It is not, when the verifier rejected the reference solution. Every
+	// mutant is then verified against a verifier that says no to everything,
+	// so every mutant is `killed` and a rate of 1.00 measures the false
+	// positive rather than the verifier's reach. The 2026-09-05 check of
+	// task-plecto-gate is the case this field exists for: 5 of 5 reference
+	// runs failed on the same four bands, and all seven mutants came back
+	// killed — including the two the task declares equivalent, which is what
+	// gives the game away.
+	//
+	// It is also false where no reference run reached a verdict at all: there
+	// is then nothing saying the verifier accepts anything.
+	//
+	// It is about the reference rather than about whether a rate exists; a
+	// check with no killable mutant carries a null rate and this flag still
+	// answers the question it is named for.
+	KillRateMeaningful bool    `json:"kill_rate_meaningful"`
+	KillRateMin        float64 `json:"kill_rate_min"`
 }
 
 // Report is what one health check produced.
@@ -168,8 +241,15 @@ type Options struct {
 	// Dir is where the report and the per-run output go. Check creates it.
 	Dir string
 	// Parallel is how many verifications run at once. Zero is
-	// DefaultParallel.
+	// DefaultParallel, and a banded verifier holds it to BandParallel unless
+	// ParallelExplicit says a person asked for the number.
 	Parallel int
+	// ParallelExplicit says the caller chose Parallel rather than inheriting a
+	// default. See ParallelFor.
+	ParallelExplicit bool
+	// Warn receives the one-line warnings a check produces about how it is
+	// being run, as opposed to what it found. Nil discards them.
+	Warn func(string)
 	// RunID names the check. Empty generates one.
 	RunID string
 	// Now is the clock, injectable so a test can pin a report's bytes.
@@ -206,7 +286,7 @@ func Check(ctx context.Context, opts Options) (*Report, error) {
 	if err := opts.Task.RequireDoctorable(); err != nil {
 		return nil, err
 	}
-	if err := opts.Task.RequireExitCodeVerifier(); err != nil {
+	if err := opts.Task.RequireRunnableVerifier(); err != nil {
 		return nil, err
 	}
 	now := opts.Now
@@ -259,19 +339,73 @@ func Check(ctx context.Context, opts Options) (*Report, error) {
 		}
 		report.Runs = append(report.Runs, j.run)
 	}
-	report.Aggregates = aggregate(opts.Task, report.Runs)
-	report.Verdict = verdict(opts.Task, report.Runs, report.Aggregates)
+	report.Aggregates.KillRateMin = opts.Task.Doctor.KillRateMin
+	report.Conclude()
 	report.FinishedAt = now().UTC().Format(time.RFC3339)
 
-	body, err := report.Bytes()
-	if err != nil {
+	if err := report.Write(filepath.Join(dir, ReportFile)); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, "report.json")
-	if err := os.WriteFile(path, body, 0o644); err != nil { //nolint:gosec // a report is world-readable on purpose
-		return nil, fmt.Errorf("%w: write %s: %w", ErrDoctor, path, err)
-	}
 	return report, nil
+}
+
+// ReportFile is the name a check gives its report inside the output directory.
+const ReportFile = "report.json"
+
+// Conclude reads the runs and fills in everything derived from them: the
+// counts, the per-run annotations and the verdict.
+//
+// It is separate from Check because it is the whole of what a replay does. A
+// report holds every run verbatim, so the conclusions can be recomputed from
+// the file long after the containers are gone — which is how a report written
+// before a field existed gains it, without running the verifier again.
+//
+// Aggregates.KillRateMin is an input rather than an output: it is the task's
+// threshold as it stood when the check ran, and a replay judges against the
+// threshold in the file rather than against whatever the task says today.
+func (r *Report) Conclude() {
+	r.Aggregates = aggregate(r.Aggregates.KillRateMin, r.Runs)
+	annotate(r.Runs, r.Aggregates)
+	r.Verdict = verdict(r.Runs, r.Aggregates)
+}
+
+// ReadReport decodes a report this package wrote.
+//
+// The schema version is the one thing leniency does not extend to: a report of
+// another shape read as this one would be recomputed into a file that says
+// something nobody measured.
+func ReadReport(path string) (*Report, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrDoctor, err)
+	}
+	var report Report
+	if err := json.Unmarshal(body, &report); err != nil {
+		return nil, fmt.Errorf("%w: decode %s: %w", ErrDoctor, filepath.Base(path), err)
+	}
+	if report.SchemaVersion != SchemaVersion {
+		return nil, fmt.Errorf("%w: %s is schema_version %d; this build reads %d",
+			ErrDoctor, filepath.Base(path), report.SchemaVersion, SchemaVersion)
+	}
+	if report.RunID == "" {
+		return nil, fmt.Errorf("%w: %s carries no run_id", ErrDoctor, filepath.Base(path))
+	}
+	if len(report.Runs) == 0 {
+		return nil, fmt.Errorf("%w: %s holds no runs to recompute", ErrDoctor, filepath.Base(path))
+	}
+	return &report, nil
+}
+
+// Write renders the report to path.
+func (r *Report) Write(path string) error {
+	body, err := r.Bytes()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, body, 0o644); err != nil { //nolint:gosec // a report is world-readable on purpose
+		return fmt.Errorf("%w: write %s: %w", ErrDoctor, path, err)
+	}
+	return nil
 }
 
 // job is one planned verification: the run it will become, and the diff to
@@ -393,9 +527,9 @@ func combine(
 // filled in place, so the report's order is the plan's order rather than the
 // order the containers happened to finish in.
 func verify(ctx context.Context, opts Options, dir string, jobs []job) {
-	parallel := opts.Parallel
-	if parallel < 1 {
-		parallel = DefaultParallel
+	parallel, warning := ParallelFor(opts.Task.Verify.Kind, opts.Parallel, opts.ParallelExplicit)
+	if warning != "" && opts.Warn != nil {
+		opts.Warn(warning)
 	}
 	var timeout time.Duration
 	if opts.Task.Verify.TimeoutSeconds > 0 {
@@ -430,6 +564,7 @@ func verify(ctx context.Context, opts Options, dir string, jobs []job) {
 			}
 			j.run.Status = result.Status
 			j.run.Project = result.ProjectName
+			j.run.Band = result.Band
 			j.run.ExitCode = result.ExitCode
 			j.run.DurationMS = result.DurationMS
 			j.run.Outcome = outcomeOf(j.run.Kind, result.Status)
@@ -485,8 +620,8 @@ func outcomeOf(kind RunKind, status verifyrunner.Status) Outcome {
 // aggregate counts the runs. A timeout is inconclusive rather than a kill:
 // some tools count it as detected, and that is how a verifier that hangs on
 // everything comes out looking perfect.
-func aggregate(t *task.Task, runs []Run) Aggregates {
-	out := Aggregates{KillRateMin: t.Doctor.KillRateMin}
+func aggregate(killRateMin float64, runs []Run) Aggregates {
+	out := Aggregates{KillRateMin: killRateMin}
 	for _, run := range runs {
 		switch run.Kind {
 		case RunReference:
@@ -517,13 +652,80 @@ func aggregate(t *task.Task, runs []Run) Aggregates {
 		rate := float64(out.Killed) / float64(measured)
 		out.KillRate = &rate
 	}
+	// A rate is evidence only if something first said the verifier accepts a
+	// solution it should accept. Strictly fewer inconclusive runs than runs, so
+	// a check with no reference run at all is not meaningful either.
+	out.KillRateMeaningful = out.ReferenceFailures == 0 && out.ReferenceInconclusive < out.ReferenceRuns
+	return out
+}
+
+// annotate writes onto each mutant run what only the whole check knows: that
+// its outcome is not what it looks like, and which of the bands it broke the
+// reference had not broken already.
+//
+// It runs after aggregate because both answers depend on how the reference
+// went, which is not known while a mutant is being verified.
+func annotate(runs []Run, counts Aggregates) {
+	if counts.KillRateMeaningful {
+		return
+	}
+	note := "no reference run reached a verdict"
+	if counts.ReferenceFailures > 0 {
+		note = "reference also failed"
+	}
+	reference := referenceFailedBands(runs)
+	for i := range runs {
+		if runs[i].Kind != RunMutant || runs[i].Outcome != OutcomeKilled {
+			continue
+		}
+		runs[i].OutcomeNote = note
+		if len(reference) > 0 {
+			runs[i].BandsBeyondReference = beyond(runs[i].Band, reference)
+		}
+	}
+}
+
+// referenceFailedBands is every invariant any reference run put out of band.
+//
+// The union rather than the intersection: an invariant that failed on one
+// reference run out of five is an invariant this machine cannot hold, and a
+// mutant failing it is not evidence of anything.
+func referenceFailedBands(runs []Run) map[string]bool {
+	failed := map[string]bool{}
+	for _, run := range runs {
+		if run.Kind != RunReference || run.Band == nil {
+			continue
+		}
+		for _, name := range run.Band.Failed {
+			failed[name] = true
+		}
+	}
+	return failed
+}
+
+// beyond is the band's failed invariants that the reference did not fail, in
+// the order the verifier reported them. Nil where there are none, so a mutant
+// that broke nothing the reference had not broken says so by writing no key.
+func beyond(band *verifyrunner.Band, reference map[string]bool) []string {
+	if band == nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, name := range band.Failed {
+		if reference[name] || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
 	return out
 }
 
 // verdict reads the counts. The order is the order of severity: a verifier
 // that rejects the reference solution is broken whatever its kill rate says,
 // and a check that could not measure says so rather than guessing.
-func verdict(t *task.Task, runs []Run, counts Aggregates) vocab.Health {
+func verdict(runs []Run, counts Aggregates) vocab.Health {
 	if counts.ReferenceFailures > 0 {
 		return vocab.HealthUnhealthy
 	}
@@ -537,7 +739,7 @@ func verdict(t *task.Task, runs []Run, counts Aggregates) vocab.Health {
 		}
 	}
 	// Strictly below the threshold fails, so a threshold of 1 is reachable.
-	if counts.KillRate != nil && *counts.KillRate < t.Doctor.KillRateMin {
+	if counts.KillRate != nil && *counts.KillRate < counts.KillRateMin {
 		return vocab.HealthUnhealthy
 	}
 	if counts.KillRate == nil ||

@@ -529,3 +529,54 @@ func TestVerifierNumbersAreWrittenAsStrings(t *testing.T) {
 		t.Errorf("a check with no rate wrote a kill_rate key:\n%s", body)
 	}
 }
+
+// TestVerifierWritesNotAvailableForARateThatIsNotEvidence is the third state of
+// the kill rate, beside a number and no key at all: a rate that was measured
+// and means nothing, because the verifier rejected the reference solution and
+// so rejected every mutant with it.
+//
+// It is a word rather than a number on purpose. A record outlives its run, and
+// `kill_rate: "1.00"` under `verdict: unhealthy` is the pair a hurried reader
+// gets backwards.
+func TestVerifierWritesNotAvailableForARateThatIsNotEvidence(t *testing.T) {
+	base := roundTripDocuments()[3].(doc.Verifier)
+	verifier := modifyVerifier(base, func(v *doc.Verifier) {
+		v.KillRate = doc.KillRateNotEvidence
+		v.Verdict = vocab.HealthUnhealthy
+	})
+	if err := verifier.Validate(); err != nil {
+		t.Fatalf("Validate refused the not-evidence sentinel: %v", err)
+	}
+	front, err := verifier.Frontmatter()
+	if err != nil {
+		t.Fatalf("Frontmatter: %v", err)
+	}
+	if front.KillRate != "n/a" {
+		t.Fatalf("kill_rate = %q, want n/a", front.KillRate)
+	}
+	body, err := verifier.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	if !strings.Contains(string(body), "kill_rate: n/a\n") {
+		t.Fatalf("the document does not carry the word:\n%s", body)
+	}
+	// The two sentinels are different facts — nothing was measured, against
+	// something was measured and means nothing — so they must not collapse.
+	if doc.NoKillRate == doc.KillRateNotEvidence {
+		t.Fatal("the two sentinels are the same value")
+	}
+}
+
+// TestVerifierStillRefusesARateOutsideTheRange checks that widening Validate
+// for the sentinels did not widen it for everything: -0.5 is not a rate and not
+// a sentinel, and a record carrying one is a bug worth refusing.
+func TestVerifierStillRefusesARateOutsideTheRange(t *testing.T) {
+	base := roundTripDocuments()[3].(doc.Verifier)
+	for _, rate := range []float64{-0.5, -3, 1.5} {
+		verifier := modifyVerifier(base, func(v *doc.Verifier) { v.KillRate = rate })
+		if err := verifier.Validate(); err == nil {
+			t.Errorf("Validate accepted kill_rate %v", rate)
+		}
+	}
+}

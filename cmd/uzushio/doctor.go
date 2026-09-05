@@ -23,13 +23,14 @@ var newRunner = func(bin string) verifyrunner.Runner { return verifyrunner.Exec{
 // newTaskDoctorCmd builds the health check.
 func newTaskDoctorCmd() *cobra.Command {
 	var (
-		taskDir  string
-		cmoaBin  string
-		vaultDir string
-		outDir   string
-		parallel int
-		timeout  time.Duration
-		asJSON   bool
+		taskDir    string
+		cmoaBin    string
+		vaultDir   string
+		outDir     string
+		replayPath string
+		parallel   int
+		timeout    time.Duration
+		asJSON     bool
 	)
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -38,47 +39,85 @@ func newTaskDoctorCmd() *cobra.Command {
 			"its mutants once, and reports what the verifier did. A reference run that fails\n" +
 			"is a false positive; a mutant that passes is a defect the verifier cannot see.\n\n" +
 			"The report goes to <task>/doctor/<run-id>/report.json. Exit 0 is healthy, 1 is\n" +
-			"unhealthy, 2 is a usage or task error and 3 is inconclusive.",
+			"unhealthy, 2 is a usage or task error and 3 is inconclusive.\n\n" +
+			"--replay <report.json> recomputes an existing report from the runs it already\n" +
+			"holds and rewrites it in place, keeping its run id. Nothing is verified: no\n" +
+			"cmoa, no docker, no worktree. It is how a report written before a field\n" +
+			"existed gains it, and how a record can be written for a check that has\n" +
+			"already run.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			loaded, err := task.Load(taskDir)
 			if err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
-			if err := loaded.RequireDoctorable(); err != nil {
-				return &exitError{code: exitUsage, err: err}
-			}
-			if err := loaded.RequireExitCodeVerifier(); err != nil {
-				return &exitError{code: exitUsage, err: err}
-			}
-			ctx := cmd.Context()
-			if timeout > 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, timeout)
-				defer cancel()
-			}
-			report, err := doctor.Check(ctx, doctor.Options{
-				Task:     loaded,
-				Runner:   newRunner(cmoaBin),
-				Dir:      outDir,
-				Parallel: parallel,
-			})
-			// Every failure to get a check at all — a task uzushio cannot
-			// read, an output directory that already holds one, a worktree
-			// that would not build — is a usage error rather than a verdict.
-			if err != nil {
-				return &exitError{code: exitUsage, err: err}
+			errOut := cmd.ErrOrStderr()
+
+			var (
+				report     *doctor.Report
+				reportFile string
+			)
+			if replayPath != "" {
+				// The refused flags are the ones that say how to run something.
+				// A replay runs nothing, and a command that accepted --parallel
+				// and then ignored it would be lying about what it did.
+				if err := refuseWithReplay(cmd, "parallel", "timeout", "out"); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				report, err = doctor.ReadReport(replayPath)
+				if err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				report.Conclude()
+				if err := report.Write(replayPath); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				reportFile = replayPath
+			} else {
+				if err := loaded.RequireDoctorable(); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				if err := loaded.RequireRunnableVerifier(); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				ctx := cmd.Context()
+				if timeout > 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, timeout)
+					defer cancel()
+				}
+				report, err = doctor.Check(ctx, doctor.Options{
+					Task:   loaded,
+					Runner: newRunner(cmoaBin),
+					Dir:    outDir,
+					// A banded verifier is held to one verification at a time
+					// unless the flag was typed; Changed is what tells the two
+					// apart, because the flag's default and a typed 2 are the same
+					// integer.
+					Parallel:         parallel,
+					ParallelExplicit: cmd.Flags().Changed("parallel"),
+					Warn:             func(line string) { fmt.Fprintln(errOut, line) },
+				})
+				// Every failure to get a check at all — a task uzushio cannot
+				// read, an output directory that already holds one, a worktree
+				// that would not build — is a usage error rather than a verdict.
+				if err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				reportFile = filepath.Join(outDir, doctor.ReportFile)
+				if outDir == "" {
+					reportFile = filepath.Join(loaded.Dir, "doctor", report.RunID, doctor.ReportFile)
+				}
 			}
 
-			errOut := cmd.ErrOrStderr()
 			for _, line := range report.Summary() {
 				fmt.Fprintln(errOut, line)
 			}
-			reportPath, insideTask := reportPathFor(loaded, outDir, report.RunID)
+			reportPath, insideTask := reportPathFor(loaded, reportFile)
 			if insideTask {
 				fmt.Fprintf(errOut, "report: %s\n", reportPath)
 			} else {
-				fmt.Fprintf(errOut, "report: %s\n", filepath.Join(outDir, "report.json"))
+				fmt.Fprintf(errOut, "report: %s\n", reportFile)
 			}
 
 			if vaultDir != "" {
@@ -91,7 +130,7 @@ func newTaskDoctorCmd() *cobra.Command {
 					// it is not named at all.
 					recorded = ""
 					fmt.Fprintln(errOut,
-						"warning: --out is outside the task directory, so the record names no report")
+						"warning: the report is outside the task directory, so the record names no report")
 				}
 				written, err := report.Record(vaultDir, recorded)
 				if err != nil {
@@ -113,6 +152,8 @@ func newTaskDoctorCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cmoaBin, "cmoa", "", "the cmoa binary (default: cmoa on PATH)")
 	cmd.Flags().StringVar(&vaultDir, "vault", "", "a DocDag vault to record the result in")
 	cmd.Flags().StringVar(&outDir, "out", "", "where to write the report (default: <task>/doctor/<run-id>)")
+	cmd.Flags().StringVar(&replayPath, "replay", "",
+		"recompute this report.json in place from the runs it holds, verifying nothing")
 	cmd.Flags().IntVar(&parallel, "parallel", doctor.DefaultParallel, "how many verifications to run at once")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0,
 		"give up on the whole check after this long (default: no limit)")
@@ -120,18 +161,32 @@ func newTaskDoctorCmd() *cobra.Command {
 	return cmd
 }
 
-// reportPathFor is the report's path relative to the task directory, and
-// whether it is under it at all.
+// refuseWithReplay reports the first of the named flags that was typed
+// alongside --replay.
+//
+// They are refused rather than ignored. Each of them says how to run
+// something, a replay runs nothing, and the failure mode of accepting them is
+// somebody believing a report was re-measured under a timeout it never had.
+func refuseWithReplay(cmd *cobra.Command, names ...string) error {
+	for _, name := range names {
+		if cmd.Flags().Changed(name) {
+			return fmt.Errorf(
+				"--replay recomputes a report and verifies nothing, so --%s has nothing to do; "+
+					"drop one of the two", name)
+		}
+	}
+	return nil
+}
+
+// reportPathFor is a report's path relative to the task directory, and whether
+// it is under it at all.
 //
 // Only a path under the task is a path a record may carry: the record is
 // committed to somebody's repository, and a report kept elsewhere can only be
 // named absolutely, which would put the machine that ran the check into the
 // document. The caller warns and records no report rather than naming one.
-func reportPathFor(loaded *task.Task, outDir, runID string) (string, bool) {
-	if outDir == "" {
-		return filepath.ToSlash(filepath.Join("doctor", runID, "report.json")), true
-	}
-	abs, err := filepath.Abs(outDir)
+func reportPathFor(loaded *task.Task, reportFile string) (string, bool) {
+	abs, err := filepath.Abs(reportFile)
 	if err != nil {
 		return "", false
 	}
@@ -139,7 +194,7 @@ func reportPathFor(loaded *task.Task, outDir, runID string) (string, bool) {
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", false
 	}
-	return filepath.ToSlash(filepath.Join(relative, "report.json")), true
+	return filepath.ToSlash(relative), true
 }
 
 // verdictError turns the verdict into the process's answer. The check has

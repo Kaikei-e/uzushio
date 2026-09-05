@@ -1,0 +1,13 @@
+diff --git a/plecto/crates/server/src/health.rs b/plecto/crates/server/src/health.rs
+index b0f0d70..3f721d9 100644
+--- a/plecto/crates/server/src/health.rs
++++ b/plecto/crates/server/src/health.rs
+@@ -68,7 +68,7 @@ pub(crate) async fn serve_health_checks(
+         last.retain(|k, _| live.contains(k));
+         tokio::select! {
+             _ = crate::listener::drained(&mut drain) => return,
+-            _ = tokio::time::sleep(period.max(Duration::from_millis(20))) => {}
++            _ = tokio::time::sleep(period.max(Duration::from_millis(1200))) => {}
+         }
+     }
+ }

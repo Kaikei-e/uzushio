@@ -272,10 +272,11 @@ func TestLoadRejects(t *testing.T) {
 	}
 }
 
-// TestBandIsReservedAndRefused records the one verifier kind the schema
-// accepts and no command runs: a task can be written before uzushio can
-// measure it, and the refusal is a sentence rather than a wrong answer.
-func TestBandIsReservedAndRefused(t *testing.T) {
+// TestBandIsRunnable records that both verifier kinds are runnable. The band
+// kind used to be reserved and refused by every command; it is now measured
+// like any other, because `cmoa verify` reads the rows and answers in the same
+// status vocabulary either way.
+func TestBandIsRunnable(t *testing.T) {
 	loaded, err := task.Load(write(t, `{
   "version": 2, "id": "a", "repo": "repo", "files": ["a.go"],
   "verify": {"kind": "band"},
@@ -288,9 +289,25 @@ func TestBandIsReservedAndRefused(t *testing.T) {
 	if loaded.Verify.Kind != task.KindBand {
 		t.Fatalf("verify.kind = %q, want band", loaded.Verify.Kind)
 	}
-	err = loaded.RequireExitCodeVerifier()
-	if !errors.Is(err, task.ErrTask) || !strings.Contains(err.Error(), "band is not implemented") {
-		t.Fatalf("RequireExitCodeVerifier error = %v, want the not-implemented message", err)
+	if err := loaded.RequireRunnableVerifier(); err != nil {
+		t.Fatalf("RequireRunnableVerifier: %v", err)
+	}
+}
+
+// TestUnknownKindIsRefused is the other half of the same rule: a kind CMoA adds
+// after this build is refused by name rather than run as an exit-code verifier.
+func TestUnknownKindIsRefused(t *testing.T) {
+	loaded, err := task.Load(write(t, `{
+  "version": 2, "id": "a", "repo": "repo", "files": ["a.go"],
+  "reference": {"diff": "reference.diff"}
+}`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	loaded.Verify.Kind = task.Kind("oracle")
+	err = loaded.RequireRunnableVerifier()
+	if !errors.Is(err, task.ErrTask) || !strings.Contains(err.Error(), `unknown verify.kind "oracle"`) {
+		t.Fatalf("RequireRunnableVerifier error = %v, want the unknown-kind message", err)
 	}
 }
 

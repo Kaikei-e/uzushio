@@ -222,3 +222,64 @@ func TestErrorsCarryNoArgv(t *testing.T) {
 		t.Errorf("the error drops cmoa's own message: %v", err)
 	}
 }
+
+// TestDecodeReadsABand is the shape a banded verifier's answer arrives in: one
+// row per invariant, with every number nullable, because a `skipped` or `info`
+// row measured nothing and a zero would read as a measurement of zero.
+func TestDecodeReadsABand(t *testing.T) {
+	got, err := verifyrunner.Decode([]byte(`{
+  "schema_version": 1, "task": "plecto-gate", "status": "fail", "exit_code": 1,
+  "band": {
+    "judged": 2,
+    "failed": ["rr_spread_req"],
+    "skipped": ["ratelimit_tax_us"],
+    "rows": [
+      {"invariant":"rr_spread_req","value":120000,"ci_half":null,
+       "band_lo":0,"band_hi":0,"verdict":"fail"},
+      {"invariant":"ratelimit_tax_us","value":null,"ci_half":null,
+       "band_lo":2.2,"band_hi":4.2,"verdict":"skipped"},
+      {"invariant":"pooled_tail_p99_ms","value":0.31,"ci_half":0.02,
+       "band_lo":null,"band_hi":null,"verdict":"info"}
+    ]
+  }
+}`))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Band == nil {
+		t.Fatal("the band was dropped")
+	}
+	if got.Band.Judged != 2 || len(got.Band.Failed) != 1 || got.Band.Failed[0] != "rr_spread_req" {
+		t.Fatalf("band = %+v", got.Band)
+	}
+	if len(got.Band.Rows) != 3 {
+		t.Fatalf("%d rows", len(got.Band.Rows))
+	}
+	failed := got.Band.Rows[0]
+	if failed.Value == nil || *failed.Value != 120000 || failed.CIHalf != nil {
+		t.Errorf("the failing row = %+v", failed)
+	}
+	if failed.BandHi == nil || *failed.BandHi != 0 {
+		// A band of 0-0 is the one invariant that is exactly host-independent.
+		// Read as an absent number it would silently stop being checkable.
+		t.Errorf("a band_hi of 0 was read as absent: %+v", failed)
+	}
+	if got.Band.Rows[1].Value != nil {
+		t.Errorf("a skipped row carries a value: %+v", got.Band.Rows[1])
+	}
+	if info := got.Band.Rows[2]; info.BandLo != nil || info.BandHi != nil || info.Verdict != "info" {
+		t.Errorf("an info row carries a band: %+v", info)
+	}
+}
+
+// TestDecodeWithoutABand records that an exit-code verifier reports none, and
+// that its absence is not a decoding failure.
+func TestDecodeWithoutABand(t *testing.T) {
+	got, err := verifyrunner.Decode([]byte(passJSON))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Band != nil {
+		t.Fatalf("band = %+v, want none", got.Band)
+	}
+}

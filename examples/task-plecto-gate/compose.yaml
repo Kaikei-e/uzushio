@@ -1,0 +1,65 @@
+# The verifier for task-plecto-gate. CMoA runs
+#   docker compose -f compose.yaml -p <unique> run --rm --no-deps -T --quiet-pull verify
+# with CMOA_CANDIDATE_DIR pointing at the candidate worktree, and then
+#   docker compose -f compose.yaml -p <unique> down -v --remove-orphans
+#
+# One service, and it has to be one: `--no-deps` means depends_on is never
+# started, so a sidecar is impossible. Nothing is lost — the bench harnesses
+# (bench-server, load-balancing) embed their own upstreams, and every byte of
+# load stays on 127.0.0.1 inside this container's own network namespace. No
+# ports are published and --network host is not needed.
+services:
+  verify:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: uzushio-plecto-gate:1.97.1
+    working_dir: /work
+    # The gate starts a proxy, three to five in-process upstreams and a
+    # generator, all children of one bash. init reaps whatever a killed
+    # generator leaves behind; run-perf.sh's own EXIT trap handles the proxy.
+    init: true
+    # run-perf.sh splits nproc in half into PROXY_CPUS and GEN_CPUS and pins
+    # both with taskset, so nproc has to report the CPUs the container may
+    # actually use. A CFS quota (`cpus:`) would leave nproc reporting the whole
+    # host and taskset pinning onto throttled CPUs; cpuset is what makes the two
+    # agree. Two is the minimum that works at all — with one, PROXY_CPUS comes
+    # out as "0--1" and every taskset fails. More is better: set PLECTO_CPUSET
+    # to a contiguous set of same-kind cores on an otherwise idle machine.
+    cpuset: "${PLECTO_CPUSET:-0-3}"
+    volumes:
+      - ${CMOA_CANDIDATE_DIR:?set by cmoa verify}:/work
+      - ./gate.sh:/gate.sh:ro
+      # The freshness guard hard-codes plecto/target/release/examples and does
+      # not honour CARGO_TARGET_DIR, so the build must land at exactly this
+      # path. These three volumes are `external` because CMoA tears the project
+      # down with `down -v`, which would delete a volume the project owned — and
+      # with it the whole cargo build. setup.sh creates them.
+      #
+      # Sharing a target directory means verifications must be SERIALISED:
+      # cargo takes a lock on it. `uzushio task doctor` runs a banded task at
+      # --parallel 1 for a second reason (a banded verifier measures latency),
+      # and the two reasons agree.
+      - plecto-target:/work/plecto/target
+      - loadgen-target:/work/bench/loadgen/target
+      - cargo-registry:/usr/local/cargo/registry
+    environment:
+      # NOT set, deliberately: REQUIRE_OFFLINE (a bridged container has a
+      # default route and run-perf.sh would refuse to run), INFLUX (wants
+      # docker-in-docker), NO_COLOR (only the literal "1" is remapped safely;
+      # any other value makes every oha run write an empty JSON and the reducer
+      # crash), PROXY_CPUS/GEN_CPUS (cpuset already makes the default split
+      # right).
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: "1"
+    command: ["bash", "/gate.sh"]
+volumes:
+  plecto-target:
+    external: true
+    name: uzushio-plecto-gate-target
+  loadgen-target:
+    external: true
+    name: uzushio-plecto-gate-loadgen-target
+  cargo-registry:
+    external: true
+    name: uzushio-plecto-gate-cargo-registry
