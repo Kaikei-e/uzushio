@@ -244,6 +244,8 @@ func TestPathAndFilename(t *testing.T) {
 		{KindPattern, "fp/retry-storm", "spec/patterns/retry-storm.md"},
 		{KindRun, "run/he-0001@2026-09-05-m-out", "spec/runs/he-0001@2026-09-05-m-out.md"},
 		{KindVerifier, "verifier/hello@2026-09-05", "spec/verifiers/hello@2026-09-05.md"},
+		{KindCalibration, "calibration/gpt-oss-20b@2026-09-05",
+			"spec/calibrations/gpt-oss-20b@2026-09-05.md"},
 	}
 	for _, tt := range tests {
 		got, err := Path(tt.kind, tt.id)
@@ -268,7 +270,7 @@ func TestWritesID(t *testing.T) {
 	if WritesID(KindEdit) {
 		t.Fatal("an edit's stem carries its identifier; it need not write id:")
 	}
-	for _, k := range []Kind{KindPattern, KindRun, KindVerifier} {
+	for _, k := range []Kind{KindPattern, KindRun, KindVerifier, KindCalibration} {
 		if !WritesID(k) {
 			t.Fatalf("%s identifiers carry a slash and must be written in frontmatter", k)
 		}
@@ -402,5 +404,64 @@ func TestTaskIDPatternIsCMoAs(t *testing.T) {
 		if ValidTaskID(id) {
 			t.Fatalf("ValidTaskID(%q) = true, and CMoA refuses it", id)
 		}
+	}
+}
+
+// TestCalibrationID holds the identifier to the same accept/reject decisions
+// the pattern in the configuration makes, which is what keeps the two from
+// drifting: the shape is declared once as a string DocDag reads and once as a
+// named-group expression this package parses with.
+func TestCalibrationID(t *testing.T) {
+	good := []struct {
+		judge string
+		day   string
+		seq   int
+		want  string
+	}{
+		{"gpt-oss-20b", "2026-09-05", 0, "calibration/gpt-oss-20b@2026-09-05"},
+		{"qwen3.1", "2026-09-05", 2, "calibration/qwen3.1@2026-09-05-2"},
+	}
+	for _, tt := range good {
+		id, err := CalibrationID(tt.judge, tt.day, tt.seq)
+		if err != nil {
+			t.Fatalf("CalibrationID(%q, %q, %d): %v", tt.judge, tt.day, tt.seq, err)
+		}
+		if id != tt.want {
+			t.Fatalf("CalibrationID = %q, want %q", id, tt.want)
+		}
+		ref, err := ParseCalibrationID(id)
+		if err != nil {
+			t.Fatalf("ParseCalibrationID(%q): %v", id, err)
+		}
+		if ref.Judge != tt.judge || ref.Day != tt.day || ref.Seq != tt.seq {
+			t.Fatalf("ParseCalibrationID(%q) = %+v", id, ref)
+		}
+		back, err := ref.ID()
+		if err != nil || back != id {
+			t.Fatalf("the reference rebuilds as %q (%v)", back, err)
+		}
+	}
+	for _, bad := range []struct {
+		judge string
+		day   string
+		seq   int
+	}{
+		{"GPT-OSS", "2026-09-05", 0},
+		{"gpt_oss", "2026-09-05", 0},
+		{"gpt-oss-20b", "2026-13-40", 0},
+		{"gpt-oss-20b", "not-a-day", 0},
+		{"gpt-oss-20b", "2026-09-05", -1},
+	} {
+		if id, err := CalibrationID(bad.judge, bad.day, bad.seq); err == nil {
+			t.Fatalf("CalibrationID(%q, %q, %d) = %q, want a refusal", bad.judge, bad.day, bad.seq, id)
+		}
+	}
+	// A zero sequence number writes no suffix: two spellings of one document
+	// is the mistake the rule avoids.
+	if id, _ := CalibrationID("m", "2026-09-05", 0); id != "calibration/m@2026-09-05" {
+		t.Fatalf("a zero sequence wrote %q", id)
+	}
+	if _, err := ParseCalibrationID("calibration/m@2026-09-05-"); err == nil {
+		t.Fatal("a trailing hyphen was read as a sequence number")
 	}
 }

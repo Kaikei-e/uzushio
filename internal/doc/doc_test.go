@@ -178,6 +178,7 @@ func TestTemplatesAreDocuments(t *testing.T) {
 		{vocab.KindPattern, "fp/example"},
 		{vocab.KindRun, "run/he-0000@" + doc.TemplateDay + "-model-out"},
 		{vocab.KindVerifier, "verifier/example@" + doc.TemplateDay},
+		{vocab.KindCalibration, "calibration/judge-model@" + doc.TemplateDay},
 	}
 	root := tempVault(t)
 	for _, template := range templates {

@@ -41,6 +41,7 @@ func referencePattern() string {
 		vocab.PatternIDBody,
 		vocab.RunIDBody,
 		vocab.VerifierIDBody,
+		vocab.CalibrationIDBody,
 	}
 	pattern := "^("
 	for i, alternative := range alternatives {
@@ -135,9 +136,9 @@ func Config() (config.Config, error) {
 	return cfg, nil
 }
 
-// addKinds declares the four uzushio kinds.
+// addKinds declares the five uzushio kinds.
 //
-// All four are append_only. The history check reads only kinds that opt in,
+// All five are append_only. The history check reads only kinds that opt in,
 // and it exempts the status field, so marking an edit append_only does not
 // stand in the way of its status moving from proposed to accepted; what it
 // forbids is rewriting a decision after the fact. It protects less than it
@@ -260,6 +261,59 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 		// No edges and no rules this step. A verifier check has nothing to
 		// point at yet: the task it is about is CMoA's, not a document in this
 		// vault, and the clause that will require one is Step 4's work.
+	}
+
+	cfg.Kinds[vocab.KindCalibration.String()] = config.KindSpec{
+		Dir: vocab.DirCalibrations,
+		ID:  vocab.CalibrationIDPattern,
+		// Like a run and a verifier check, a calibration answers to no status
+		// vocabulary: it is a measurement, and what it concluded is the
+		// verdict.
+		Closed:     true,
+		AppendOnly: true,
+		Fields: map[string]config.FieldSpec{
+			// The judge and the candidates it judged. Without the pair, a
+			// coefficient is a number about nothing: the same judge scores
+			// differently against three strong proposers and against three
+			// weak ones, because kappa is sensitive to how often the answer
+			// is obvious.
+			vocab.FieldJudge.String():      {Required: true},
+			vocab.FieldPool.String():       {Required: true},
+			vocab.FieldWindowFrom.String(): {},
+			vocab.FieldWindowTo.String():   {},
+			vocab.FieldNItems.String():     {},
+			// The handling is required and closed because it is not a
+			// preprocessing detail: the two handlings estimate different
+			// quantities, and a coefficient whose handling is unstated cannot
+			// be compared with anything.
+			vocab.FieldTieHandling.String(): {
+				OneOf:    vocab.Strings(vocab.AllTieHandlings()),
+				Required: true,
+			},
+			// The three coefficients are strings, like the verifier's rate:
+			// a scalar field is compared as text, and `unmeasured` has to be
+			// spellable in the same key as a number.
+			vocab.FieldSwapKappa.String():  {},
+			vocab.FieldRerunKappa.String(): {},
+			vocab.FieldHumanKappa.String(): {},
+			vocab.FieldNHuman.String():     {},
+			vocab.FieldVerdict.String(): {
+				OneOf:    vocab.Strings(vocab.AllCalibrateds()),
+				Required: true,
+			},
+			vocab.FieldReport.String():       {},
+			vocab.FieldInForceUntil.String(): {},
+		},
+		// A calibration carries force from the day it was written until
+		// thirty days after its window closed, and then stops on its own.
+		// That is the whole mechanism behind the warning `uzushio judge
+		// status` prints: a judge whose validity nobody has re-measured
+		// silently leaves `binding` rather than staying there because nobody
+		// remembered to retire it.
+		Period: &config.PeriodSpec{
+			From:  config.KeyDate,
+			Until: vocab.FieldInForceUntil.String(),
+		},
 	}
 }
 
@@ -415,6 +469,13 @@ func extendProjections(cfg *config.Config) error {
 		},
 	)
 
+	// What binding means for a calibration: it has not expired. There is
+	// nothing to accept — a measurement is not a decision — so the day is the
+	// whole of it, and the day is what makes the projection useful: thirty
+	// days after the window closes the calibration drops out of `binding`
+	// without anyone editing anything, and `uzushio judge status` reports a
+	// judge running on no measurement at all.
+	//
 	// What binding means for an edit: accepted, in force today, not already
 	// replaced, and carrying the three things a run can show. Alternatives are
 	// OR-ed and this one is scoped to a kind the preset's alternatives never
@@ -427,6 +488,11 @@ func extendProjections(cfg *config.Config) error {
 	}
 	effective := cfg.Projections[index]
 	effective.AnyOf = append(effective.AnyOf, config.ProjectionAlt{When: config.Condition{
+		Attr: map[string]config.AttrCondition{
+			config.KeyKind:     eq(vocab.KindCalibration.String()),
+			config.AttrInForce: isTrue(),
+		},
+	}}, config.ProjectionAlt{When: config.Condition{
 		Attr: map[string]config.AttrCondition{
 			config.KeyKind:                        eq(vocab.KindEdit.String()),
 			config.DefaultStatusField:             eq(vocab.StatusAccepted.String()),

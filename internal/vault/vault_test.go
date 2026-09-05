@@ -82,9 +82,14 @@ func TestKindsAreDeclared(t *testing.T) {
 			t.Fatalf("%s declares statuses %v", k, spec.StatusValues)
 		}
 	}
-	// Only the edit has a lifetime; a pattern and a run are always in force.
-	if _, ok := cfg.KindPeriod(vocab.KindEdit.String()); !ok {
-		t.Fatal("the edit kind declares no period")
+	// An edit and a calibration have lifetimes; a pattern, a run and a
+	// verifier check are always in force. The calibration's is the whole of
+	// its staleness mechanism: it stops binding on a day rather than when
+	// somebody remembers to retire it.
+	for _, k := range []vocab.Kind{vocab.KindEdit, vocab.KindCalibration} {
+		if _, ok := cfg.KindPeriod(k.String()); !ok {
+			t.Fatalf("the %s kind declares no period", k)
+		}
 	}
 	for _, k := range []vocab.Kind{vocab.KindPattern, vocab.KindRun, vocab.KindVerifier} {
 		if _, ok := cfg.KindPeriod(k.String()); ok {
@@ -123,6 +128,10 @@ func TestRequiredScalarFields(t *testing.T) {
 		{vocab.KindRun, vocab.FieldVerdict},
 		{vocab.KindRun, vocab.FieldSuite},
 		{vocab.KindVerifier, vocab.FieldVerdict},
+		{vocab.KindCalibration, vocab.FieldVerdict},
+		{vocab.KindCalibration, vocab.FieldJudge},
+		{vocab.KindCalibration, vocab.FieldPool},
+		{vocab.KindCalibration, vocab.FieldTieHandling},
 	}
 	for _, want := range required {
 		spec, ok := cfg.Field(want.kind.String(), want.field.String())
@@ -548,6 +557,84 @@ func TestVerifierKind(t *testing.T) {
 		if match, ok := rule.When.Attr[config.KeyKind]; ok && match.Eq != nil &&
 			*match.Eq == vocab.KindVerifier.String() {
 			t.Fatalf("rule %s is about a verifier; this step declares none, so it would need a fixture", rule.Name)
+		}
+	}
+}
+
+// TestCalibrationKind pins the shape of the kind `uzushio judge calibrate`
+// writes, and the one thing about it that is not like the verifier's: it has a
+// period, and being in force is what makes it binding.
+func TestCalibrationKind(t *testing.T) {
+	cfg := mustConfig(t)
+	spec, ok := cfg.Kind(vocab.KindCalibration.String())
+	if !ok {
+		t.Fatal("the calibration kind is not declared")
+	}
+	if spec.ID != vocab.CalibrationIDPattern {
+		t.Fatalf("calibration id = %q, want %q", spec.ID, vocab.CalibrationIDPattern)
+	}
+	period, ok := cfg.KindPeriod(vocab.KindCalibration.String())
+	if !ok {
+		t.Fatal("the calibration kind declares no period; nothing would ever expire")
+	}
+	if period.Until != vocab.FieldInForceUntil.String() {
+		t.Fatalf("calibration period until = %q", period.Until)
+	}
+	verdict, ok := cfg.Field(vocab.KindCalibration.String(), vocab.FieldVerdict.String())
+	if !ok {
+		t.Fatal("the calibration kind declares no verdict")
+	}
+	if !slices.Equal(verdict.OneOf, vocab.Strings(vocab.AllCalibrateds())) {
+		t.Fatalf("calibration verdict one_of = %v", verdict.OneOf)
+	}
+	// The three kinds that write `verdict` write three different vocabularies
+	// into it. A word admitted by two of them would make a reader guess which
+	// kind wrote the document.
+	health, _ := cfg.Field(vocab.KindVerifier.String(), vocab.FieldVerdict.String())
+	for _, word := range verdict.OneOf {
+		if slices.Contains(health.OneOf, word) {
+			t.Fatalf("the calibration verdict admits %q, which is a verifier's word", word)
+		}
+	}
+	handling, ok := cfg.Field(vocab.KindCalibration.String(), vocab.FieldTieHandling.String())
+	if !ok || !handling.Required {
+		t.Fatal("tie_handling is not required; a coefficient without one cannot be compared")
+	}
+	for _, field := range vocab.CalibrationFields() {
+		if _, ok := cfg.Field(vocab.KindCalibration.String(), field.String()); !ok {
+			t.Fatalf("the calibration kind does not declare %s", field)
+		}
+	}
+	// A calibration is binding while it is in force, which is the alternative
+	// the effective projection has to carry for it.
+	index := slices.IndexFunc(cfg.Projections, func(spec config.ProjectionSpec) bool {
+		return spec.Name == config.ProjectionEffective
+	})
+	if index < 0 {
+		t.Fatal("no effective projection")
+	}
+	found := false
+	for _, alternative := range cfg.Projections[index].AnyOf {
+		kind, ok := alternative.When.Attr[config.KeyKind]
+		if ok && kind.Eq != nil && *kind.Eq == vocab.KindCalibration.String() {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("nothing makes a calibration binding; judge status would always report none")
+	}
+	// Like a verifier check, a calibration has no edge and no rule, so it
+	// needs no fixture.
+	for _, edge := range cfg.Edges {
+		if slices.Contains(edge.From, vocab.KindCalibration.String()) ||
+			slices.Contains(edge.To, vocab.KindCalibration.String()) {
+			t.Fatalf("edge %s admits a calibration; this step declares none", edge.Name)
+		}
+	}
+	for _, rule := range cfg.Rules {
+		if match, ok := rule.When.Attr[config.KeyKind]; ok && match.Eq != nil &&
+			*match.Eq == vocab.KindCalibration.String() {
+			t.Fatalf("rule %s is about a calibration; this step declares none, so it would need a fixture", rule.Name)
 		}
 	}
 }
