@@ -1,0 +1,15 @@
+We can start by using the formula:
+
+P(neither) = 1 - P(either)
+
+where "either" means liking blue or green or both. 
+
+To find P(either), we need to add the percentages of students who like blue and green, but then we need to subtract the percentage who like both (because we don't want to count them twice):
+
+P(either) = 58% + 45% - 22% = 81%
+
+Now we can find P(neither):
+
+P(neither) = 1 - P(either) = 1 - 0.81 = 0.19
+
+So the probability that a randomly picked student from the school would like neither blue nor green is 0.19 or 19%.

@@ -1,0 +1,15 @@
+Here is a 10 line proof that the square root of 2 is irrational:
+
+Suppose root two were rational, 
+Expressible as a fraction p/q.
+p and q have no common factors,
+As fractions are in lowest terms.
+Squaring both sides gives 2 = p^2/q^2,
+So p^2 = 2q^2. But then p^2  
+Is even, so p is even too. 
+Dividing p by 2, call it p', 
+Gives 2q^2 = (p')^2. Repeat 
+This process; p' is even too. All 
+Integers cannot be even, so
+We have a contradiction. 
+Root two is irrational, my friend.

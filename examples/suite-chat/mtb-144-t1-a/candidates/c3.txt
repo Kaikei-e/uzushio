@@ -1,0 +1,9 @@
+The central dogma of molecular biology is the fundamental principle that explains how genetic information flows within a biological system. It states that DNA is transcribed into RNA, which is then translated into proteins. This means that the genetic information stored in DNA is first copied into RNA, which then serves as a template for the synthesis of proteins.
+
+The processes involved in the central dogma are:
+
+1. Transcription: The process by which the genetic information in DNA is copied into RNA.
+
+2. Translation: The process by which the genetic information in RNA is used to synthesize proteins.
+
+The term "central dogma" was coined by Francis Crick, one of the co-discoverers of the structure of DNA, in 1958.

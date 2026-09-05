@@ -1,0 +1,39 @@
+Good catch again! There is another bug in this code.
+
+The bug is here:
+
+```python
+dp = [[None]*(n+1) for i in range(m+1)]
+```
+
+Initializing the DP array with None values is incorrect. It should be initialized with 0s instead:
+
+```python 
+dp = [[0]*(n+1) for i in range(m+1)]
+```
+
+The corrected code would be:
+
+```python
+def longest_common_subsequence(X , Y): 
+    # Find lengths of two strings 
+    m = len(X) 
+    n = len(Y) 
+  
+    # Create a table to store results of sub-problems 
+    dp = [[0]*(n+1) for i in range(m+1)] 
+  
+    # Fill dp[][] in bottom up manner 
+    for i in range(1, m+1): 
+        for j in range(1, n+1): 
+            if X[i-1] == Y[j-1]: 
+                dp[i][j] = dp[i-1][j-1]+1
+            else: 
+                dp[i][j] = max(dp[i-1][j], dp[i][j-1]) 
+  
+    return dp[m][n]
+```
+
+The DP array needs to be initialized with 0s since we are building up solutions for the subproblems by incrementing the values. Initializing with None will give incorrect results.
+
+Hope this helps clarify! Let me know if you have any other questions.

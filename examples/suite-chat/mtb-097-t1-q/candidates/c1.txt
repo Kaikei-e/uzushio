@@ -1,0 +1,15 @@
+Probability is a branch of mathematics that deals with the study of chance events. It is the likelihood of an event occurring or not occurring. The probability of an event is always between 0 and 1, with 0 meaning the event will never happen, and 1 meaning the event will always happen.
+
+For example, let's say you want to know the probability of flipping a coin and getting heads. The probability of this happening is 1/2 or 0.5 because there are two possible outcomes, heads or tails, and both are equally likely.
+
+Another example, if you want to know the probability of rolling a die and getting a 6, the probability is 1/6 or 0.1667 because there are 6 possible outcomes, each one is equally likely, and 1 of them is a 6.
+
+You can calculate probability by using the following formula:
+
+Probability of an event happening = number of favorable outcomes / total number of possible outcomes
+
+It's important to note that probability is based on the assumption that events are independent and that the outcome of one event does not affect the outcome of another event.
+
+There are also different types of probability distributions such as the normal distribution and the binomial distribution which can be useful in different scenarios.
+
+In summary, probability is a measure of the likelihood of an event occurring or not occurring. It is between 0 and 1, with 0 meaning the event will never happen, and 1 meaning the event will always happen. It can be calculated by using the formula: probability of an event happening = number of favorable outcomes / total number of possible outcomes. Additionally, there are different types of probability distributions that can be used to model different scenarios.

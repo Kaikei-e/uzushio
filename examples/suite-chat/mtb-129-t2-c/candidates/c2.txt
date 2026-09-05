@@ -1,0 +1,18 @@
+Yes, there exists an algorithm with better time complexity, which is O(m + n) = O(k), where k is the index of the element to find. This algorithm is based on the idea of binary search and can be implemented as follows:
+```python
+def find_kth_smallest(m, n, k):
+    low = 0
+    high = min(m, n)
+    while low <= high:
+        mid = (low + high) // 2
+        if mid == k:
+            return m[mid]
+        elif m[mid] < n[mid]:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return None
+```
+This algorithm works by first finding the index of the middle element in the union of the two lists. If the kth smallest element is in the first half of the union, we know that it must be in the range [0, mid). If the kth smallest element is in the second half of the union, we know that it must be in the range [mid, n]. We then perform a binary search in each half to find the kth smallest element.
+
+The time complexity of this algorithm is O(m + n) = O(k), which is better than the previous algorithm when k is much larger than both m and n. The space complexity is also O(1), which is optimal.

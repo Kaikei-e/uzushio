@@ -1,0 +1,1 @@
+{"person":["A","D","H"],"organization":["F","D","V","G"],"location":["B","E"]}

@@ -1,0 +1,17 @@
+{
+"a": {
+"country": "Denmark", 
+"capital": "Copenhagen",
+"language": "Danish"
+},
+"b":{
+"country": "Eldoria",
+"capital": "Avalore", 
+"language": "Lumina"
+},
+"c":{
+"country": "Argentina",
+"capital": "Buenos Aires",
+"language": "Spanish"
+}
+}

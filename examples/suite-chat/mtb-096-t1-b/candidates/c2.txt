@@ -1,0 +1,9 @@
+Here is a simplified explanation of language models and how they are trained:
+
+A language model is a statistical model that learns the probability of sequences of words in a language. It learns the likelihood of one word following another. Language models are trained on large amounts of text data to understand the patterns and relationships between words in a language. 
+
+Language models are trained using unlabelled data, which means the training data does not have any labels or annotations. The model simply learns from a large amount of plain text. It looks for the frequencies and probabilities of word sequences and patterns in the text to build its understanding.
+
+So in short, a language model learns the structure and patterns of language from unlabelled text data. It helps systems like voice assistants, machine translation systems and predictive text applications to understand language and generate natural-sounding speech or text. The key is that language models only require unlabelled data - just lots of plain text in the target language.
+
+Does this help explain the basic idea of language models and how they are trained? Let me know if you need any clarification or have additional questions!

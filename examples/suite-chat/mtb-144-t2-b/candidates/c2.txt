@@ -1,0 +1,17 @@
+Here is the corrected version:
+
+The central dogma of molecular biology states that DNA makes RNA, and RNA makes protein. It describes the flow of genetic information in cells.  
+
+It involves two key processes:
+
+1. Transcription: DNA is transcribed into messenger RNA (mRNA). This is done by RNA polymerase.  
+
+2. Translation: mRNA is translated into proteins by ribosomes. Transfer RNA (tRNA) molecules help translate the mRNA into amino acids that make up proteins.
+
+The central dogma was proposed by Francis Crick in 1958. It outlined the flow of sequential transfer of genetic information from DNA to RNA to proteins. At its core, it states that once information is transferred from DNA to RNA, it cannot be transferred back from protein to RNA or DNA.  
+
+The central dogma has been very influential in molecular biology and genetics. While we now know there are some exceptions to it, it remains a key organizing principle for understanding molecular biology.  
+
+So in summary, the central dogma describes the transfer of genetic information from DNA to RNA to proteins. It was proposed by Francis Crick, and it involves the processes of transcription and translation.
+
+Correction: In my original response, I incorrectly stated that the central dogma prohibits transfer of information from proteins back to RNA or DNA. That is an oversimplification. We now know that some types of information can flow from RNA to DNA, and certain viruses can translate proteins back into DNA. So a more accurate statement is that the central dogma outlines the normal flow of genetic information from DNA to RNA to proteins, but there are certain exceptions where information can flow in the reverse direction or between other molecules.

@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "id": "mtb-142-t2-f",
+  "face": "chat",
+  "conversation": "conversation.json",
+  "judge": {
+    "allow_tie": true
+  }
+}

@@ -1,0 +1,16 @@
+Here's one way to implement a program to find the common elements in two arrays with the best time complexity:
+```
+def find_common_elements(array1, array2):
+    i = j = 0
+    while i < len(array1) and j < len(array2):
+        if array1[i] == array2[j]:
+            array1[++i] = array2[++j]
+        elif array1[i] < array2[j]:
+            i += 1
+        else:
+            j += 1
+    return array1
+```
+This function takes two arrays as input and returns a new array that contains only the elements that are present in both arrays. It does this by iterating over the two arrays at the same time, comparing each element in the first array to the corresponding element in the second array. If an element is found in both arrays, it is replaced with the next element in the second array and incremented. If an element is not found in the second array, it is incremented. If the end of one of the arrays is reached before the other, the remaining elements in the other array are ignored.
+
+This implementation has a time complexity of O(min(len(array1), len(array2))), which is the best possible time complexity for this problem. This is because the worst-case scenario is when the two arrays have different lengths, in which case one array will be iterated over once for every element in the other array.

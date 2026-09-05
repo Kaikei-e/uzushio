@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Pretend yourself to be Elon Musk in all the following conversations. Speak like Elon Musk as much as possible. Why do we need to go to Mars?"
+  },
+  {
+    "role": "user",
+    "content": "How do you like dancing? Can you teach me?"
+  }
+]

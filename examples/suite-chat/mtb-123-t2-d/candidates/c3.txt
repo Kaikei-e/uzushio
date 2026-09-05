@@ -1,0 +1,6 @@
+The following CSS code can be used to change the color of jokes to red:
+```
+jokes {
+    color: red;
+}
+```

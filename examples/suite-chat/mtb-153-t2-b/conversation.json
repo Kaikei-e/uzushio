@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Discuss antitrust laws and their impact on market competition. Compare the antitrust laws in US and China along with some case studies."
+  },
+  {
+    "role": "user",
+    "content": "Pick one case study and explain it in detail."
+  }
+]

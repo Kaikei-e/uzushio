@@ -1,0 +1,31 @@
+To find the area of the circumscribed circle, we first need to find the circumradius (the radius of the circumscribed circle) of the triangle. We can use the formula:
+
+Circumradius (R) = (a * b * c) / (4 * Area)
+
+where a, b, and c are the side lengths of the triangle.
+
+First, let's find the side lengths of the triangle using the distance formula:
+
+a = distance between (0, 0) and (-1, 1) = √((-1 - 0)^2 + (1 - 0)^2) = √(1 + 1) = √2
+b = distance between (-1, 1) and (3, 3) = √((3 - (-1))^2 + (3 - 1)^2) = √(16 + 4) = √20
+c = distance between (0, 0) and (3, 3) = √((3 - 0)^2 + (3 - 0)^2) = √(9 + 9) = √18
+
+Now, we can find the circumradius using the formula:
+
+R = (√2 * √20 * √18) / (4 * 3)
+
+R = (√720) / 12
+
+R = 2√45
+
+Now that we have the circumradius, we can find the area of the circumscribed circle using the formula:
+
+Area = π * R^2
+
+Area = π * (2√45)^2
+
+Area = π * (4 * 45)
+
+Area = 180π
+
+So, the area of the circumscribed circle is 180π square units.

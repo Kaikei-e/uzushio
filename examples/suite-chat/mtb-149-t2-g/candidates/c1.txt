@@ -1,0 +1,7 @@
+Reinforcement learning is a type of machine learning that is distinct from supervised learning, and it is not possible to solve a reinforcement learning problem using supervised learning alone.
+
+Reinforcement learning involves an agent interacting with an environment and receiving feedback in the form of rewards or penalties, in order to learn a policy that maximizes the rewards it receives. This is in contrast to supervised learning, which involves training an algorithm on labeled data, with the goal of making accurate predictions or classifications on new, unseen data.
+
+It is possible to use supervised learning as a component of a reinforcement learning algorithm, but this would typically be used to improve the performance of the algorithm, rather than to solve the problem itself. For example, a reinforcement learning algorithm might use supervised learning to learn a model of the environment, or to make predictions about the outcomes of different actions.
+
+In general, the use of supervised learning in reinforcement learning is just one of many possible approaches, and the choice of which approach to use will depend on the specific problem being solved and the available data.

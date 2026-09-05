@@ -1,0 +1,1 @@
+The highest common ancestor of two nodes in a tree is the node that is the most recent common ancestor of both nodes.

@@ -1,0 +1,1 @@
+If you have just overtaken the last person in the race, it would be logically impossible, as you cannot overtake the person who is in the last position while you are also participating in the race. You would already be ahead of the last person if you are not the one in the last position.

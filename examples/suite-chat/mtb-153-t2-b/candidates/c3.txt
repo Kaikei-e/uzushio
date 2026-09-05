@@ -1,0 +1,17 @@
+Let's look at the Microsoft antitrust case in the US in more detail.
+
+In 1998, the US Department of Justice sued Microsoft for illegally maintaining its monopoly in the PC operating system market. At the time, Microsoft's Windows operating system dominated the market with over 90% market share. The DOJ alleged that Microsoft was engaging in anti-competitive practices to maintain its dominant position, including:
+
+1. Bundling Internet Explorer web browser with Windows. By bundling IE for free with Windows, Microsoft made it harder for other browsers like Netscape to gain market share.
+
+2. Exclusive deals with PC makers. Microsoft's licensing deals with PC manufacturers like Dell and HP made Windows the preinstalled OS on nearly all PCs. This was seen as an "applications barrier to entry" for other operating systems.
+
+3. Threatening to withhold Windows license from PC makers if they bundled rival software. Microsoft used its dominant position to prevent competition from other software like Netscape Navigator.
+
+After a lengthy trial, a federal court found Microsoft guilty of illegally maintaining its monopoly. However, Microsoft avoided a breakup and was only subject to limited remedies. An appeals court also overturned some of the findings against Microsoft.
+
+The key takeaway from this case is that while antitrust laws aim to promote competition, proving illegal monopolistic behavior can be very difficult. There were reasonable arguments on both sides. Microsoft claimed that bundling IE and exclusive deals were legitimate business practices, and that its large market share reflected the popularity of its innovative products.
+
+The Microsoft case highlighted the complex challenges in applying antitrust laws to fast-changing high-tech industries. It shaped future antitrust scrutiny of big tech companies in the US. The limited impact on Microsoft also showed the difficulties in curbing monopolistic power once it has been established.
+
+So in summary, the Microsoft antitrust trial was a landmark case that raised important questions around market dominance, anti-competitive practices, and innovation in the technology sector. But its mixed outcome reflected the complexities in regulating competition in digital markets.

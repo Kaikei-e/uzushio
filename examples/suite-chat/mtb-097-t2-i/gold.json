@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "lmsys/mt_bench_human_judgments",
+  "license": "CC-BY-4.0",
+  "question_id": 97,
+  "turn": 2,
+  "models": {
+    "c1": "llama-13b",
+    "c2": "claude-v1",
+    "c3": "gpt-3.5-turbo"
+  },
+  "gold": "c3",
+  "method": "acyclic-majority",
+  "margin_stratum": "narrow",
+  "bt_top": "c3",
+  "hard": false,
+  "judgments_used": 5,
+  "human_annotators": 2
+}

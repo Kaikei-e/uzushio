@@ -1,0 +1,8 @@
+```
+def findCommonElements(arr1, arr2): 
+    # Create a set of elements present in both arrays 
+    common_elems = set(arr1).intersection(arr2) 
+  
+    # Return common elements 
+    return common_elems
+```

@@ -1,0 +1,19 @@
+Let's start by using algebra to solve the problem. 
+
+Let x be the number of people who got on the bus at the terminal. 
+
+At the first stop, half of the people got down, so there were x/2 people left on the bus. Then 4 more people got in, so the total number of people on the bus was x/2 + 4. 
+
+At the second stop, 6 people got down, so there were x/2 + 4 - 6 = x/2 - 2 people left on the bus. Then 8 more people got in, so the total number of people on the bus was x/2 - 2 + 8 = x/2 + 6. 
+
+We know that there were 25 people heading to the third stop, so we can set up an equation: 
+
+x/2 + 6 = 25 
+
+Solving for x, we get: 
+
+x/2 = 19 
+
+x = 38 
+
+Therefore, 38 people got on the bus at the terminal.

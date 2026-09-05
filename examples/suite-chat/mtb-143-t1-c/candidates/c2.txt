@@ -1,0 +1,15 @@
+Photosynthesis is a crucial process that allows plants, algae, and some bacteria to convert sunlight into chemical energy in the form of glucose. It occurs in two main stages: the light-dependent reactions and the light-independent reactions (also known as the Calvin cycle).
+
+1. Light-dependent reactions:
+- Location: These reactions take place in the thylakoid membranes within the chloroplasts.
+- Primary inputs: Light energy (from the sun), water (H2O), and NADP+ (nicotinamide adenine dinucleotide phosphate) as an electron acceptor, and ADP (adenosine diphosphate) with an inorganic phosphate group (Pi).
+- Primary outputs: Oxygen (O2) is produced as a byproduct from the splitting of water molecules, while ATP (adenosine triphosphate) is generated as an energy source, and NADPH (reduced form of NADP+) is produced as an electron carrier.
+
+During the light-dependent reactions, chlorophyll and other pigments in the thylakoid membranes absorb light energy, which excites electrons. These high-energy electrons are transferred through a series of proteins in the electron transport chain, generating ATP and NADPH in the process. The electrons lost by chlorophyll are replaced by splitting water molecules, which releases oxygen gas as a byproduct.
+
+2. Light-independent reactions (Calvin cycle):
+- Location: These reactions occur in the stroma of the chloroplasts.
+- Primary inputs: Carbon dioxide (CO2), ATP, and NADPH (produced during the light-dependent reactions).
+- Primary outputs: Glucose (C6H12O6) and other sugars, as well as ADP, Pi, and NADP+ (which are recycled back into the light-dependent reactions).
+
+The Calvin cycle uses the energy stored in ATP and the electrons carried by NADPH to fix carbon dioxide into an organic molecule through a series of enzyme-catalyzed reactions. The final product is glucose, which can be used by the plant for energy, growth, and repair. The ADP, Pi, and NADP+ produced in the Calvin cycle are then recycled back into the light-dependent reactions to continue the process of photosynthesis.

@@ -1,0 +1,22 @@
+Let's use variables to represent the number of people who got on the bus at the terminal, and the number of people who got on at each stop.
+
+Let x be the number of people who got on the bus at the terminal.
+
+Let y be the number of people who got on at the first stop.
+
+Let z be the number of people who got on at the second stop.
+
+We know that x + y + z = 25, because there were a total of 25 people heading to the third stop.
+
+We also know that y = 4 and z = 6, because these are the number of people who got on at the first and second stops, respectively.
+
+We can use substitution to solve for x:
+
+x + y + z = 25
+y = 4
+z = 6
+
+x + 4 + 6 = 25
+x = 15
+
+Therefore, there were 15 people who got on the bus at the terminal.

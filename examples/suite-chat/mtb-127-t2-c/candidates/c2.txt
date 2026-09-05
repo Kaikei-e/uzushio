@@ -1,0 +1,20 @@
+```
+def topTwoElements(arr):
+    # Initialize two variables to track the two most occurring elements
+    mostOccurringElement = arr[0]
+    countOfMostOccurringElement = 0
+
+    # Iterate through the array
+    for i in range(1, len(arr)):
+        # Increment the count of the most occurring element
+        if arr[i] == mostOccurringElement:
+            countOfMostOccurringElement += 1
+
+        # Update the most occurring element if the current element is greater than the most occurring element
+        elif arr[i] > mostOccurringElement:
+            mostOccurringElement = arr[i]
+            countOfMostOccurringElement = 0
+
+    # Return the two most occurring elements
+    return (mostOccurringElement, countOfMostOccurringElement)
+```

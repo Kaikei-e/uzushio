@@ -1,0 +1,11 @@
+In the provided solution, we assumed that the satellite is in a stable circular orbit around the Earth, and no external forces are acting on it. However, there are some corner or edge cases that may affect the satellite's orbit and need to be considered:
+
+1. Non-circular orbits: If the satellite is in an elliptical orbit, the analysis becomes more complex. In this case, the satellite's speed will vary throughout its orbit, being fastest at the periapsis (closest point to Earth) and slowest at the apoapsis (farthest point from Earth). The conservation of mechanical energy and angular momentum still apply, but the relationship between speed, radius, and period of revolution will be different.
+
+2. Atmospheric drag: If the satellite is orbiting at a low altitude, it may experience atmospheric drag, which can cause its speed to decrease and its orbit to decay over time. In this case, the conservation of mechanical energy will not hold, as energy is being lost due to drag. The satellite's orbit will gradually become lower and more circular until it eventually re-enters the Earth's atmosphere.
+
+3. Gravitational perturbations: The presence of other celestial bodies (e.g., the Moon, other planets) can cause gravitational perturbations that affect the satellite's orbit. These perturbations can cause the satellite's speed and orbital radius to change over time, making the analysis more complex.
+
+4. Non-uniform Earth mass distribution: The Earth's mass distribution is not perfectly uniform, which can cause variations in the gravitational force experienced by the satellite. This can lead to perturbations in the satellite's orbit, affecting its speed, radius, and period of revolution.
+
+To handle these corner or edge cases, a more detailed analysis would be required, taking into account the specific conditions and forces acting on the satellite. This may involve numerical simulations, more complex mathematical models, or the use of specialized software for orbital mechanics.

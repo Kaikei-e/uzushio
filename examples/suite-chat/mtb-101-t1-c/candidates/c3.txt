@@ -1,0 +1,10 @@
+If I have just overtaken the second person, that means:
+
+- I was previously in third position
+- I have now moved up to second position
+- The person I overtook was previously in second position, but is now in third position
+
+So:
+
+My current position: Second 
+The position of the person I just overtook: Third

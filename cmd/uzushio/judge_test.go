@@ -444,3 +444,57 @@ func until(t *testing.T, day string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// TestCalibrationDocumentValidatesInTheVault is the one check the unit tests
+// cannot make: that what `calibrate` writes is a document the real
+// configuration accepts. The body is a page of prose the report generates, and
+// a summary that grew a raw tab or a wikilink nobody meant would only show up
+// here.
+func TestCalibrationDocumentValidatesInTheVault(t *testing.T) {
+	engine := requireDocDag(t)
+	// The repository's own configuration and corpus, and nothing else: the
+	// point is that a generated calibration is at home in the real vault.
+	vault := t.TempDir()
+	copyTree(t, filepath.Join("..", ".."), vault, "docdag.yaml")
+	copyTree(t, filepath.Join("..", "..", "spec"), filepath.Join(vault, "spec"), "")
+	dir := t.TempDir()
+	got := run(t, "judge", "calibrate",
+		"--suite", judgeSuite(t, filepath.Join(dir, "suite")),
+		"--cmoa", fakeJudgeCMoA(t, dir), "--config", judgeConfig(t, dir, "gpt-oss-20b"),
+		"--vault", vault, "--rerun", "1", "--as-of", "2026-09-06")
+	if got.code != exitOK {
+		t.Fatalf("calibrate exit = %d\n%s", got.code, got.stderr)
+	}
+	cmd := exec.Command(engine, "validate")
+	cmd.Dir = vault
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("docdag validate refused the calibration:\n%s", out)
+	}
+	if !strings.Contains(string(out), "OK") {
+		t.Fatalf("docdag validate said:\n%s", out)
+	}
+}
+
+// copyTree copies one file, or a directory's files, into a temporary vault.
+func copyTree(t *testing.T, from, to, only string) {
+	t.Helper()
+	if only != "" {
+		judgeWrite(t, filepath.Join(to, only), readFile(t, filepath.Join(from, only)))
+		return
+	}
+	err := filepath.WalkDir(from, func(p string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		relative, relErr := filepath.Rel(from, p)
+		if relErr != nil {
+			return relErr
+		}
+		judgeWrite(t, filepath.Join(to, relative), readFile(t, p))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("copy %s: %v", from, err)
+	}
+}

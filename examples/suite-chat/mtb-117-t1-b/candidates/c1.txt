@@ -1,0 +1,18 @@
+To solve the inequality |x + 5| < 10, we can break it down into two separate inequalities:
+
+1. When (x + 5) is positive or zero:
+x + 5 < 10
+x < 10 - 5
+x < 5
+
+2. When (x + 5) is negative:
+-(x + 5) < 10
+-x - 5 < 10
+-x < 10 + 5
+-x < 15
+x > -15
+
+Now, we can combine the two inequalities:
+-15 < x < 5
+
+The integers that satisfy this inequality are -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, and 4. There are a total of 19 integers in the solution of the inequality |x + 5| < 10.

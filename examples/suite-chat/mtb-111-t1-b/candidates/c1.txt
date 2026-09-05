@@ -1,0 +1,12 @@
+Okay, let's solve this step-by-step:
+1) We are given the coordinates of the 3 vertices of the triangle: (0, 0), (-1, 1), and (3, 3)
+2) To find the area of a triangle, we can use the formula: A = (base * height) / 2
+3) We need to find the base and height of the triangle. The base is the length of the bottom side of the triangle. The height is the perpendicular distance from the base to the top vertex.
+4) The bottom side of the triangle connects the points (0, 0) and (3, 3). So the base = 3 - 0 = 3 units. 
+5) The height is the perpendicular distance from (0, 0) to the top vertex (3, 3). Using the distance formula, the height = sqrt[(3 - 0)^2 + (3 - 0)^2] = sqrt(9 + 9) = sqrt(18) = 3*sqrt(2) units.
+6) Plugging into the area formula: 
+A = (base * height) / 2 = (3 * 3*sqrt(2)) / 2 = 9*sqrt(2) / 2 = 4.5*sqrt(2) square units
+
+So the area of the triangle is 4.5*sqrt(2) square units.
+
+Does this make sense? Let me know if you have any other questions!

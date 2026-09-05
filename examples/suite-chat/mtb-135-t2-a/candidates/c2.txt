@@ -1,0 +1,53 @@
+Here are three similar examples in YAML format:
+
+```
+a:
+  country: France
+  capital: Paris
+  language: French
+
+b:
+  country: Italy
+  capital: Rome
+  language: Italian
+
+c:
+  country: Spain
+  capital: Madrid
+  language: Spanish
+```
+
+```
+a:
+  country: Japan
+  capital: Tokyo
+  language: Japanese
+
+b:
+  country: South Korea
+  capital: Seoul
+  language: Korean
+
+c:
+  country: China
+  capital: Beijing
+  language: Mandarin
+
+```
+
+```
+a:
+  country: Brazil
+  capital: Brasília
+  language: Portuguese
+
+b:
+  country: Mexico
+  capital: Mexico City
+  language: Spanish
+
+c:
+  country: Peru
+  capital: Lima
+  language: Spanish
+```

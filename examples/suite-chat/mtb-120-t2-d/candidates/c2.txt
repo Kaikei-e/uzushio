@@ -1,0 +1,18 @@
+To find x such that f(x) = 0, we set the function f(x) equal to 0 and solve for x:
+
+f(x) = 4x^3 - 9x - 14 = 0
+
+4x^3 - 9x - 14 = 0
+4x^3 - 9x + 14 = 0   (Add 14 to both sides)
+4x^3 - 9x = 14
+x^3 - 2.25x = 3.5   (Divide both sides by 4)
+x^3 - 2.25x - 3.5 = 0   (Subtract 3.5 from both sides)
+
+Now we can factorize the left side:
+(x - 1)(x^2 + 2.25x + 3.5) = 0
+
+Setting each factor to 0 gives:
+x - 1 = 0   =>   x = 1
+x^2 + 2.25x + 3.5 = 0   =>   x = -2  (using the quadratic formula)
+
+Therefore, the values of x such that f(x) = 0 are x = 1 and x = -2.

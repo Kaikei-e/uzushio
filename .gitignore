@@ -18,6 +18,12 @@
 /examples/suite-go/*/runs/
 /examples/suite-go/*/doctor/
 
+# What `cmoa judge` writes beside a chat calibration item. The suite and its
+# gold labels are committed; the traces of one judge run are not — they hold
+# the whole prompt and the raw model answers, and the calibration's own
+# report.json carries the numbers a reader needs.
+/examples/suite-chat/*/runs/
+
 # What `uzushio run` writes: the rendered harness trees, the per-trial journal,
 # the run header, and the baseline cache it shares between sibling runs. The
 # default --out is <suite dir>/runs/<run-id> and the cache is <suite dir>/cache,

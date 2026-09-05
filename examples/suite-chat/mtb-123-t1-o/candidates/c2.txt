@@ -1,0 +1,24 @@
+Here's a simple website in HTML:
+```
+<title>Random Joke</title>
+<h1>Random Joke</h1>
+<p>Click the button to get a random joke.</p>
+<button onclick="getRandomJoke()">Get a Joke</button>
+<p>Jokes:</p>
+<p>1. What do you call a fish with no eyes?</p>
+<p>2. What do you call a fish with no eyes and no feet?</p>
+<p>3. What do you call a fish with no eyes and no feet, swimming backwards?</p>
+<p>4. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat?</p>
+<p>5. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground?</p>
+<p>6. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling?</p>
+<p>7. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth?</p>
+<p>8. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head?</p>
+<p>9. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back?</p>
+<p>10. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back, and a cat on its head?</p>
+<p>11. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back, and a cat on its head, and a mouse on its head?</p>
+<p>12. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back, and a cat on its head, and a mouse on its head, and a bird on its head?</p>
+<p>13. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back, and a cat on its head, and a mouse on its head, and a bird on its head, and a snake on its head?</p>
+<p>14. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back, and a cat on its head, and a mouse on its head, and a bird on its head, and a snake on its head, and a frog on its head?</p>
+<p>15. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, and a monkey on its head, and a dog on its back, and a cat on its head, and a mouse on its head, and a bird on its head, and a snake on its head, and a frog on its head, and a turtle on its head?</p>
+<p>16. What do you call a fish with no eyes and no feet, swimming backwards, wearing a hat, jumping on the ground, and whistling, with a banana in its mouth, an
+```

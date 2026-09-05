@@ -1,0 +1,1 @@
+The probability that a student would like neither blue nor green is 0.78.

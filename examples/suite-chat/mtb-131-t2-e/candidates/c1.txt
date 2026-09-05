@@ -1,0 +1,5 @@
+Sure, here's an updated JSON array of integers that includes the release date for each movie:
+
+[["This movie released on Nov. 18, 2019, was phenomenal. The cinematography, the acting, the plot - everything was top-notch.", 5],
+["Never before have I been so disappointed with a movie. The plot was predictable and the characters were one-dimensional. In my opinion, this movie is the worst one to have been released in 2022.", 1],
+["The movie was okay. There were some parts I enjoyed, but there were also parts that felt lackluster. This is a movie that was released in Feb 2018 and seems to be quite ordinary.", 3]]

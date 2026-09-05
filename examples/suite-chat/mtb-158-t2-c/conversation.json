@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Which methods did Socrates employ to challenge the prevailing thoughts of his time?"
+  },
+  {
+    "role": "user",
+    "content": "Let's bring Socrates to modern world. Generate a conversation between Socrates and Bill Gates to debate on generative AI for education."
+  }
+]

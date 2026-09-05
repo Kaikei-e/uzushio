@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Implement a program to find the common elements in two arrays without using any extra data structures."
+  },
+  {
+    "role": "user",
+    "content": "Now the constraint of not using extra data structure is removed, implement one with the best time complexity."
+  }
+]

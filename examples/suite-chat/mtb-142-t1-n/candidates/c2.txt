@@ -1,0 +1,31 @@
+When the speed of a satellite in a circular orbit around the Earth decreases, its kinetic energy also decreases. According to the principle of conservation of mechanical energy, the total mechanical energy (the sum of kinetic and potential energy) of the satellite must remain constant, assuming no external forces are acting on it.
+
+As the satellite's kinetic energy decreases, its potential energy must increase to maintain the conservation of mechanical energy. This means that the satellite will move to a higher altitude, increasing its distance from the Earth. Consequently, the orbital radius of the satellite will increase.
+
+Now let's consider the period of revolution. The gravitational force acting on the satellite provides the centripetal force required for its circular motion. The centripetal force is given by:
+
+F_c = (m*v^2) / r
+
+where m is the mass of the satellite, v is its orbital speed, and r is the orbital radius.
+
+The gravitational force is given by:
+
+F_g = (G * M * m) / r^2
+
+where G is the gravitational constant, M is the mass of the Earth, and r is the orbital radius.
+
+Since F_c = F_g, we can write:
+
+(m*v^2) / r = (G * M * m) / r^2
+
+Rearranging the equation, we get:
+
+v^2 = (G * M) / r
+
+The period of revolution, T, can be related to the orbital speed and radius using the following equation:
+
+T = 2 * pi * r / v
+
+Now, as the orbital speed (v) decreases and the orbital radius (r) increases, the period of revolution (T) will also increase. This is because the satellite will take more time to complete one orbit around the Earth due to its reduced speed and increased distance from the Earth.
+
+In summary, when the speed of a satellite in a circular orbit around the Earth decreases, its orbital radius will increase, and its period of revolution will also increase. This can be justified using the principles of conservation of mechanical energy and the relationship between gravitational and centripetal forces.

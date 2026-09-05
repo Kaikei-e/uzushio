@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "The vertices of a triangle are at points (0, 0), (-1, 1), and (3, 3). What is the area of the triangle?"
+  },
+  {
+    "role": "user",
+    "content": "What's area of the circle circumscribing the triangle?"
+  }
+]

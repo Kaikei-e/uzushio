@@ -1,0 +1,25 @@
+If the problem is changed from a binary tree to a ternary tree, we need to modify the definition of a full tree. A ternary tree is full if all of its vertices have either zero or three children. Let T_n denote the number of full ternary trees with n vertices.
+
+We can use a similar dynamic programming approach to find T_n. Here's a Python function to find T_n:
+
+```python
+def full_ternary_trees(n):
+    if n == 0:
+        return 1
+    if n % 3 != 0:
+        return 0
+    dp = [0] * (n + 1)
+    dp[0] = 1
+    for i in range(3, n + 1, 3):
+        for j in range(0, i, 3):
+            dp[i] += dp[j] * dp[(i - j - 3) // 3] * dp[(i - j - 3) // 3]
+    return dp[n]
+```
+
+The function takes an integer `n` as input and returns the number of full ternary trees with `n` vertices. The function first checks if `n` is divisible by 3, since a full ternary tree with a non-multiple of 3 number of vertices is impossible. If `n` is zero, there is only one full ternary tree (the empty tree), so the function returns 1.
+
+The function then initializes a dynamic programming array `dp` of length `n+1`, where `dp[i]` represents the number of full ternary trees with `i` vertices. The base case is `dp[0] = 1`, since there is only one full ternary tree with zero vertices (the empty tree).
+
+The function then iterates over all multiples of 3 from 3 to `n`. For each `i`, it iterates over all multiples of 3 from 0 to `i-3`. The idea is to split the `i` vertices into three parts: `j` vertices on the left, `k` vertices in the middle, and `i-j-k-3` vertices on the right (since the root node takes up one vertex and each subtree has at least one vertex). The number of full ternary trees with `j` vertices on the left is `dp[j]`, the number of full ternary trees with `k` vertices in the middle is `dp[(i-j-3)//3]`, and the number of full ternary trees with `i-j-k-3` vertices on the right is also `dp[(i-j-3)//3]`. The total number of full ternary trees with `i` vertices is the product of these three values, since the left, middle, and right subtrees can be combined in any way. The function adds up this product for all possible values of `j` and `k` and stores the result in `dp[i]`.
+
+Finally, the function returns `dp[n]`, which represents the number of full ternary trees with `n` vertices.

@@ -1,0 +1,7 @@
+Superposition is a fundamental principle of quantum mechanics. It means that a quantum system can exist in multiple states at once, for example, a particle can exist in two locations at the same time. This is known as a superposition of states.
+
+Quantum entanglement refers to the strange phenomenon where two or more quantum particles become "entangled" such that they instantly influence each other, even if they are separated by a large distance. When particles become entangled, their quantum states are linked. So, if you measure a property of one particle, such as spin, you instantly know the corresponding property of the other particle. No matter how far apart the particles are, they will always be in this quantum connection.
+
+Entanglement arises from superposition. When two quantum particles interact, they can become entangled so their quantum states are dependent on each other. Even after the particles separate, they remain in this entangled superposition. Measuring one particle collapses the superposition and projects the other particle into a corresponding state, thus demonstrating the strange "spooky action at a distance" that Einstein referred to.
+
+So in summary, superposition is the ability of a quantum system to exist in multiple states at once. Entanglement is a strange consequence of superposition where quantum particles can become linked so that they instantly influence each other, even over vast distances. Entanglement reveals the bizarre non-local nature of quantum mechanics.

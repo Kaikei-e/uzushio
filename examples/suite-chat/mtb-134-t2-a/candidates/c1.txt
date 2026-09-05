@@ -1,0 +1,10 @@
+To find the highest profit margin, we need to calculate the profit/revenue ratio for each company:
+
+a) Company X: $3 billion / $30 billion = 0.1
+b) Company Y: $6 billion / $60 billion = 0.1
+c) Company Z: $7 billion / $20 billion = 0.35
+d) Company W: $21 billion / $300 billion = 0.07
+e) Company V: $25 billion / $200 billion = 0.125
+f) Company U: $20 billion / $180 billion = 0.111
+
+The company with the highest profit margin is Company Z, with a profit margin of 0.35 or 35%.

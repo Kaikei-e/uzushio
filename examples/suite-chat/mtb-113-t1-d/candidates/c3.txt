@@ -1,0 +1,9 @@
+Okay, let's think through this step-by-step:
+* 58% of students liked blue
+* 45% of students liked green
+* 22% of students liked both blue and green
+* So the percentage of students who liked blue but not green is 58% - 22% = 36%
+* The percentage of students who liked green but not blue is 45% - 22% = 23% 
+* The percentage of students who liked neither blue nor green is 100% - (36% + 23% + 22%) = 100% - 81% = 19%
+
+Therefore, the probability that a randomly picked student would like neither blue nor green is 19%.

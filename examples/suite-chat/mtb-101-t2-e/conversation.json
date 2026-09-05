@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Imagine you are participating in a race with a group of people. If you have just overtaken the second person, what's your current position? Where is the person you just overtook?"
+  },
+  {
+    "role": "user",
+    "content": "If the \"second person\" is changed to \"last person\" in the above question, what would the answer be?"
+  }
+]

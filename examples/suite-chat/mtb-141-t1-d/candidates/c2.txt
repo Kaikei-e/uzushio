@@ -1,0 +1,7 @@
+Superposition is a fundamental concept in quantum physics, which describes the ability of a quantum system, such as an atom or a photon, to exist in multiple states simultaneously. In other words, a quantum system can have multiple possible states or positions at the same time, rather than being in one definite state or position like classical objects. This is known as a superposition of states.
+
+Quantum entanglement, on the other hand, is a phenomenon where the properties of two or more quantum systems become correlated, so that the state of one system cannot be described independently of the others, even when the systems are separated by large distances. This correlation persists even when the systems are separated by large distances, a phenomenon known as "spooky action at a distance."
+
+Superposition and entanglement are related in that they both describe phenomena that are not possible in classical physics. In quantum systems, superposition allows for the creation of entangled states, where the properties of multiple systems are correlated in a way that cannot be explained by classical physics.
+
+Entanglement can be used to create quantum computers, quantum cryptography, and other quantum technologies, but it also raises fundamental questions about the nature of reality and the limits of human knowledge.

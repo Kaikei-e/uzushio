@@ -1,0 +1,37 @@
+To find the value of x such that f(x) = 0, we need to set f(x) equal to 0 and solve for x.
+
+f(x) = 4x^3 - 9x - 14
+
+f(x) = 0
+
+4x^3 - 9x - 14 = 0
+
+To solve this equation, we can use factoring.
+
+4x(x^2 - 3) - 9x - 14 = 0
+
+(2x - 3)(2x^2 + x - 2) = 0
+
+2x - 3 = 0 or 2x^2 + x - 2 = 0
+
+2x - 3 = 0
+
+2x = 3
+
+x = 1.5
+
+or
+
+2x^2 + x - 2 = 0
+
+2x^2 + x - 2 = 0
+
+(2x + 1)^2 = 0
+
+2x + 1 = 0
+
+2x = -1
+
+x = -0.5
+
+Therefore, the values of x that satisfy f(x) = 0 are x = 1.5 and x = -0.5.

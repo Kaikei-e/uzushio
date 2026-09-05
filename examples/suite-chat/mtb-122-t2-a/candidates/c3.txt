@@ -1,0 +1,24 @@
+Here is a C++ program to find the nth number in the sequence where each number is the sum of the three preceding ones:
+
+```cpp 
+#include <iostream>
+
+int sum(int n) {
+    if (n < 0) {
+        std::cout << "Incorrect input";
+    } else if (n <= 2) {
+        return -1;
+    } else {
+        return sum(n-1) + sum(n-2) + sum(n-3);
+    }
+}
+
+int main() {
+    int n;
+    std::cout << "Enter n: ";
+    std::cin >> n;
+    std::cout << "The " << n << "th number is " << sum(n);
+}
+```
+
+This program defines a recursive sum() function to calculate the nth number in the sequence. The base cases are sum(0) = sum(1) = sum(2) = -1.  For any other input n, we recursively call sum(n-1), sum(n-2) and sum(n-3) and add the results.

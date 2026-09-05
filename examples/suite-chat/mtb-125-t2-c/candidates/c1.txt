@@ -1,0 +1,55 @@
+If it's not a binary tree but a general tree with multiple children per node, you can modify the function to handle that case. Here's a Python function to find the highest common ancestor in a general tree:
+
+```python
+class TreeNode:
+    def __init__(self, value=0, children=None):
+        self.value = value
+        self.children = children if children is not None else []
+
+def find_path_to_node(root, path, node_value):
+    if root is None:
+        return False
+
+    path.append(root.value)
+
+    if root.value == node_value:
+        return True
+
+    for child in root.children:
+        if find_path_to_node(child, path, node_value):
+            return True
+
+    path.pop()
+    return False
+
+def find_highest_common_ancestor(root, node1_value, node2_value):
+    path1 = []
+    path2 = []
+
+    if not find_path_to_node(root, path1, node1_value) or not find_path_to_node(root, path2, node2_value):
+        return None
+
+    hca = None
+    for i in range(min(len(path1), len(path2))):
+        if path1[i] == path2[i]:
+            hca = path1[i]
+        else:
+            break
+
+    return hca
+
+# Example usage:
+# Construct a general tree
+#         1
+#       / | \
+#      2  3  4
+#     / \
+#    5   6
+root = TreeNode(1, [TreeNode(2, [TreeNode(5), TreeNode(6)]), TreeNode(3), TreeNode(4)])
+
+# Find the highest common ancestor of nodes with values 5 and 6
+hca = find_highest_common_ancestor(root, 5, 6)
+print("Highest Common Ancestor:", hca)  # Output: Highest Common Ancestor: 2
+```
+
+The main difference in this implementation is that the `TreeNode` class now has a `children` attribute, which is a list of child nodes. The `find_path_to_node` function has been modified to iterate through all children instead of just left and right children. The rest of the code remains the same.

@@ -1,0 +1,7 @@
+The inequality |x + 5| < 10 means that the absolute value of x + 5 is less than 10.
+Since the absolute value is always non-negative, this is equivalent to -10 < x + 5 < 10.
+Subtracting 5 from all parts, we get -15 < x < 5.
+Therefore, the solution set contains all integers between -15 and 5, inclusive. 
+There are -15 - (-5) + 1 = 21 integers in the solution set.
+
+So the number of integers in the solution is 21

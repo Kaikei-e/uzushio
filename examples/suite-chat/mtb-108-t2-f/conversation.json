@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Which word does not belong with the others?\ntyre, steering wheel, car, engine"
+  },
+  {
+    "role": "user",
+    "content": "Could you replace it with a word that belongs with the others?"
+  }
+]

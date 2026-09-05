@@ -1,0 +1,1 @@
+Yes, the program can be parallelized by using multiple threads to read the files and compute the word counts in parallel.

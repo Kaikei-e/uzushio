@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Write a simple website in HTML. When a user clicks the button, it shows a random joke from a list of 4 jokes."
+  },
+  {
+    "role": "user",
+    "content": "How to use CSS to change the color of jokes to red?"
+  }
+]

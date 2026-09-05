@@ -1,0 +1,22 @@
+{
+"books": [
+{
+"main character": "Harry Potter",
+"book": "Harry Potter and the Philosopher's Stone",
+"author": "J.K. Rowling",
+"year of publication": 1997
+},
+{
+"main character": "Frodo Baggins",
+"book": "The Lord of the Rings: The Fellowship of the Ring",
+"author": "J.R.R. Tolkien",
+"year of publication": 1954
+},
+{
+"main character": "Zylo",
+"book": "The Prism Galaxy Chronicles: The Awakening of the Starcaster",
+"author": "L.E. Starlighter",
+"year of publication": 2028
+}
+]
+}

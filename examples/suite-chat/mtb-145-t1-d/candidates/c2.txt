@@ -1,0 +1,7 @@
+The process that occurs when solid calcium carbonate reacts with hydrochloric acid is a chemical reaction that produces aqueous calcium chloride, carbon dioxide, and water. The balanced chemical equation for this reaction is:
+
+CaCO3(s) + 2HCl(aq) → CaCl2(aq) + CO2(g) + H2O(l)
+
+This is a type of double displacement reaction, where the calcium carbonate and hydrochloric acid switch partners to form calcium chloride and carbon dioxide.
+
+Observations that might indicate that the reaction is taking place include the formation of bubbles (carbon dioxide gas), a decrease in the amount of solid calcium carbonate, and the production of heat. Additionally, the solution may become cloudy due to the formation of calcium chloride.

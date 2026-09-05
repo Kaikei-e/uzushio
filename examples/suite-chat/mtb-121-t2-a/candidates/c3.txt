@@ -1,0 +1,47 @@
+Yes, we can parallelize the program using the `multiprocessing` module in Python. Here's the modified program that reads all the text files under a directory and returns top-5 words with the most number of occurrences using parallel processing:
+
+```python
+import os
+import re
+from collections import Counter
+from multiprocessing import Pool, Manager
+
+def process_file(filename, word_counter):
+    # Open the file and read its contents
+    with open(filename, "r") as file:
+        contents = file.read()
+
+        # Use regular expressions to split the contents into words
+        words = re.findall(r'\b\w+\b', contents)
+
+        # Update the word counter with the words from the file
+        word_counter.update(words)
+
+def get_top_words(directory):
+    # Initialize a Manager object to share the word counter between processes
+    manager = Manager()
+    word_counter = manager.Counter()
+
+    # Create a pool of worker processes
+    pool = Pool()
+
+    # Loop through all files in the directory
+    for filename in os.listdir(directory):
+        # Check if the file is a text file
+        if filename.endswith(".txt"):
+            # Submit a task to the pool to process the file
+            pool.apply_async(process_file, args=(os.path.join(directory, filename), word_counter))
+
+    # Wait for all tasks to complete
+    pool.close()
+    pool.join()
+
+    # Return the top 5 words with the most occurrences
+    return word_counter.most_common(5)
+
+# Example usage
+top_words = get_top_words("path/to/directory")
+print(top_words)
+```
+
+In this modified program, we use the `Pool` class from the `multiprocessing` module to create a pool of worker processes. We submit a task to the pool for each text file in the directory, and each task processes the file and updates the shared `word_counter` object using the `Manager` class. Finally, we wait for all tasks to complete using the `close` and `join` methods of the `Pool` class, and return the top 5 words with the most occurrences using the `most_common` method of the `Counter` class.

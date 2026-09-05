@@ -1,0 +1,13 @@
+Machine learning is a subfield of artificial intelligence (AI) that involves the use of algorithms and statistical models to enable a system to improve its performance on a specific task by learning from data. In other words, machine learning involves the development of algorithms that can learn and make predictions or decisions based on data, without being explicitly programmed to do so.
+
+There are three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning.
+
+1. Supervised learning: In supervised learning, the algorithm is trained on a labeled dataset, which means that the data is already classified or labeled. The goal of the algorithm is to learn the relationship between the input data and the corresponding output labels, so that it can make accurate predictions or classifications on new, unseen data. For example, a supervised learning algorithm might be trained on a dataset of images of handwritten digits, with each image labeled with the corresponding digit (e.g. "1" or "5"). The algorithm would then be able to recognize handwritten digits and accurately classify new images.
+2. Unsupervised learning: In unsupervised learning, the algorithm is trained on an unlabeled dataset, which means that the data is not pre-classified or labeled. The goal of the algorithm is to find patterns or structure in the data, without any prior knowledge of what the output should look like. For example, an unsupervised learning algorithm might be used to group similar customer data based on purchasing habits, without any prior knowledge of what characteristics define a "similar" customer.
+3. Reinforcement learning: In reinforcement learning, the algorithm learns through trial and error, by interacting with an environment and receiving feedback in the form of rewards or penalties. The goal of the algorithm is to learn a policy that maximizes the rewards it receives, by learning from its past experiences. For example, a reinforcement learning algorithm might be used to train a robot to navigate a maze, by receiving a reward each time it moves closer to the goal and a penalty each time it moves away from the goal.
+
+Real-world examples of each type of machine learning include:
+
+* Supervised learning: Credit scoring, image recognition, speech recognition, and natural language processing.
+* Unsupervised learning: Customer segmentation, anomaly detection, data visualization, and clustering.
+* Reinforcement learning: Robotics, game playing, autonomous vehicles, and supply chain optimization.

@@ -1,0 +1,15 @@
+The base rate fallacy is a logical fallacy where people ignore the overall rates of events when making judgments about the probability of an event. In other words, they focus on specific information about the event and ignore the overall "base rate" of how often that type of event occurs.
+
+Here are five examples of how politicians can use the base rate fallacy in their campaigns:
+
+1. Focusing on a few tragic stories of people affected by a problem like terrorism or violent crime, while ignoring the overall very low base rates of those events to make people think they are more common than they really are. 
+
+2. Highlighting a few examples of government inefficiency or waste while ignoring the overall base rate of how well government programs operate to argue that government is broken.
+
+3. Pointing to a few extreme examples of voter fraud to argue that it's a widespread problem, while ignoring the very low base rates of actual voter fraud. 
+
+4. Focusing on a few stories of people abusing welfare or other benefit programs while ignoring the overall low rates of fraud and abuse to argue that the programs should be cut or reformed.
+
+5. Highlighting a few examples of violent undocumented immigrants to argue that immigration reform is urgently needed due to public safety, while ignoring the overall low base rates of violence by undocumented immigrants.
+
+In all these cases, the politicians are relying on a few powerful examples and anecdotes to elicit an emotional reaction, while ignoring the underlying base rates that would provide important context. They are hoping that people will focus on the vivid examples rather than the overall statistics.

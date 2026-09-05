@@ -1,0 +1,18 @@
+Okay, let's think through this:
+
+1. Oranges cost more than apples.  (Unknown if true or false)
+2. Oranges cost less than bananas. (Unknown if true or false)
+3. Bananas cost more than apples and bananas cost more than orange. (True)
+
+We know the third statement is true. But we don't know if the first two statements are true or not.
+
+The first statement is:
+1. Oranges cost more than apples.  
+
+Even though the third statement is true, we don't have enough information to determine if the first statement is true or false. It could be either.
+
+Therefore, if the third statement is true, the first statement is uncertain.
+
+The answer is: Uncertain
+
+Explanation: We know bananas cost more than oranges and apples from the true third statement. But we don't know the exact costs of oranges and apples in relation to each other. So we can't say if the first statement is definitively true or false.

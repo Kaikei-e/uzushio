@@ -1,0 +1,22 @@
+Here is an example of a C++ program that finds the nth number in the sequence defined in your question:
+```
+#include <iostream>
+
+int sequence(int n) {
+  if (n <= 3) {
+    return n;
+  } else {
+    return sequence(n - 1) + sequence(n - 2);
+  }
+}
+
+int main() {
+  int n = 4;
+  int seq_num = sequence(n);
+  std::cout << "The " << n << "th number in the sequence is: " << seq_num << std::endl;
+  return 0;
+}
+```
+This program defines a function `sequence(int n)` which takes an integer `n` as an argument and returns the nth number in the sequence defined in your question. The function uses recursion to calculate the nth number by calling itself twice with the arguments `n - 1` and `n - 2` and returning their sum. If `n` is less than or equal to 3, the function returns `n` as the first three numbers in the sequence are 0, -1, and -1.
+
+In the `main()` function, the program calls the `sequence(n)` function and stores the returned value in a variable called `seq_num`. The `main()` function then prints out the value of `seq_num` to confirm that it is the nth number in the sequence.

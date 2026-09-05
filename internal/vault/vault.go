@@ -304,6 +304,28 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 			vocab.FieldReport.String():       {},
 			vocab.FieldInForceUntil.String(): {},
 		},
+		// No edge and no rule, for two reasons that are worth keeping apart.
+		//
+		// The first is the verifier's: a calibration points at nothing in this
+		// vault. The suite it measured is a directory of tasks, not a
+		// document, and an edge needs a far end.
+		//
+		// The second is a rule this step wanted and could not write. "A
+		// chat-face edit was accepted while no calibration with a measured
+		// human_kappa is binding" is the obligation the kind exists to carry,
+		// and the current vocabulary cannot express it twice over: an edit
+		// names a harness surface and has no way to say which face it is
+		// about, and — the harder half — the condition is about the vault as a
+		// whole rather than about the document being judged. A DocDag rule is
+		// evaluated on one document and its neighbours across an edge, so
+		// "nothing anywhere is binding" has nowhere to be asked. Writing the
+		// rule against the edit's own keys would produce a rule that fires on
+		// nothing for the rest of the repository's life, which is worse than
+		// its absence: it would read as an enforced obligation. The check
+		// belongs in the command that accepts an edit, or in a future
+		// vocabulary where an edit names its face and points at the
+		// calibration it rests on.
+		//
 		// A calibration carries force from the day it was written until
 		// thirty days after its window closed, and then stops on its own.
 		// That is the whole mechanism behind the warning `uzushio judge

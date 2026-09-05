@@ -1,0 +1,12 @@
+When solid calcium carbonate (CaCO₃) reacts with hydrochloric acid (HCl), the products formed are aqueous calcium chloride (CaCl₂), carbon dioxide (CO₂), and water (H₂O). The balanced chemical equation for this reaction is:
+
+CaCO₃ (s) + 2 HCl (aq) → CaCl₂ (aq) + CO₂ (g) + H₂O (l)
+
+This reaction is an example of an acid-base reaction, specifically a double displacement reaction, where the calcium and hydrogen ions switch places.
+
+Observations that might indicate that the reaction is taking place include:
+
+1. Effervescence or bubbling due to the formation of carbon dioxide gas.
+2. The solid calcium carbonate dissolving as it reacts with the hydrochloric acid.
+3. A possible change in the color of the solution, depending on the initial color of the calcium carbonate and the concentration of the hydrochloric acid.
+4. A possible change in temperature, as the reaction may be exothermic (releasing heat) or endothermic (absorbing heat), depending on the specific conditions.

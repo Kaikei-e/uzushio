@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "How many integers are in the solution of the inequality |x + 5| \u003c 10"
+  },
+  {
+    "role": "user",
+    "content": "What about |x + 10| \u003c 5"
+  }
+]

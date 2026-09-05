@@ -1,0 +1,41 @@
+To find the top-2 most occurring elements, you can modify the Boyer-Moore Voting Algorithm to keep track of two candidates and their counts. Here's a Python function that finds the top-2 most occurring elements in a given integer array:
+
+```python
+def top_two_elements(nums):
+    candidate1, candidate2 = None, None
+    count1, count2 = 0, 0
+
+    for num in nums:
+        if num == candidate1:
+            count1 += 1
+        elif num == candidate2:
+            count2 += 1
+        elif count1 == 0:
+            candidate1, count1 = num, 1
+        elif count2 == 0:
+            candidate2, count2 = num, 1
+        else:
+            count1, count2 = count1 - 1, count2 - 1
+
+    # Verify if the candidates are actually the top-2 most occurring elements
+    count1, count2 = 0, 0
+    for num in nums:
+        if num == candidate1:
+            count1 += 1
+        elif num == candidate2:
+            count2 += 1
+
+    top_two = []
+    if count1 > len(nums) // 3:
+        top_two.append(candidate1)
+    if count2 > len(nums) // 3:
+        top_two.append(candidate2)
+
+    return top_two
+
+# Example usage:
+nums = [1, 1, 2, 2, 3, 3, 3]
+print(top_two_elements(nums))  # Output: [1, 2]
+```
+
+This function maintains two candidates and their counts. It updates the candidates and counts based on the current number in the array. After iterating through the entire array, it verifies if the candidates are actually the top-2 most occurring elements by counting their occurrences again. If their counts are greater than `len(nums) // 3`, they are added to the `top_two` list, which is returned as the result.

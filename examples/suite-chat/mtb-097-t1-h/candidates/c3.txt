@@ -1,0 +1,11 @@
+Sure! Probability is the study of how likely events are to happen. It's often represented as a number between 0 and 1, where 0 means that an event is impossible and 1 means that it's certain. For example, the probability of flipping a coin and getting heads is 0.5, or 50%, because there are two possible outcomes (heads or tails) and they're equally likely.
+
+To calculate probability, you need to know how many possible outcomes there are and how many of them are favorable to the event you're interested in. For example, if you want to know the probability of rolling a 6 on a standard die, there is only one favorable outcome (rolling a 6) out of six possible outcomes (rolling any number from 1 to 6), so the probability is 1/6 or about 0.17.
+
+There are different types of probability, including:
+
+- Marginal probability, which is the probability of a single event occurring.
+- Joint probability, which is the probability of two or more events occurring together.
+- Conditional probability, which is the probability of an event occurring given that another event has already occurred.
+
+There are many resources online that can help you learn more about probability, including Khan Academy, Coursera, and YouTube tutorials. You can also practice with problems and examples to improve your understanding.

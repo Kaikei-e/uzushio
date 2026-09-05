@@ -1,0 +1,9 @@
+- country: Florin 
+  capital: Camelot 
+  language: Florinese
+- country: Azantria
+  capital: Astra 
+  language: Azantrian 
+- country: Xanadu
+  capital: Shangri-La
+  language: Xanadese

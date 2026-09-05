@@ -1,0 +1,4 @@
+Riemannian geometry is a broad area of mathematics that focuses on curvature. It's different from Euclidean geometry because it measures the curvature of a surface, rather than its distance from a point.
+An example of a surface is the Earth. The Earth is curved, so it has a curvature. Euclidean geometry measures the distance from a point, like the distance from your house to the store.
+In Euclidean geometry, the angle of a triangle is 180 degrees, but in Riemannian geometry, the angle of a triangle can be more or less than 180 degrees.
+Remember, Riemannian geometry is a broad area of mathematics that focuses on curvature. It's different from Euclidean geometry because it measures the curvature of a surface, rather than its distance from a point.

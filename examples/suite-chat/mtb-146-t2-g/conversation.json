@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Please explain the differences between exothermic and endothermic reactions, and include the criteria you used to distinguish between them. Additionally, please provide a real-world example to illustrate your explanation."
+  },
+  {
+    "role": "user",
+    "content": "Can a process involve both reactions? List one."
+  }
+]

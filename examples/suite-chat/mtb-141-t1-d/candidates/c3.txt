@@ -1,0 +1,2 @@
+Quantum entanglement is a phenomenon in which two or more particles interact in such a way that the quantum state of each particle cannot be described independently of the others, even when the particles are separated by a large distance.
+Superposition is a quantum mechanical property of a system in which two or more states coexist. It is a fundamental principle of quantum mechanics that any two quantum states can be added together to yield another valid quantum state.

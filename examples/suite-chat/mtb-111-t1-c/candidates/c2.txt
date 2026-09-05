@@ -1,0 +1,17 @@
+To find the area of the triangle with vertices (0, 0), (-1, 1), and (3, 3), we can use the formula for the area of a triangle given its coordinates:
+
+Area = (1/2) * |(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))|
+
+Plugging in the coordinates of the vertices:
+
+Area = (1/2) * |(0 * (1 - 3) + (-1) * (3 - 0) + 3 * (0 - 1))|
+
+Area = (1/2) * |(0 * (-2) - 1 * 3 + 3 * (-1))|
+
+Area = (1/2) * |(0 - 3 - 3)|
+
+Area = (1/2) * |-6|
+
+Area = 3
+
+So, the area of the triangle is 3 square units.

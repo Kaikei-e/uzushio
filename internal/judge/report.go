@@ -32,10 +32,16 @@ type Agreement struct {
 }
 
 // Swap is the judge against itself with the candidates in the other order.
+//
+// Every run of every item contributes its three pairs, so a calibration at
+// three seeds over two hundred items reads eighteen hundred pairs rather than
+// six hundred. That is deliberate: position consistency is a property of the
+// judge under one prompt, and a second seed is another reading of it, not a
+// different question.
 type Swap struct {
-	// Pairs is how many pairs were judged in both orders, Decided how many of
-	// those the judge answered both times, and Flips how many of the decided
-	// ones it answered differently.
+	// Pairs is how many pairs were judged in both orders, over every seed;
+	// Decided how many of those the judge answered both times, and Flips how
+	// many of the decided ones it answered differently.
 	Pairs   int `json:"pairs"`
 	Decided int `json:"decided"`
 	Flips   int `json:"flips"`
