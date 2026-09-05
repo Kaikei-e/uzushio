@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "id": "suite-chat-ja",
+  "face": "chat",
+  "tasks": [
+    {
+      "id": "ja-001",
+      "dir": "ja-001",
+      "split": "calibration",
+      "category": "writing"
+    },
+    {
+      "id": "ja-002",
+      "dir": "ja-002",
+      "split": "calibration",
+      "category": "writing"
+    },
+    {
+      "id": "ja-003",
+      "dir": "ja-003",
+      "split": "calibration",
+      "category": "writing"
+    },
+    {
+      "id": "ja-004",
+      "dir": "ja-004",
+      "split": "calibration",
+      "category": "writing"
+    },
+    {
+      "id": "ja-005",
+      "dir": "ja-005",
+      "split": "calibration",
+      "category": "writing"
+    },
+    {
+      "id": "ja-006",
+      "dir": "ja-006",
+      "split": "calibration",
+      "category": "roleplay"
+    },
+    {
+      "id": "ja-007",
+      "dir": "ja-007",
+      "split": "calibration",
+      "category": "roleplay"
+    },
+    {
+      "id": "ja-008",
+      "dir": "ja-008",
+      "split": "calibration",
+      "category": "roleplay"
+    },
+    {
+      "id": "ja-009",
+      "dir": "ja-009",
+      "split": "calibration",
+      "category": "roleplay"
+    },
+    {
+      "id": "ja-010",
+      "dir": "ja-010",
+      "split": "calibration",
+      "category": "roleplay"
+    },
+    {
+      "id": "ja-011",
+      "dir": "ja-011",
+      "split": "calibration",
+      "category": "reasoning"
+    },
+    {
+      "id": "ja-012",
+      "dir": "ja-012",
+      "split": "calibration",
+      "category": "reasoning"
+    },
+    {
+      "id": "ja-013",
+      "dir": "ja-013",
+      "split": "calibration",
+      "category": "reasoning"
+    },
+    {
+      "id": "ja-014",
+      "dir": "ja-014",
+      "split": "calibration",
+      "category": "reasoning"
+    },
+    {
+      "id": "ja-015",
+      "dir": "ja-015",
+      "split": "calibration",
+      "category": "reasoning"
+    },
+    {
+      "id": "ja-016",
+      "dir": "ja-016",
+      "split": "calibration",
+      "category": "math"
+    },
+    {
+      "id": "ja-017",
+      "dir": "ja-017",
+      "split": "calibration",
+      "category": "math"
+    },
+    {
+      "id": "ja-018",
+      "dir": "ja-018",
+      "split": "calibration",
+      "category": "math"
+    },
+    {
+      "id": "ja-019",
+      "dir": "ja-019",
+      "split": "calibration",
+      "category": "math"
+    },
+    {
+      "id": "ja-020",
+      "dir": "ja-020",
+      "split": "calibration",
+      "category": "math"
+    },
+    {
+      "id": "ja-021",
+      "dir": "ja-021",
+      "split": "calibration",
+      "category": "coding"
+    },
+    {
+      "id": "ja-022",
+      "dir": "ja-022",
+      "split": "calibration",
+      "category": "coding"
+    },
+    {
+      "id": "ja-023",
+      "dir": "ja-023",
+      "split": "calibration",
+      "category": "coding"
+    },
+    {
+      "id": "ja-024",
+      "dir": "ja-024",
+      "split": "calibration",
+      "category": "coding"
+    },
+    {
+      "id": "ja-025",
+      "dir": "ja-025",
+      "split": "calibration",
+      "category": "coding"
+    },
+    {
+      "id": "ja-026",
+      "dir": "ja-026",
+      "split": "calibration",
+      "category": "extraction"
+    },
+    {
+      "id": "ja-027",
+      "dir": "ja-027",
+      "split": "calibration",
+      "category": "extraction"
+    },
+    {
+      "id": "ja-028",
+      "dir": "ja-028",
+      "split": "calibration",
+      "category": "extraction"
+    },
+    {
+      "id": "ja-029",
+      "dir": "ja-029",
+      "split": "calibration",
+      "category": "extraction"
+    },
+    {
+      "id": "ja-030",
+      "dir": "ja-030",
+      "split": "calibration",
+      "category": "extraction"
+    },
+    {
+      "id": "ja-031",
+      "dir": "ja-031",
+      "split": "calibration",
+      "category": "stem"
+    },
+    {
+      "id": "ja-032",
+      "dir": "ja-032",
+      "split": "calibration",
+      "category": "stem"
+    },
+    {
+      "id": "ja-033",
+      "dir": "ja-033",
+      "split": "calibration",
+      "category": "stem"
+    },
+    {
+      "id": "ja-034",
+      "dir": "ja-034",
+      "split": "calibration",
+      "category": "stem"
+    },
+    {
+      "id": "ja-035",
+      "dir": "ja-035",
+      "split": "calibration",
+      "category": "stem"
+    },
+    {
+      "id": "ja-036",
+      "dir": "ja-036",
+      "split": "calibration",
+      "category": "humanities"
+    },
+    {
+      "id": "ja-037",
+      "dir": "ja-037",
+      "split": "calibration",
+      "category": "humanities"
+    },
+    {
+      "id": "ja-038",
+      "dir": "ja-038",
+      "split": "calibration",
+      "category": "humanities"
+    },
+    {
+      "id": "ja-039",
+      "dir": "ja-039",
+      "split": "calibration",
+      "category": "humanities"
+    },
+    {
+      "id": "ja-040",
+      "dir": "ja-040",
+      "split": "calibration",
+      "category": "humanities"
+    }
+  ]
+}
