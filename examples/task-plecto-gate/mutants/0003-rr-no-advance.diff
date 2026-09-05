@@ -1,0 +1,13 @@
+diff --git a/plecto/crates/control/src/upstream/lb.rs b/plecto/crates/control/src/upstream/lb.rs
+index de63e53..022cacb 100644
+--- a/plecto/crates/control/src/upstream/lb.rs
++++ b/plecto/crates/control/src/upstream/lb.rs
+@@ -175,7 +175,7 @@ impl UpstreamGroup {
+         if eligible == 0 {
+             return None;
+         }
+-        let target = self.rr.fetch_add(1, Ordering::Relaxed) % eligible;
++        let target = self.rr.load(Ordering::Relaxed) % eligible;
+         let mut seen = 0;
+         let mut last = None;
+         for inst in instances {

@@ -1,0 +1,12 @@
+diff --git a/plecto/crates/server/src/metrics.rs b/plecto/crates/server/src/metrics.rs
+index db40a7b..e633502 100644
+--- a/plecto/crates/server/src/metrics.rs
++++ b/plecto/crates/server/src/metrics.rs
+@@ -264,6 +264,7 @@ impl ServerMetrics {
+         pool: Option<plecto_control::PoolResidency>,
+         upstreams: &[Arc<UpstreamGroup>],
+     ) -> String {
++        std::thread::sleep(std::time::Duration::from_millis(50));
+         const CLASSES: [&str; 5] = ["1xx", "2xx", "3xx", "4xx", "5xx"];
+         let mut out: Vec<String> = Vec::new();
+ 

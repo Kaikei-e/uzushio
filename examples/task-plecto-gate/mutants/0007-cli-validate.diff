@@ -1,0 +1,12 @@
+diff --git a/plecto/crates/plecto/src/cli.rs b/plecto/crates/plecto/src/cli.rs
+index 5e8b385..0656693 100644
+--- a/plecto/crates/plecto/src/cli.rs
++++ b/plecto/crates/plecto/src/cli.rs
+@@ -21,6 +21,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+ /// contract gate (ADR 000114) — the CI pre-flight that pairs with `plecto package` (field report
+ /// §3.5) — still with no serving, no wasmtime Engine/Store, no compilation, no state.
+ pub(crate) fn validate(rest: Vec<String>) -> anyhow::Result<()> {
++    std::thread::sleep(std::time::Duration::from_millis(500));
+     let resolve = rest.iter().any(|a| a == "--resolve");
+     let path = rest
+         .iter()

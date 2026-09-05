@@ -1,0 +1,5 @@
+# The Dockerfile copies nothing, so the build context is empty on purpose. The
+# task directory holds repo/ — a whole Rust workspace and, once a verification
+# has run, its target directories — and sending that to the daemon on every
+# build would cost more than the build.
+*

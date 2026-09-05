@@ -1,0 +1,71 @@
+{
+  "version": 2,
+  "id": "plecto-gate",
+  "repo": "repo",
+  "rev": "39778ec3f02f1db8883a11a4864f9b43f2dc3fac",
+  "files": [
+    "plecto/crates/host/src/filter.rs",
+    "plecto/crates/host/src/state.rs",
+    "plecto/crates/control/src/upstream/lb.rs",
+    "plecto/crates/server/src/health.rs",
+    "plecto/examples/filters/filter-apikey/src/lib.rs"
+  ],
+  "max_context_bytes": 131072,
+  "verify": {
+    "compose_file": "compose.yaml",
+    "service": "verify",
+    "kind": "band",
+    "timeout_seconds": 1500
+  },
+  "reference": {
+    "diff": "reference.diff"
+  },
+  "mutants": [
+    {
+      "diff": "mutants/0001-dispatch-sleep.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "plecto/crates/host/src/filter.rs:110 — 50us sleep in run_on_request; band dispatch_floor_us"
+    },
+    {
+      "diff": "mutants/0002-apikey-extra-kv.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "plecto/examples/filters/filter-apikey/src/lib.rs:98 — a second host_kv::get per request; band apikey_cost_us"
+    },
+    {
+      "diff": "mutants/0003-rr-no-advance.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "plecto/crates/control/src/upstream/lb.rs:178 — fetch_add -> load, the cursor never advances; aimed at rr_spread_req, which stayed 0 on 2026-09-05: what caught it was ejection_transition_s at 6 s, never settling"
+    },
+    {
+      "diff": "mutants/0004-health-slow-tick.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "plecto/crates/server/src/health.rs:71 — probe floor 20ms -> 1200ms; aimed at ejection_transition_s, which it only moved to 2 on 2026-09-05, inside the 0-2 band: on a host where the reference holds this one may survive"
+    },
+    {
+      "diff": "mutants/0005-ratelimit-probe.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "plecto/crates/host/src/state.rs:563 — an extra kv.get in try_acquire; band ratelimit_tax_us, which is skipped without k6"
+    },
+    {
+      "diff": "mutants/0006-metrics-render.diff",
+      "expect": "equivalent",
+      "origin": "hand",
+      "note": "plecto/crates/server/src/metrics.rs:266 — a cold path: no gate step starts an admin listener or scrapes /metrics"
+    },
+    {
+      "diff": "mutants/0007-cli-validate.diff",
+      "expect": "equivalent",
+      "origin": "hand",
+      "note": "plecto/crates/plecto/src/cli.rs:23 — crates/plecto is not in the dependency graph of the measured examples"
+    }
+  ],
+  "doctor": {
+    "kill_rate_min": 0.8,
+    "reference_runs": 5
+  }
+}

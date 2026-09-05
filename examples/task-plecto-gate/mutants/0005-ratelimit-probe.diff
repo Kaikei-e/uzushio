@@ -1,0 +1,12 @@
+diff --git a/plecto/crates/host/src/state.rs b/plecto/crates/host/src/state.rs
+index cd59002..3160f10 100644
+--- a/plecto/crates/host/src/state.rs
++++ b/plecto/crates/host/src/state.rs
+@@ -561,6 +561,7 @@ impl host_ratelimit::Host for HostState {
+             };
+         };
+         let nskey = self.ns_key(TAG_RATELIMIT, &key);
++        let _probe = self.kv.get(&nskey); // "check before charge"
+         let kv = &self.kv;
+         let key_len = key.len();
+         let now_ms = self.now_ms;

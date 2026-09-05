@@ -1,0 +1,12 @@
+diff --git a/plecto/crates/host/src/filter.rs b/plecto/crates/host/src/filter.rs
+index 08e5cb0..9145e7f 100644
+--- a/plecto/crates/host/src/filter.rs
++++ b/plecto/crates/host/src/filter.rs
+@@ -108,6 +108,7 @@ impl LoadedFilter {
+     }
+ 
+     fn run_on_request(&self, req: &HttpRequest) -> HookResult<RequestDecision> {
++        std::thread::sleep(std::time::Duration::from_micros(50));
+         self.inner.run_hook(self.trusted.as_ref(), |inst| {
+             self.inner.runtime.call_on_request(inst, req)
+         })
