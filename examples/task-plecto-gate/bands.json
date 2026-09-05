@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "task": "plecto-gate",
+  "rev": "39778ec3f02f1db8883a11a4864f9b43f2dc3fac",
+  "source_runs": [
+    "20260905T002350Z-e13205e7"
+  ],
+  "day": "2026-09-05",
+  "n": 5,
+  "rule": {
+    "statistic": "normal-tolerance-interval",
+    "p": 0.95,
+    "gamma": 0.9,
+    "k2": 4.164,
+    "rel_floor": 0.02,
+    "floors": {
+      "us": 0.1,
+      "ms": 0.005
+    },
+    "lower": "derive"
+  },
+  "invariants": {
+    "apikey_cost_us": {
+      "lo": 1.8544,
+      "hi": 2.262,
+      "centre": 2.0582,
+      "half_width": 0.2038,
+      "three_ci_half": 0.9657,
+      "kept": false,
+      "reason": "derived: k*stdev"
+    },
+    "apikey_tail_p50_ms": {
+      "lo": -0.02,
+      "hi": 0.15,
+      "centre": 0.0107,
+      "half_width": null,
+      "three_ci_half": null,
+      "kept": true,
+      "reason": "kept: in band"
+    },
+    "dispatch_floor_us": {
+      "lo": 8.5042,
+      "hi": 9.0326,
+      "centre": 8.7684,
+      "half_width": 0.2641,
+      "three_ci_half": 0.8154,
+      "kept": false,
+      "reason": "derived: k*stdev"
+    },
+    "ejection_stray_failed": {
+      "lo": 0,
+      "hi": 0,
+      "centre": 0,
+      "half_width": null,
+      "three_ci_half": null,
+      "kept": true,
+      "reason": "kept: in band"
+    },
+    "ejection_transition_s": {
+      "lo": 0,
+      "hi": 2,
+      "centre": 1,
+      "half_width": null,
+      "three_ci_half": null,
+      "kept": true,
+      "reason": "kept: in band"
+    },
+    "enforce_allowed_ratio": {
+      "lo": 0.9,
+      "hi": 1.1,
+      "centre": 0.9166,
+      "half_width": null,
+      "three_ci_half": null,
+      "kept": true,
+      "reason": "kept: declared"
+    },
+    "pooled_tail_p50_ms": {
+      "lo": 0.0098,
+      "hi": 0.0416,
+      "centre": 0.0257,
+      "half_width": 0.0158,
+      "three_ci_half": null,
+      "kept": false,
+      "reason": "derived: k*stdev"
+    },
+    "ratelimit_tax_us": {
+      "lo": 6.7481,
+      "hi": 12.7957,
+      "centre": 9.7719,
+      "half_width": 3.0238,
+      "three_ci_half": 2.2947,
+      "kept": false,
+      "reason": "derived: k*stdev"
+    },
+    "respctx_tail_p50_ms": {
+      "lo": -0.05,
+      "hi": 0.25,
+      "centre": -0.0007,
+      "half_width": null,
+      "three_ci_half": null,
+      "kept": true,
+      "reason": "kept: in band"
+    },
+    "rr_spread_req": {
+      "lo": 0,
+      "hi": 0,
+      "centre": 0,
+      "half_width": null,
+      "three_ci_half": null,
+      "kept": true,
+      "reason": "kept: in band"
+    }
+  }
+}

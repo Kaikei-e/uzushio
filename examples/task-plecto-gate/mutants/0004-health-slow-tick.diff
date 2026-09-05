@@ -7,7 +7,7 @@ index b0f0d70..3f721d9 100644
          tokio::select! {
              _ = crate::listener::drained(&mut drain) => return,
 -            _ = tokio::time::sleep(period.max(Duration::from_millis(20))) => {}
-+            _ = tokio::time::sleep(period.max(Duration::from_millis(1200))) => {}
++            _ = tokio::time::sleep(period.max(Duration::from_millis(3000))) => {}
          }
      }
  }

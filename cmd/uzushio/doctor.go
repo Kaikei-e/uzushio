@@ -28,6 +28,8 @@ func newTaskDoctorCmd() *cobra.Command {
 		vaultDir   string
 		outDir     string
 		replayPath string
+		reusePath  string
+		only       []string
 		parallel   int
 		timeout    time.Duration
 		asJSON     bool
@@ -44,7 +46,13 @@ func newTaskDoctorCmd() *cobra.Command {
 			"holds and rewrites it in place, keeping its run id. Nothing is verified: no\n" +
 			"cmoa, no docker, no worktree. It is how a report written before a field\n" +
 			"existed gains it, and how a record can be written for a check that has\n" +
-			"already run.",
+			"already run.\n\n" +
+			"A full check of a slow verifier is an hour and a half, and most questions are\n" +
+			"smaller than that. --only reference, --only mutants, or --only <label-or-diff>\n" +
+			"runs part of it, and repeats. --reuse-reference <report.json> takes the\n" +
+			"reference block from an earlier check instead of running it again, and refuses\n" +
+			"unless that check was of the same task, at the same revision, under the same\n" +
+			"verifier — which the report's environment fingerprint is what decides.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			loaded, err := task.Load(taskDir)
@@ -61,7 +69,8 @@ func newTaskDoctorCmd() *cobra.Command {
 				// The refused flags are the ones that say how to run something.
 				// A replay runs nothing, and a command that accepted --parallel
 				// and then ignored it would be lying about what it did.
-				if err := refuseWithReplay(cmd, "parallel", "timeout", "out"); err != nil {
+				if err := refuseWithReplay(cmd,
+					"parallel", "timeout", "out", "only", "reuse-reference"); err != nil {
 					return &exitError{code: exitUsage, err: err}
 				}
 				report, err = doctor.ReadReport(replayPath)
@@ -80,6 +89,13 @@ func newTaskDoctorCmd() *cobra.Command {
 				if err := loaded.RequireRunnableVerifier(); err != nil {
 					return &exitError{code: exitUsage, err: err}
 				}
+				var earlier *doctor.Report
+				if reusePath != "" {
+					earlier, err = doctor.ReadReport(reusePath)
+					if err != nil {
+						return &exitError{code: exitUsage, err: err}
+					}
+				}
 				ctx := cmd.Context()
 				if timeout > 0 {
 					var cancel context.CancelFunc
@@ -90,6 +106,8 @@ func newTaskDoctorCmd() *cobra.Command {
 					Task:   loaded,
 					Runner: newRunner(cmoaBin),
 					Dir:    outDir,
+					Only:   doctor.Only(only),
+					Reuse:  earlier,
 					// A banded verifier is held to one verification at a time
 					// unless the flag was typed; Changed is what tells the two
 					// apart, because the flag's default and a typed 2 are the same
@@ -154,6 +172,11 @@ func newTaskDoctorCmd() *cobra.Command {
 	cmd.Flags().StringVar(&outDir, "out", "", "where to write the report (default: <task>/doctor/<run-id>)")
 	cmd.Flags().StringVar(&replayPath, "replay", "",
 		"recompute this report.json in place from the runs it holds, verifying nothing")
+	cmd.Flags().StringArrayVar(&only, "only", nil,
+		"run only these verifications: reference, mutants, or a run label or mutant diff name; repeat for more")
+	cmd.Flags().StringVar(&reusePath, "reuse-reference", "",
+		"take the reference runs from this report.json instead of running them, "+
+			"if it measured the same task at the same revision under the same verifier")
 	cmd.Flags().IntVar(&parallel, "parallel", doctor.DefaultParallel, "how many verifications to run at once")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0,
 		"give up on the whole check after this long (default: no limit)")

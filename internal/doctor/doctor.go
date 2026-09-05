@@ -140,9 +140,19 @@ type Run struct {
 	Note     string              `json:"note,omitempty"`
 	Project  string              `json:"project_name,omitempty"`
 	Status   verifyrunner.Status `json:"status"`
+	// ReusedFrom names the check this run was copied from, for a reference run
+	// that was not performed again.
+	//
+	// It is on the run rather than on the report because it is a property of
+	// the measurement: this line is a container that ran at some other time,
+	// and a reader comparing two lines of one report needs to know that one of
+	// them is older than the other. Conclude counts it as the reference run it
+	// is — the point of reusing it is that it is still evidence — and the
+	// environment fingerprint is what says it may be.
+	ReusedFrom string `json:"reused_from,omitempty"`
 	// Band is what a banded verifier measured, carried straight through from
 	// `cmoa verify`. It is what turns "killed" into "killed via
-	// apikey_cost_us, 1.9 against a band ending at 1.2" — the material a
+	// <invariant>, 1.9 against a band ending at 1.2" — the material a
 	// person needs to re-centre a band, or to notice that the mutant nobody
 	// caught was the one whose invariant reported skipped.
 	Band    *verifyrunner.Band `json:"band,omitempty"`
@@ -156,7 +166,7 @@ type Run struct {
 	// the reference did not, in the order the verifier reported them.
 	//
 	// It is the differential a reader wants when the reference itself failed:
-	// a mutant that adds `ejection_transition_s` to a set of four bands that
+	// a mutant that adds one more invariant to a set of four bands that
 	// were already failing was genuinely detected, and one that adds nothing
 	// was not. It is written only where the reference failed something, since
 	// otherwise it is the mutant's own failed set spelled twice.
@@ -186,8 +196,8 @@ type Aggregates struct {
 	// It is not, when the verifier rejected the reference solution. Every
 	// mutant is then verified against a verifier that says no to everything,
 	// so every mutant is `killed` and a rate of 1.00 measures the false
-	// positive rather than the verifier's reach. The 2026-09-05 check of
-	// task-plecto-gate is the case this field exists for: 5 of 5 reference
+	// positive rather than the verifier's reach. The 2026-09-05 check of the
+	// first banded task is the case this field exists for: 5 of 5 reference
 	// runs failed on the same four bands, and all seven mutants came back
 	// killed — including the two the task declares equivalent, which is what
 	// gives the game away.
@@ -210,10 +220,38 @@ type Report struct {
 	Rev           string       `json:"rev"`
 	CMoAVersion   string       `json:"cmoa_version"`
 	Verdict       vocab.Health `json:"verdict"`
-	Aggregates    Aggregates   `json:"aggregates"`
-	Runs          []Run        `json:"runs"`
-	StartedAt     string       `json:"started_at"`
-	FinishedAt    string       `json:"finished_at"`
+	// Environment fingerprints what the verifier was, as opposed to what it
+	// judged: the compose file, the task-directory files mounted into the
+	// container, and the built image. It is what says whether an earlier
+	// check's reference block is still a measurement of the same thing.
+	Environment *Environment `json:"environment,omitempty"`
+	Aggregates  Aggregates   `json:"aggregates"`
+	Runs        []Run        `json:"runs"`
+	StartedAt   string       `json:"started_at"`
+	FinishedAt  string       `json:"finished_at"`
+}
+
+// ReusedReference returns the check a report's reference runs were copied from,
+// and whether any were.
+func (r *Report) ReusedReference() (string, bool) {
+	for _, run := range r.Runs {
+		if run.Kind == RunReference && run.ReusedFrom != "" {
+			return run.ReusedFrom, true
+		}
+	}
+	return "", false
+}
+
+// ReferenceRuns is every reference run a report holds, which is what a later
+// check reuses.
+func (r *Report) ReferenceRuns() []Run {
+	var out []Run
+	for _, run := range r.Runs {
+		if run.Kind == RunReference {
+			out = append(out, run)
+		}
+	}
+	return out
 }
 
 // Bytes renders the report as it is written to disk: two-space indent, one
@@ -254,6 +292,17 @@ type Options struct {
 	RunID string
 	// Now is the clock, injectable so a test can pin a report's bytes.
 	Now func() time.Time
+	// Only selects which verifications run. Empty is all of them.
+	Only Only
+	// Reuse is an earlier report whose reference runs are copied into this
+	// check instead of being performed again. Nil runs them.
+	//
+	// It is refused unless the earlier report is about the same task at the
+	// same revision with the same environment fingerprint, because the whole
+	// value of a reference run is that it measured this verifier, and a
+	// reference block carried across a changed verifier is a green line about
+	// something that no longer exists.
+	Reuse *Report
 }
 
 // ErrDirInUse is what Check returns for a directory that already holds a
@@ -317,8 +366,16 @@ func Check(ctx context.Context, opts Options) (*Report, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrDoctor, err)
 	}
+	environment, err := Fingerprint(ctx, opts.Task)
+	if err != nil {
+		return nil, err
+	}
 
-	jobs, err := plan(ctx, opts.Task, rev, dir)
+	reused, err := reuse(opts, rev, environment)
+	if err != nil {
+		return nil, err
+	}
+	jobs, err := plan(ctx, opts.Task, rev, dir, opts.Only, reused != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -330,14 +387,22 @@ func Check(ctx context.Context, opts Options) (*Report, error) {
 		Task:          opts.Task.ID,
 		Rev:           rev,
 		Verdict:       vocab.HealthInconclusive,
-		Runs:          make([]Run, 0, len(jobs)),
+		Environment:   environment,
+		Runs:          make([]Run, 0, len(jobs)+len(reused)),
 		StartedAt:     started.Format(time.RFC3339),
 	}
+	// The reused runs come first, which is where the reference block goes in a
+	// report that ran it: the order of the file is the order of the check as a
+	// person would have performed it.
+	report.Runs = append(report.Runs, reused...)
 	for _, j := range jobs {
 		if report.CMoAVersion == "" {
 			report.CMoAVersion = j.cmoaVersion
 		}
 		report.Runs = append(report.Runs, j.run)
+	}
+	if report.CMoAVersion == "" && opts.Reuse != nil {
+		report.CMoAVersion = opts.Reuse.CMoAVersion
 	}
 	report.Aggregates.KillRateMin = opts.Task.Doctor.KillRateMin
 	report.Conclude()
@@ -408,6 +473,63 @@ func (r *Report) Write(path string) error {
 	return nil
 }
 
+// reuse reads the reference block out of an earlier report, and refuses unless
+// that report is about the same task, at the same revision, under the same
+// verifier.
+//
+// The three checks are separate and are reported separately. "A different
+// commit" and "a different harness" are both reasons a reference run is not
+// evidence about this check, and the person who has to fix it needs to know
+// which one it was.
+func reuse(opts Options, rev string, environment *Environment) ([]Run, error) {
+	if opts.Reuse == nil {
+		return nil, nil
+	}
+	if opts.Only.Wants(OnlyReference) {
+		// Two instructions that cancel: run only the reference, and do not run
+		// the reference. Neither reading is safe to guess at.
+		return nil, fmt.Errorf(
+			"%w: --only %s runs the reference and --reuse-reference does not run it; drop one",
+			ErrDoctor, OnlyReference)
+	}
+	earlier := opts.Reuse
+	var complaints []string
+	if earlier.Task != opts.Task.ID {
+		complaints = append(complaints, fmt.Sprintf("it measured task %q and this is %q",
+			earlier.Task, opts.Task.ID))
+	}
+	if earlier.Rev != rev {
+		complaints = append(complaints, fmt.Sprintf("it measured %s and this is %s",
+			short(earlier.Rev), short(rev)))
+	}
+	if !environment.Same(earlier.Environment) {
+		complaints = append(complaints, environment.Differences(earlier.Environment)...)
+	}
+	if len(complaints) > 0 {
+		return nil, fmt.Errorf(
+			"%w: the reference runs of %s cannot be reused here: %s",
+			ErrDoctor, earlier.RunID, strings.Join(complaints, "; "))
+	}
+	runs := earlier.ReferenceRuns()
+	if len(runs) == 0 {
+		return nil, fmt.Errorf("%w: %s holds no reference run to reuse", ErrDoctor, earlier.RunID)
+	}
+	out := make([]Run, 0, len(runs))
+	for _, run := range runs {
+		// The run is copied whole and marked, rather than summarised. A
+		// reference run's band rows are what a calibration is built from, and a
+		// report that carried the verdict without them would be one nobody
+		// could calibrate off.
+		if run.ReusedFrom == "" {
+			run.ReusedFrom = earlier.RunID
+		}
+		// The per-run output directory belongs to the check that produced it.
+		run.Out = ""
+		out = append(out, run)
+	}
+	return out, nil
+}
+
 // job is one planned verification: the run it will become, and the diff to
 // hand over. A job whose diff never materialised carries a status already and
 // is never run.
@@ -429,20 +551,49 @@ type job struct {
 // and `git diff --cached` read back out as the combined patch. The worktree is
 // reset between mutants, so a mutant that fails to apply costs the next one
 // nothing.
-func plan(ctx context.Context, t *task.Task, rev, dir string) (jobs []job, err error) {
+func plan(
+	ctx context.Context, t *task.Task, rev, dir string, only Only, reused bool,
+) (jobs []job, err error) {
 	jobs = make([]job, 0, t.Doctor.ReferenceRuns+len(t.Mutants))
 	referenceDiff := t.AbsPath(t.Reference.Path)
 	if _, err := os.Stat(referenceDiff); err != nil {
 		return nil, fmt.Errorf("%w: reference.diff: %w", ErrDoctor, err)
 	}
-	for i := 1; i <= t.Doctor.ReferenceRuns; i++ {
-		label := fmt.Sprintf("reference-%d", i)
-		jobs = append(jobs, job{
-			run:  Run{Label: label, Kind: RunReference, Out: label},
-			diff: referenceDiff,
-		})
+	// matched records which selectors named something, so one that named
+	// nothing is refused rather than quietly narrowing the check to less than
+	// the caller asked for. available is what could have been typed instead.
+	matched := map[string]bool{}
+	var available []string
+	if !reused {
+		for i := 1; i <= t.Doctor.ReferenceRuns; i++ {
+			label := fmt.Sprintf("reference-%d", i)
+			available = append(available, label)
+			if !only.matchesReference(label) {
+				continue
+			}
+			note(matched, only, label, OnlyReference)
+			jobs = append(jobs, job{
+				run:  Run{Label: label, Kind: RunReference, Out: label},
+				diff: referenceDiff,
+			})
+		}
 	}
-	if len(t.Mutants) == 0 {
+
+	var wanted []int
+	for i, mutant := range t.Mutants {
+		label := labelFor(fmt.Sprintf("mutant-%d-%s", i, stem(mutant.Diff)))
+		available = append(available, stem(mutant.Diff))
+		if !only.matchesMutant(label, mutant.Diff) {
+			continue
+		}
+		note(matched, only, label, OnlyMutants, mutant.Diff,
+			filepath.Base(filepath.FromSlash(mutant.Diff)), stem(mutant.Diff))
+		wanted = append(wanted, i)
+	}
+	if unmatched := only.Unmatched(matched); len(unmatched) > 0 {
+		return nil, errNoSuchSelector(unmatched, available)
+	}
+	if len(wanted) == 0 {
 		// Nothing to compose, and nothing to measure a rate over. The check
 		// still runs: whether the verifier accepts the reference is half of
 		// what it is for, and the missing half is what makes the verdict
@@ -467,7 +618,8 @@ func plan(ctx context.Context, t *task.Task, rev, dir string) (jobs []job, err e
 		}
 	}()
 
-	for i, mutant := range t.Mutants {
+	for _, i := range wanted {
+		mutant := t.Mutants[i]
 		label := labelFor(fmt.Sprintf("mutant-%d-%s", i, stem(mutant.Diff)))
 		index := i
 		run := Run{
@@ -498,6 +650,20 @@ func plan(ctx context.Context, t *task.Task, rev, dir string) (jobs []job, err e
 		jobs = append(jobs, job{run: run, diff: path})
 	}
 	return jobs, nil
+}
+
+// note records that a planned verification answered to one of the selectors,
+// so Unmatched can tell a narrowed check from a mistyped one. An empty
+// selection matches everything and has nothing to record.
+func note(matched map[string]bool, only Only, names ...string) {
+	if only.Empty() {
+		return
+	}
+	for _, name := range names {
+		if only.Wants(name) {
+			matched[name] = true
+		}
+	}
 }
 
 // combine writes reference-then-mutant as one patch against the revision.
@@ -737,6 +903,20 @@ func verdict(runs []Run, counts Aggregates) vocab.Health {
 			run.Expect == task.ExpectKilled && run.Outcome == OutcomeSurvived {
 			return vocab.HealthUnhealthy
 		}
+	}
+	// A rate that is not evidence is not a rate to compare to anything, in
+	// either direction. The two ways a verifier is unhealthy without one — the
+	// reference failed, or a hand-written mutant survived — are both returned
+	// above; what is left is a check that did not establish the verifier accepts
+	// anything, which is the definition of inconclusive.
+	//
+	// This sits above the threshold comparison rather than below it because a
+	// check narrowed with --only to the mutants alone has no reference run at
+	// all: it would otherwise report `unhealthy` off a rate the same report
+	// prints as "not evidence", which is the pairing record.go exists to
+	// prevent, arrived at from the other side.
+	if !counts.KillRateMeaningful {
+		return vocab.HealthInconclusive
 	}
 	// Strictly below the threshold fails, so a threshold of 1 is reachable.
 	if counts.KillRate != nil && *counts.KillRate < counts.KillRateMin {
