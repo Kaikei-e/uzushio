@@ -22,10 +22,11 @@ uzushio depends on both layers below it. Neither of them depends on uzushio.
 
 - the specification corpus under `spec/` and the conformance tests under
   `tests/conform/`;
-- a Go module and three commands: `uzushio docdag-config`, which generates the
+- a Go module and four commands: `uzushio docdag-config`, which generates the
   `docdag.yaml` the corpus is validated under; `uzushio task doctor`, which
-  measures a CMoA task's verifier; and `uzushio task mutate`, which writes the
-  mutants it is measured with;
+  measures a CMoA task's verifier; `uzushio task mutate`, which writes the
+  mutants it is measured with; and `uzushio task calibrate`, which re-centres a
+  banded verifier's tolerances on the host that runs it;
 - four kinds for the harness-improvement loop — `edit` (a proposed change to
   one harness surface), `pattern` (a recurring failure, written as an STPA
   unsafe control action), `run` (one evaluation of one edit on one split) and
@@ -48,6 +49,7 @@ anything, the verifier itself is measured.
 uzushio task doctor --task examples/task-hello        # measure the verifier
 uzushio task doctor --task . --vault . --json         # record it, and print the report
 uzushio task mutate --task . --operators arith,cond   # write more mutants
+uzushio task calibrate --task . --from doctor/<id>/report.json  # re-centre its bands
 ```
 
 `doctor` asks the two questions that can be asked without knowing what the
@@ -111,30 +113,215 @@ reporting the count per operator. `--keep-nonviable` turns the check off.
 for `examples/task-hello` is docker. `mutate` needs `git` and a Go toolchain,
 and never runs the verifier.
 
+### Running less than everything
+
+A full check of a slow verifier is an hour and a half — five reference runs and
+seven mutants at seven minutes each — and most questions are much smaller than
+that. `--only` runs part of the check; `--reuse-reference` takes the reference
+block from an earlier one.
+
+```sh
+# a mutant was added: verify that one mutant, and reuse the reference block   ~7 min
+uzushio task doctor --task . --only 0003-slow-tick \
+  --reuse-reference doctor/<earlier-run-id>/report.json
+
+# drift check: does the verifier still accept correct code?                  ~35 min
+uzushio task doctor --task . --only reference
+
+# a re-calibration, or anything that changed the verifier: everything        ~90 min
+uzushio task doctor --task .
+```
+
+`--only` takes `reference`, `mutants`, a run label (`reference-2`,
+`mutant-2-0003-slow-tick`) or a mutant's diff (`0003-slow-tick`,
+`0003-slow-tick.diff`, `mutants/0003-slow-tick.diff`), and repeats. **A selector
+that matches nothing is refused**, because the failure it prevents is a typo
+producing a clean report about a mutant nobody verified.
+
+How many reference runs there are stays `doctor.reference_runs` in `task.json`.
+That is the task's own judgement about how many runs it takes to see this
+verifier's false-positive rate — 5 for the banded task, 3 by default — and a
+flag that quietly lowered it would answer a different question from the one the
+task asks.
+
+A check narrowed to the mutants alone reports **inconclusive**, whatever its
+kill rate: nothing in it said the verifier accepts a correct solution, so the
+rate is not evidence of detection. That is what `--reuse-reference` is for.
+
+#### Reusing a reference block honestly
+
+```sh
+uzushio task doctor --task . --reuse-reference doctor/<run-id>/report.json
+```
+
+The reference runs are copied into the new report whole — band rows included,
+which is what a calibration is built from — each marked `reused_from: <run-id>`,
+and counted as the reference runs they are. The record in the vault gets one
+line saying where they came from.
+
+It is refused unless the earlier check measured **the same task, at the same
+revision, under the same verifier**. The first two are the report's `task` and
+`rev`. The third is a new `environment` fingerprint that every report now
+carries: a sha256 over the task's `verify` block, its compose file, everything
+that compose file bind-mounts into the verify service from inside the task
+directory (a file by its bytes, a directory by its sorted tree), the Dockerfile
+the service builds from, and the built image's id.
+
+The mounts are **discovered from the compose file**, not from a list of names.
+What the container is given is what decides what it measures, and the compose
+file is where that is written down — so a task that mounts a differently named
+file is covered without this being told about it, and a scratch file nobody
+mounts does not invalidate anything.
+
+The fingerprint lists its own components, so a refusal names what differs rather
+than only that something does; where docker cannot be reached the image is left
+out and the component list says so, which means a fingerprint taken without
+docker never silently matches one taken with it.
+
+The image is in there because it is the part of the environment least visible in
+a diff. A rebuilt base layer is a different machine to measure on and nothing in
+the task directory changes when it happens — and a reference block carried
+across that is a green line about a verifier that no longer exists.
+
+## Banded verifiers
+
+A verifier does not have to answer with an exit code. A task whose `verify.kind`
+is `band` runs a verifier that prints one measured value per invariant with the
+band it is held to, in a CSV block ending each run:
+
+```
+invariant,value,ci_half,band_lo,band_hi,verdict
+p50_latency_ms,0.482,0.019,0.30,0.45,fail
+```
+
+`verdict` is `pass`, `fail`, `skipped` (the input never arrived) or `info`
+(reported, never judged). `cmoa verify` reads those rows and reports which
+invariant answered, so a report can say *killed via `queue_depth`, 120000
+against a band of 0–0* instead of only *the verifier said no* — and can tell "an
+invariant left its band" apart from "the harness produced nothing", which one
+exit code cannot. `doctor` carries the rows into `report.json` and runs a banded
+task one verification at a time, because two containers measuring latency on one
+machine measure each other.
+
+### Calibrating a band
+
+**A band is a claim about a machine.** A gate whose bands were calibrated
+somewhere else does not report that a host is different; it reports that every
+solution is wrong — and the kill rate it then produces is that false positive
+read back, because a verifier which rejects the reference rejects the mutants
+with it. `doctor` measures exactly this, and `calibrate` is what is done about
+it.
+
+```sh
+uzushio task calibrate --task . --from doctor/<run-id>/report.json --dry-run
+```
+
+**Its only input is doctor reports.** Every band row carries both the value
+measured and the band it was judged against, so the reports already hold what
+this host reads and what it was expected to read. Nothing is opened in the
+task's repository, and this knows nothing about the format any gate keeps its
+own bands in.
+
+The rule is a two-sided normal tolerance interval about the median:
+
+```
+centre = median(v)
+w      = max( k₂(N, 0.95, 0.90) · s , 0.02 · |centre| , floor[unit] )
+band   = centre ∓ w
+```
+
+`s` is the sample standard deviation between whole verifications and `k₂` is the
+two-sided normal tolerance factor — 4.164 at N = 5, falling to 3.021 at N = 10
+(NBS Handbook 91 Table A-6; equivalently ISO 16269-6 and NIST/SEMATECH §7.2.6.3).
+Three standard deviations would be the obvious multiplier and is the wrong one:
+at N = 5 the sample `s` has a 34 % coefficient of variation, so `mean ± 3s` is a
+**95/73** interval — it delivers the coverage its label implies about 73 % of the
+time. Fewer than five runs is an error, not a warning.
+
+The floors are what keep a band from collapsing. Only two units are recognisable
+from an invariant's name, so a ratio or a count that happens to read identically
+on every run would otherwise derive the band `[x, x]` — which rejects the next
+clean run. The relative floor applies to every derived band; where even that has
+no scale to work from (a centre of zero, no spread, no unit) the calibration
+**refuses** rather than writing a band nobody can pass. `--rel-floor`,
+`--floor-us`, `--floor-ms`, `--centre`, `--spread`, `--k` and `--lower` move the
+rule; `--min-runs` moves the threshold.
+
+Three refusals are the substance of it rather than details:
+
+- a band **the reference never left** is copied through unchanged, because
+  calibration repairs the bands that do not hold here and widening the ones that
+  do would trade a verifier that rejects everything for one that accepts
+  everything;
+- a **quantised** invariant — whole units against a band of whole units — is
+  never derived, because a statistical width over it states the instrument's
+  resolution rather than anything about the host; derive that band from what the
+  invariant means and make the regression you want caught bigger than one unit;
+- an invariant named with **`--keep`** is never derived. Some bands are centred
+  on arithmetic rather than on a host — a ratio against a computed expectation —
+  and re-centring one on an observed shortfall writes the shortfall down as the
+  expectation. The tool cannot tell which those are, so the task says:
+
+```sh
+uzushio task calibrate --task . --from doctor/<run-id>/report.json \
+  --keep <invariant>
+```
+
+A `--keep` that names an invariant nobody measured is refused, since the typo
+would mean the band it was meant to protect was re-centred anyway.
+
+### bands.json, and the task's adapter
+
+The output is `bands.json` — uzushio's shape, not any gate's:
+
+```json
+{
+  "schema_version": 1,
+  "task": "<id>", "rev": "<sha>",
+  "source_runs": ["<doctor run id>"], "day": "2026-09-05", "n": 5,
+  "rule": {
+    "statistic": "normal-tolerance-interval",
+    "p": 0.95, "gamma": 0.9, "k2": 4.164,
+    "rel_floor": 0.02, "floors": {"us": 0.1, "ms": 0.005}, "lower": "derive"
+  },
+  "invariants": {
+    "p50_latency_ms": {
+      "lo": 0.4312, "hi": 0.5328, "centre": 0.482,
+      "half_width": 0.0508, "three_ci_half": 0.057,
+      "kept": false, "reason": "derived: k*stdev"
+    }
+  }
+}
+```
+
+`half_width` is null for a kept band, which had none derived. `three_ci_half` is
+three times the largest half-range the verifier itself reported — the width a
+gate's own guidance usually asks for. It is **recorded and never used**: that
+number is the spread *inside* one run with the machine in one state, while a
+band has to cover the spread *between* whole verifications. Writing it down beside
+the derived width is what makes the deviation from that guidance checkable
+rather than asserted.
+
+The key order is deterministic — the schema's for the outside, sorted for the
+invariants — so a re-calibration that changed nothing is an empty diff. The file
+names the task, the revision, the source runs and the rule, and **nothing about
+the machine**: it is committed to somebody's repository.
+
+**Turning `bands.json` into whatever the gate reads is the task's own adapter,
+and that boundary is the point.** The shape of a gate's band file is a fact about
+somebody else's project; exactly one file per task knows it, and the calibration
+stays generic. A task's verifier script is the natural home: it is mounted into
+the container, so a change to what the verifier does is a change reviewers can
+read as a diff.
+
 ### External tasks
 
-A task does not have to be a toy, and its repository does not have to live
-here. `examples/task-plecto-gate` is a task over
-[PlectoProxy](https://github.com/Kaikei-e/PlectoProxy) at one pinned commit:
-`setup.sh` fetches that commit into a gitignored `repo/`, and nothing is added
-to the project itself. Its verifier is that project's own T1 performance gate,
-judged against that project's own bands.
-
-It is also the first task whose `verify.kind` is `band` rather than
-`exit-code`. A banded verifier prints one measured value per invariant with the
-band it is held to; `cmoa verify` reads those rows and reports which invariant
-answered, so a report can say *killed via `rr_spread_req`, 120000 against a band
-of 0–0* instead of only *the verifier said no* — and can tell "an invariant left
-its band" apart from "the harness produced nothing", which one exit code cannot.
-`doctor` carries the rows into `report.json` and runs a banded task one
-verification at a time, because two containers measuring latency on one machine
-measure each other.
-
-The gate's bands are narrow and the project documents a run of unchanged code
-that went PASS, FAIL, PASS. So **the first thing the doctor does there is
-measure the false-positive rate** — `doctor.reference_runs` is 5 — and that
-number is the point of the task, not a preliminary to it. The example's README
-says what that costs and what it does not prove.
+A task does not have to be a toy, and its repository does not have to live here:
+`setup.sh` can fetch one pinned commit of another project into a gitignored
+`repo/`, with nothing added to that project itself and its own verifier used as
+the task's. `examples/task-plecto-gate` is the first such task, and the first
+banded one — its README says what a banded verifier costs and what it does not
+prove.
 
 ## The specification is a graph
 

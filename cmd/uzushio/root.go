@@ -3,9 +3,10 @@
 // `uzushio docdag-config` writes the docdag.yaml the vault is checked under,
 // and `--check` says whether the file on disk is the one the code would write.
 // `uzushio task doctor` measures a CMoA task's verifier against its reference
-// solution and its mutants, and `uzushio task mutate` writes the mutants it is
-// measured with. The `run` and `improve` commands of the harness-improvement
-// loop are not written yet.
+// solution and its mutants, `uzushio task mutate` writes the mutants it is
+// measured with, and `uzushio task calibrate` re-centres a banded verifier's
+// tolerances on the host that runs it. The `run` and `improve` commands of the
+// harness-improvement loop are not written yet.
 package main
 
 import (
