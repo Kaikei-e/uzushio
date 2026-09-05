@@ -1,0 +1,354 @@
+{
+  "schema_version": 1,
+  "suite": "suite-chat",
+  "source": "lmsys/mt_bench_human_judgments",
+  "license": "CC-BY-4.0",
+  "judge": "gpt-oss-20b",
+  "pool": "external",
+  "day": "2026-09-05",
+  "items": 200,
+  "seeds": 2,
+  "unmeasured_items": 0,
+  "unmeasured_rate": 0,
+  "max_unmeasured": 0.1,
+  "over_unmeasured_budget": false,
+  "all_bad_labels": 0,
+  "alpha": 0.05,
+  "level": 0.95,
+  "min_kappa": 0.667,
+  "strata": {
+    "mid": 80,
+    "narrow": 40,
+    "wide": 80
+  },
+  "swap": {
+    "pairs": 1200,
+    "decided": 884,
+    "flips": 124,
+    "flip_rate": {
+      "value": 0.14027149321266968,
+      "successes": 124,
+      "trials": 884,
+      "clusters": 192,
+      "ci": {
+        "lo": 0.11116004368765152,
+        "hi": 0.16938294273768784
+      },
+      "level": 0.95,
+      "method": "cluster-jackknife"
+    },
+    "agreement": {
+      "tie_handling": "abstain-as-category",
+      "ci_method": "cluster-jackknife",
+      "level": 0.95,
+      "n": 1200,
+      "clusters": 200,
+      "categories": [
+        "pair0",
+        "pair1",
+        "abstain"
+      ],
+      "first_marginal": [
+        0.47416666666666674,
+        0.33416666666666667,
+        0.19166666666666665
+      ],
+      "second_marginal": [
+        0.34750000000000003,
+        0.4783333333333333,
+        0.17416666666666666
+      ],
+      "p_o": 0.7358333333333333,
+      "p_e": 0.3579979166666667,
+      "kappa": 0.588526776587563,
+      "pabak": 0.60375,
+      "ci": {
+        "lo": 0.5376345991364299,
+        "hi": 0.6394189540386962
+      },
+      "alpha": 0.05
+    }
+  },
+  "rerun": {
+    "seeds": 2,
+    "comparisons": 200,
+    "agreement": {
+      "tie_handling": "abstain-as-category",
+      "ci_method": "cluster-jackknife",
+      "level": 0.95,
+      "n": 200,
+      "clusters": 200,
+      "categories": [
+        "c1",
+        "c2",
+        "c3",
+        "abstain"
+      ],
+      "first_marginal": [
+        0.19,
+        0.15000000000000002,
+        0.15,
+        0.51
+      ],
+      "second_marginal": [
+        0.135,
+        0.14500000000000002,
+        0.14500000000000002,
+        0.575
+      ],
+      "p_o": 0.885,
+      "p_e": 0.36239999999999994,
+      "kappa": 0.8196361355081556,
+      "pabak": 0.8466666666666667,
+      "ci": {
+        "lo": 0.7493438924005977,
+        "hi": 0.8899283786157135
+      },
+      "alpha": 0.05
+    }
+  },
+  "validity": {
+    "gold": {
+      "reference": "gold",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 200,
+        "clusters": 200,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0.19,
+          0.15,
+          0.15,
+          0.51
+        ],
+        "second_marginal": [
+          0.235,
+          0.205,
+          0.23500000000000001,
+          0.32499999999999996
+        ],
+        "p_o": 0.48000000000000004,
+        "p_e": 0.2764,
+        "kappa": 0.281370923161968,
+        "pabak": 0.3066666666666667,
+        "ci": {
+          "lo": 0.18327722643293393,
+          "hi": 0.37946461989100205
+        },
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 70,
+        "clusters": 70,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0.4142857142857143,
+          0.3142857142857143,
+          0.2714285714285714
+        ],
+        "second_marginal": [
+          0.35714285714285715,
+          0.32857142857142857,
+          0.3142857142857143
+        ],
+        "p_o": 0.8428571428571429,
+        "p_e": 0.336530612244898,
+        "kappa": 0.7631498000615196,
+        "pabak": 0.7642857142857142,
+        "ci": {
+          "lo": 0.6337612402506344,
+          "hi": 0.8925383598724047
+        },
+        "alpha": 0.05
+      },
+      "from_gold": 200,
+      "from_labels": 0
+    },
+    "human": {
+      "reference": "human",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 200,
+        "clusters": 200,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0.19,
+          0.15,
+          0.15,
+          0.51
+        ],
+        "second_marginal": [
+          0.235,
+          0.205,
+          0.23500000000000001,
+          0.32499999999999996
+        ],
+        "p_o": 0.48000000000000004,
+        "p_e": 0.2764,
+        "kappa": 0.281370923161968,
+        "pabak": 0.3066666666666667,
+        "ci": {
+          "lo": 0.18327722643293393,
+          "hi": 0.37946461989100205
+        },
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 70,
+        "clusters": 70,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0.4142857142857143,
+          0.3142857142857143,
+          0.2714285714285714
+        ],
+        "second_marginal": [
+          0.35714285714285715,
+          0.32857142857142857,
+          0.3142857142857143
+        ],
+        "p_o": 0.8428571428571429,
+        "p_e": 0.336530612244898,
+        "kappa": 0.7631498000615196,
+        "pabak": 0.7642857142857142,
+        "ci": {
+          "lo": 0.6337612402506344,
+          "hi": 0.8925383598724047
+        },
+        "alpha": 0.05
+      },
+      "from_gold": 200,
+      "from_labels": 0
+    },
+    "labels": {
+      "reference": "labels",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 0,
+        "clusters": 0,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "second_marginal": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "p_o": 0,
+        "p_e": 0,
+        "kappa": null,
+        "pabak": null,
+        "ci": null,
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 0,
+        "clusters": 0,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0,
+          0,
+          0
+        ],
+        "second_marginal": [
+          0,
+          0,
+          0
+        ],
+        "p_o": 0,
+        "p_e": 0,
+        "kappa": null,
+        "pabak": null,
+        "ci": null,
+        "alpha": 0.05
+      },
+      "from_gold": 0,
+      "from_labels": 0
+    }
+  },
+  "outcomes": {
+    "total": 400,
+    "by_kind": {
+      "no_candidate": 217,
+      "selected": 183
+    },
+    "unmeasured_runs": 0,
+    "no_candidate_by_reason": {
+      "all_draws": 30,
+      "cycle": 1,
+      "invalid_output": 11,
+      "no_majority": 175
+    },
+    "no_candidate_rate": {
+      "value": 0.51,
+      "successes": 102,
+      "trials": 200,
+      "clusters": 200,
+      "ci": {
+        "lo": 0.4411858767845865,
+        "hi": 0.5784372166878682
+      },
+      "level": 0.95,
+      "method": "wilson"
+    },
+    "calls": 2400,
+    "invalid_output_retries": 41,
+    "invalid_output_retry_rate": 0.017083333333333332
+  },
+  "latency": {
+    "median_ms": 31867,
+    "min_ms": 11343,
+    "max_ms": 213102,
+    "total_ms": 15443671
+  },
+  "human_kappa": 0.281370923161968,
+  "n_human": 200,
+  "verdict": "uncalibrated"
+}
