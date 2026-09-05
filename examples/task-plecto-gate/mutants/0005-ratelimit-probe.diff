@@ -1,12 +1,19 @@
 diff --git a/plecto/crates/host/src/state.rs b/plecto/crates/host/src/state.rs
-index cd59002..3160f10 100644
+index cd59002..f978e5d 100644
 --- a/plecto/crates/host/src/state.rs
 +++ b/plecto/crates/host/src/state.rs
-@@ -561,6 +561,7 @@ impl host_ratelimit::Host for HostState {
+@@ -561,6 +561,14 @@ impl host_ratelimit::Host for HostState {
              };
          };
          let nskey = self.ns_key(TAG_RATELIMIT, &key);
-+        let _probe = self.kv.get(&nskey); // "check before charge"
++        // "check before charge", re-reading the bucket once per shard it may be split across.
++        // Both black_box calls are load-bearing: the key so the reads cannot be folded into
++        // one, the count so the loop is not dead. See task.json for the sizing.
++        let mut probed = 0usize;
++        for _ in 0..1200 {
++            probed += usize::from(self.kv.get(std::hint::black_box(&nskey)).is_some());
++        }
++        std::hint::black_box(probed);
          let kv = &self.kv;
          let key_len = key.len();
          let now_ms = self.now_ms;

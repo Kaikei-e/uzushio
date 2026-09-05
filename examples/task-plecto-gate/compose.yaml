@@ -30,6 +30,17 @@ services:
     volumes:
       - ${CMOA_CANDIDATE_DIR:?set by cmoa verify}:/work
       - ./gate.sh:/gate.sh:ro
+      # This host's bands, from `uzushio task calibrate`. gate.sh is the adapter: it
+      # renders the tracked bench/perf/gate_tolerances.toml from this file inside the
+      # candidate worktree — which is a throwaway — and says so on stdout. Read-only
+      # here so the container cannot edit the committed file; PlectoProxy's own tree
+      # is never touched either way.
+      #
+      # `uzushio task doctor` hashes this mount into the report's environment
+      # fingerprint, because it discovers the mounts from this compose file. So
+      # re-calibrating invalidates --reuse-reference, which is exactly right: a
+      # reference block measured against other bands is not evidence about these.
+      - ./bands.json:/bands.json:ro
       # The freshness guard hard-codes plecto/target/release/examples and does
       # not honour CARGO_TARGET_DIR, so the build must land at exactly this
       # path. These three volumes are `external` because CMoA tears the project
