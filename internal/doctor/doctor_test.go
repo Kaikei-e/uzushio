@@ -947,7 +947,7 @@ func (l labelled) Verify(ctx context.Context, req verifyrunner.Request) (verifyr
 	return result, nil
 }
 
-// failingReference is the shape of the 2026-09-05 plecto-gate check: the
+// failingReference is the shape of the 2026-09-05 banded check: the
 // verifier rejects the reference on a set of bands the machine cannot hold, and
 // then rejects every mutant — including the ones the task declares equivalent.
 // One mutant breaks a band the reference held, and that one is real detection.

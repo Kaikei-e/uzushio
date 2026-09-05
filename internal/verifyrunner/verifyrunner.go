@@ -69,9 +69,9 @@ const SchemaVersion = 1
 // it was held to, and what that means.
 //
 // Every number is a pointer because every number may be absent. A `skipped` row
-// is an invariant whose input never arrived — no k6 in the image, a generator
-// that did not run — and an `info` row is one that is reported and never
-// judged; neither carries a value, and a zero would read as a measurement.
+// is an invariant whose input never arrived — a load generator missing from the
+// image, a step that did not run — and an `info` row is one that is reported and
+// never judged; neither carries a value, and a zero would read as a measurement.
 type BandRow struct {
 	Invariant string   `json:"invariant"`
 	Value     *float64 `json:"value"`
@@ -89,7 +89,7 @@ type BandRow struct {
 // status, and reading them a second time here would be a second opinion nobody
 // asked for. It is carried so that a report says which invariant moved, which
 // is the difference between "the verifier rejected this mutant" and "the
-// verifier rejected this mutant because rr_spread_req left 0-0".
+// verifier rejected this mutant because <invariant> left its band".
 type Band struct {
 	Judged  int       `json:"judged"`
 	Failed  []string  `json:"failed"`
