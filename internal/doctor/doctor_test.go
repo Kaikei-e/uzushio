@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/Kaikei-e/DocDag/lint"
 	"github.com/Kaikei-e/DocDag/model"
 
+	"github.com/Kaikei-e/uzushio/internal/doc"
 	"github.com/Kaikei-e/uzushio/internal/doctor"
 	"github.com/Kaikei-e/uzushio/internal/task"
 	"github.com/Kaikei-e/uzushio/internal/vault"
@@ -726,4 +728,423 @@ func TestLabelsAreLowerCase(t *testing.T) {
 // labelRune reports whether a rune may appear in a CMoA label.
 func labelRune(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_'
+}
+
+// --- banded verifiers -------------------------------------------------------
+
+// bandOf is the answer a banded verifier gives: one invariant judged and
+// failed, one it could not measure at all.
+func bandOf(status verifyrunner.Status) *verifyrunner.Band {
+	band := &verifyrunner.Band{
+		Judged:  1,
+		Skipped: []string{"ratelimit_tax_us"},
+		Rows: []verifyrunner.BandRow{
+			{Invariant: "ratelimit_tax_us", Verdict: "skipped"},
+		},
+	}
+	verdict := "pass"
+	if status == verifyrunner.StatusFail {
+		verdict = "fail"
+		band.Failed = []string{"rr_spread_req"}
+	}
+	value, zero := 0.0, 0.0
+	band.Rows = append(band.Rows, verifyrunner.BandRow{
+		Invariant: "rr_spread_req", Value: &value, BandLo: &zero, BandHi: &zero, Verdict: verdict,
+	})
+	return band
+}
+
+// banded is a fake that answers with band rows as well as a status.
+type banded struct{ inner *fake }
+
+func (b banded) Verify(ctx context.Context, req verifyrunner.Request) (verifyrunner.Result, error) {
+	result, err := b.inner.Verify(ctx, req)
+	if err != nil {
+		return result, err
+	}
+	result.Band = bandOf(result.Status)
+	return result, nil
+}
+
+// bandTask is newTask's task with the verifier kind the band rows come from.
+func bandTask(t *testing.T, doctorSpec string, mutants []mutantSpec) *task.Task {
+	t.Helper()
+	loaded := newTask(t, doctorSpec, mutants)
+	loaded.Verify.Kind = task.KindBand
+	return loaded
+}
+
+// TestParallelFor is the whole of the rule, said once: a banded verifier runs
+// one at a time unless a person typed otherwise, and either way says so.
+func TestParallelFor(t *testing.T) {
+	tests := []struct {
+		name      string
+		kind      task.Kind
+		requested int
+		explicit  bool
+		want      int
+		warns     string
+	}{
+		{"exit-code keeps its default", task.KindExitCode, 0, false, doctor.DefaultParallel, ""},
+		{"exit-code keeps what it was given", task.KindExitCode, 4, true, 4, ""},
+		{"band overrules the default", task.KindBand, 0, false, 1, "runs 1 verification at a time"},
+		{"band overrules an inherited 2", task.KindBand, 2, false, 1, "runs 1 verification at a time"},
+		{"band keeps a typed 3", task.KindBand, 3, true, 3, "--parallel 3 on a task"},
+		{"band at one says nothing", task.KindBand, 1, true, 1, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, warning := doctor.ParallelFor(tt.kind, tt.requested, tt.explicit)
+			if got != tt.want {
+				t.Errorf("parallel = %d, want %d", got, tt.want)
+			}
+			switch {
+			case tt.warns == "" && warning != "":
+				t.Errorf("warning = %q, want none", warning)
+			case tt.warns != "" && !strings.Contains(warning, tt.warns):
+				t.Errorf("warning = %q, want it to say %q", warning, tt.warns)
+			}
+			if warning != "" && !strings.Contains(warning, "measures contention") {
+				t.Errorf("warning = %q, which does not say why", warning)
+			}
+		})
+	}
+}
+
+// TestBandRunsOneAtATime checks the rule where it matters rather than where it
+// is written: a banded check that ran two containers at once measured the two
+// containers against each other.
+func TestBandRunsOneAtATime(t *testing.T) {
+	loaded := bandTask(t, `{"kill_rate_min": 0.8, "reference_runs": 3}`, twoHandMutants)
+	runner := killer()
+	for i := 1; i <= 3; i++ {
+		runner.byLabel["reference-"+strconv.Itoa(i)] = verifyrunner.StatusPass
+	}
+	counter := &counting{inner: banded{inner: runner}}
+	var warnings []string
+	if _, err := doctor.Check(t.Context(), doctor.Options{
+		Task:     loaded,
+		Runner:   counter,
+		Dir:      filepath.Join(t.TempDir(), "out"),
+		Parallel: 4,
+		Warn:     func(line string) { warnings = append(warnings, line) },
+	}); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if counter.max != 1 {
+		t.Errorf("%d verifications ran at once on a banded verifier", counter.max)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "runs 1 verification at a time") {
+		t.Errorf("warnings = %q", warnings)
+	}
+}
+
+// counting records how many verifications were in flight at once.
+type counting struct {
+	inner verifyrunner.Runner
+	mu    sync.Mutex
+	live  int
+	max   int
+}
+
+func (c *counting) Verify(ctx context.Context, req verifyrunner.Request) (verifyrunner.Result, error) {
+	c.mu.Lock()
+	c.live++
+	if c.live > c.max {
+		c.max = c.live
+	}
+	c.mu.Unlock()
+	// Long enough that two overlapping runs overlap observably; the fake does
+	// no work of its own, so without it every run is over before the next
+	// starts whatever the limit is.
+	time.Sleep(5 * time.Millisecond)
+	result, err := c.inner.Verify(ctx, req)
+	c.mu.Lock()
+	c.live--
+	c.mu.Unlock()
+	return result, err
+}
+
+// TestBandRowsReachTheReport is why the band is carried at all: the report says
+// which invariant answered, and the summary names it.
+func TestBandRowsReachTheReport(t *testing.T) {
+	loaded := bandTask(t, `{"kill_rate_min": 0.8, "reference_runs": 1}`, twoHandMutants)
+	runner := killer()
+	runner.byLabel["reference-1"] = verifyrunner.StatusPass
+	// One mutant nobody caught. Its band is the interesting one: nothing left a
+	// band, and one invariant was never measured at all.
+	runner.byLabel["mutant-0-times"] = verifyrunner.StatusPass
+	report := check(t, loaded, banded{inner: runner})
+
+	for _, run := range report.Runs {
+		if run.Band == nil {
+			t.Fatalf("%s carries no band", run.Label)
+		}
+		if len(run.Band.Rows) != 2 {
+			t.Fatalf("%s carries %d band rows", run.Label, len(run.Band.Rows))
+		}
+		if run.Band.Rows[0].Value != nil {
+			t.Errorf("%s: a skipped row carries a value", run.Label)
+		}
+	}
+	body, err := report.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	if !strings.Contains(string(body), `"invariant": "rr_spread_req"`) {
+		t.Fatalf("the report does not hold the band rows:\n%s", body)
+	}
+	// The line a reader needs when a mutant survives: it says where the blind
+	// spot is, which for a banded verifier is usually an invariant that
+	// reported skipped rather than one the mutant did not move.
+	summary := strings.Join(report.Summary(), "\n")
+	if !strings.Contains(summary, "survived: mutants/times.diff (hand) [skipped: ratelimit_tax_us]") {
+		t.Fatalf("the summary does not name the skipped invariant:\n%s", summary)
+	}
+}
+
+// TestBandNamesTheFailedInvariant is the reference half: a false positive says
+// which measurement moved, not only that the verifier said no.
+func TestBandNamesTheFailedInvariant(t *testing.T) {
+	loaded := bandTask(t, `{"kill_rate_min": 0.8, "reference_runs": 2}`, twoHandMutants)
+	runner := killer()
+	runner.byLabel["reference-1"] = verifyrunner.StatusPass
+	runner.byLabel["reference-2"] = verifyrunner.StatusFail
+	report := check(t, loaded, banded{inner: runner})
+
+	if report.Verdict != vocab.HealthUnhealthy {
+		t.Fatalf("verdict = %q, want unhealthy: the reference failed", report.Verdict)
+	}
+	summary := strings.Join(report.Summary(), "\n")
+	if !strings.Contains(summary, "reference-2: fail [out of band: rr_spread_req") {
+		t.Fatalf("the summary does not name the band that failed:\n%s", summary)
+	}
+}
+
+// --- a kill rate that is not evidence ----------------------------------------
+
+// labelled answers with a band chosen per label, so a test can say what the
+// reference measured and what each mutant measured separately.
+type labelled struct {
+	inner *fake
+	bands map[string][]string // label -> the invariants that failed
+}
+
+func (l labelled) Verify(ctx context.Context, req verifyrunner.Request) (verifyrunner.Result, error) {
+	result, err := l.inner.Verify(ctx, req)
+	if err != nil {
+		return result, err
+	}
+	failed := l.bands[req.Label]
+	band := &verifyrunner.Band{Judged: 4, Failed: failed}
+	for _, name := range failed {
+		value, zero := 1.0, 0.0
+		band.Rows = append(band.Rows, verifyrunner.BandRow{
+			Invariant: name, Value: &value, BandLo: &zero, BandHi: &zero, Verdict: "fail",
+		})
+	}
+	result.Band = band
+	return result, nil
+}
+
+// failingReference is the shape of the 2026-09-05 plecto-gate check: the
+// verifier rejects the reference on a set of bands the machine cannot hold, and
+// then rejects every mutant — including the ones the task declares equivalent.
+// One mutant breaks a band the reference held, and that one is real detection.
+func failingReference(t *testing.T) *doctor.Report {
+	t.Helper()
+	loaded := bandTask(t, `{"kill_rate_min": 0.8, "reference_runs": 2}`, []mutantSpec{
+		{"times", task.ExpectKilled, task.OriginHand},
+		{"swapped", task.ExpectKilled, task.OriginHand},
+		{"comment", task.ExpectEquivalent, task.OriginHand},
+	})
+	runner := killer() // everything fails, reference included
+	return check(t, loaded, labelled{
+		inner: runner,
+		bands: map[string][]string{
+			"reference-1":      {"dispatch_floor_us", "apikey_cost_us"},
+			"reference-2":      {"dispatch_floor_us", "apikey_cost_us"},
+			"mutant-0-times":   {"dispatch_floor_us", "apikey_cost_us"},
+			"mutant-1-swapped": {"dispatch_floor_us", "ejection_transition_s"},
+			"mutant-2-comment": {"apikey_cost_us"},
+		},
+	})
+}
+
+// TestKillRateIsNotEvidenceWhenTheReferenceFails is the whole of the rule: a
+// verifier that says no to the reference says no to everything, so the rate it
+// produces is the false positive read back at 1.00.
+func TestKillRateIsNotEvidenceWhenTheReferenceFails(t *testing.T) {
+	report := failingReference(t)
+
+	if report.Verdict != vocab.HealthUnhealthy {
+		t.Fatalf("verdict = %q, want unhealthy", report.Verdict)
+	}
+	counts := report.Aggregates
+	if counts.ReferenceFailures != 2 || counts.Killed != 2 || counts.Equivalent != 1 {
+		t.Fatalf("aggregates = %+v", counts)
+	}
+	if counts.KillRate == nil || *counts.KillRate != 1 {
+		t.Fatalf("kill rate = %v, want 1.00: every mutant was rejected", counts.KillRate)
+	}
+	if counts.KillRateMeaningful {
+		t.Fatal("kill_rate_meaningful is true although the reference failed twice")
+	}
+	body, err := report.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	if !strings.Contains(string(body), `"kill_rate_meaningful": false`) {
+		t.Fatalf("the report does not carry the flag:\n%s", body)
+	}
+}
+
+// TestSummaryRefusesToCompareARateThatIsNotEvidence checks the line a person
+// reads. The threshold is deliberately absent: a number nobody may use is a
+// number nobody may compare.
+func TestSummaryRefusesToCompareARateThatIsNotEvidence(t *testing.T) {
+	summary := strings.Join(failingReference(t).Summary(), "\n")
+	want := "kill rate: 1.00 — not evidence: the reference itself failed, so every mutant fails with it"
+	if !strings.Contains(summary, want) {
+		t.Fatalf("the summary does not say the rate is not evidence:\n%s", summary)
+	}
+	if strings.Contains(summary, "(minimum") {
+		t.Errorf("the summary compared an unusable rate to the threshold:\n%s", summary)
+	}
+	// The one mutant that broke a band the reference held is the one thing the
+	// check still says, so the summary says it.
+	if !strings.Contains(summary, "beyond the reference: mutants/swapped.diff (ejection_transition_s)") {
+		t.Fatalf("the summary does not name the differential:\n%s", summary)
+	}
+	if strings.Contains(summary, "beyond the reference: mutants/times.diff") {
+		t.Errorf("a mutant that broke nothing new was reported as detection:\n%s", summary)
+	}
+}
+
+// TestMutantsCarryTheOutcomeNote is what a reader of report.json sees: the
+// outcome still says killed, because that is what happened, and the note says
+// what it is worth.
+func TestMutantsCarryTheOutcomeNote(t *testing.T) {
+	report := failingReference(t)
+	notes := map[string]string{}
+	beyond := map[string][]string{}
+	for _, run := range report.Runs {
+		if run.Kind != doctor.RunMutant {
+			if run.OutcomeNote != "" {
+				t.Errorf("the reference run %s carries an outcome note %q", run.Label, run.OutcomeNote)
+			}
+			continue
+		}
+		if run.Outcome != doctor.OutcomeKilled {
+			t.Fatalf("%s: outcome = %q, want killed", run.Label, run.Outcome)
+		}
+		notes[run.Diff] = run.OutcomeNote
+		beyond[run.Diff] = run.BandsBeyondReference
+	}
+	for diff, note := range notes {
+		if note != "reference also failed" {
+			t.Errorf("%s: outcome_note = %q", diff, note)
+		}
+	}
+	// The union of the reference's failed bands is what a mutant is measured
+	// against, so apikey_cost_us counts for neither of the two that repeat it.
+	if got := beyond["mutants/swapped.diff"]; len(got) != 1 || got[0] != "ejection_transition_s" {
+		t.Errorf("swapped: bands_beyond_reference = %v", got)
+	}
+	if got := beyond["mutants/times.diff"]; got != nil {
+		t.Errorf("times: bands_beyond_reference = %v, want none", got)
+	}
+	if got := beyond["mutants/comment.diff"]; got != nil {
+		t.Errorf("comment: bands_beyond_reference = %v, want none", got)
+	}
+}
+
+// TestRecordWritesNotAvailable is the record's half. A rate that is not
+// evidence is written as a word, so a frontmatter scan cannot read it as one.
+func TestRecordWritesNotAvailable(t *testing.T) {
+	report := failingReference(t)
+	document, err := report.Document("doctor/x/report.json")
+	if err != nil {
+		t.Fatalf("Document: %v", err)
+	}
+	if document.KillRate != doc.KillRateNotEvidence {
+		t.Fatalf("KillRate = %v, want the not-evidence sentinel", document.KillRate)
+	}
+	body, err := document.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+	// Bare rather than quoted: yaml quotes "3" because it would otherwise read
+	// back as an integer, and leaves n/a alone because it cannot. Both are the
+	// strings DocDag compares as text.
+	if !strings.Contains(string(body), "kill_rate: n/a\n") {
+		t.Fatalf("the record does not write n/a:\n%s", body)
+	}
+	if !strings.Contains(string(body), "not evidence: the reference itself failed") {
+		t.Fatalf("the record's body does not carry the caveat:\n%s", body)
+	}
+}
+
+// TestKillRateIsMeaningfulWhenTheReferenceHolds is the other side. Nothing
+// about a healthy check changes: the rate is a rate, the threshold is printed
+// beside it, and no run carries a note.
+func TestKillRateIsMeaningfulWhenTheReferenceHolds(t *testing.T) {
+	loaded := newTask(t, `{"kill_rate_min": 0.8, "reference_runs": 2}`, twoHandMutants)
+	runner := killer()
+	runner.byLabel["reference-1"] = verifyrunner.StatusPass
+	runner.byLabel["reference-2"] = verifyrunner.StatusPass
+	report := check(t, loaded, runner)
+
+	if !report.Aggregates.KillRateMeaningful {
+		t.Fatal("kill_rate_meaningful is false although both reference runs passed")
+	}
+	summary := strings.Join(report.Summary(), "\n")
+	if !strings.Contains(summary, "kill rate: 1.00 (minimum 0.80)") {
+		t.Fatalf("the summary lost the rate or the threshold:\n%s", summary)
+	}
+	if strings.Contains(summary, "not evidence") {
+		t.Errorf("a healthy check was told its rate is not evidence:\n%s", summary)
+	}
+	for _, run := range report.Runs {
+		if run.OutcomeNote != "" || run.BandsBeyondReference != nil {
+			t.Errorf("%s carries %q / %v", run.Label, run.OutcomeNote, run.BandsBeyondReference)
+		}
+	}
+	document, err := report.Document("doctor/x/report.json")
+	if err != nil {
+		t.Fatalf("Document: %v", err)
+	}
+	if document.KillRate != 1 {
+		t.Fatalf("KillRate = %v, want 1", document.KillRate)
+	}
+}
+
+// TestKillRateIsNotEvidenceWhenNoReferenceRunAnswered is the second way to have
+// no reference: it did not fail, it never got a verdict, and there is still
+// nothing saying the verifier accepts anything.
+func TestKillRateIsNotEvidenceWhenNoReferenceRunAnswered(t *testing.T) {
+	loaded := newTask(t, `{"kill_rate_min": 0.8, "reference_runs": 2}`, twoHandMutants)
+	runner := killer()
+	runner.failWith = map[string]error{
+		"reference-1": errors.New("docker is not running"),
+		"reference-2": errors.New("docker is not running"),
+	}
+	report := check(t, loaded, runner)
+
+	counts := report.Aggregates
+	if counts.ReferenceFailures != 0 || counts.ReferenceInconclusive != 2 {
+		t.Fatalf("aggregates = %+v", counts)
+	}
+	if counts.KillRateMeaningful {
+		t.Fatal("kill_rate_meaningful is true although no reference run answered")
+	}
+	summary := strings.Join(report.Summary(), "\n")
+	if !strings.Contains(summary, "not evidence: no reference run reached a verdict") {
+		t.Fatalf("the summary names the wrong reason:\n%s", summary)
+	}
+	for _, run := range report.Runs {
+		if run.Kind == doctor.RunMutant && run.OutcomeNote != "no reference run reached a verdict" {
+			t.Errorf("%s: outcome_note = %q", run.Label, run.OutcomeNote)
+		}
+	}
 }

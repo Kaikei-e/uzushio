@@ -65,6 +65,38 @@ func (s Status) Valid() bool {
 // right, and reading a document that says it is a different shape is not.
 const SchemaVersion = 1
 
+// BandRow is one invariant a banded verifier measured: what it read, the band
+// it was held to, and what that means.
+//
+// Every number is a pointer because every number may be absent. A `skipped` row
+// is an invariant whose input never arrived — no k6 in the image, a generator
+// that did not run — and an `info` row is one that is reported and never
+// judged; neither carries a value, and a zero would read as a measurement.
+type BandRow struct {
+	Invariant string   `json:"invariant"`
+	Value     *float64 `json:"value"`
+	CIHalf    *float64 `json:"ci_half"`
+	BandLo    *float64 `json:"band_lo"`
+	BandHi    *float64 `json:"band_hi"`
+	Verdict   string   `json:"verdict"`
+}
+
+// Band is what a banded verifier concluded, as `cmoa verify` reports it. It is
+// absent for an exit-code verifier, and absent for a banded one that never got
+// as far as printing its rows.
+//
+// uzushio does not judge it: CMoA read the rows and turned them into the
+// status, and reading them a second time here would be a second opinion nobody
+// asked for. It is carried so that a report says which invariant moved, which
+// is the difference between "the verifier rejected this mutant" and "the
+// verifier rejected this mutant because rr_spread_req left 0-0".
+type Band struct {
+	Judged  int       `json:"judged"`
+	Failed  []string  `json:"failed"`
+	Skipped []string  `json:"skipped"`
+	Rows    []BandRow `json:"rows"`
+}
+
 // Result is the object `cmoa verify` prints. Unknown keys are ignored: CMoA
 // owns the contract and may add to it.
 type Result struct {
@@ -74,6 +106,7 @@ type Result struct {
 	DiffSHA256    string   `json:"diff_sha256"`
 	Label         string   `json:"label"`
 	Status        Status   `json:"status"`
+	Band          *Band    `json:"band,omitempty"`
 	ExitCode      int      `json:"exit_code"`
 	DurationMS    int64    `json:"duration_ms"`
 	Command       []string `json:"command"`

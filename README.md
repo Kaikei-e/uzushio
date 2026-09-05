@@ -111,6 +111,31 @@ reporting the count per operator. `--keep-nonviable` turns the check off.
 for `examples/task-hello` is docker. `mutate` needs `git` and a Go toolchain,
 and never runs the verifier.
 
+### External tasks
+
+A task does not have to be a toy, and its repository does not have to live
+here. `examples/task-plecto-gate` is a task over
+[PlectoProxy](https://github.com/Kaikei-e/PlectoProxy) at one pinned commit:
+`setup.sh` fetches that commit into a gitignored `repo/`, and nothing is added
+to the project itself. Its verifier is that project's own T1 performance gate,
+judged against that project's own bands.
+
+It is also the first task whose `verify.kind` is `band` rather than
+`exit-code`. A banded verifier prints one measured value per invariant with the
+band it is held to; `cmoa verify` reads those rows and reports which invariant
+answered, so a report can say *killed via `rr_spread_req`, 120000 against a band
+of 0–0* instead of only *the verifier said no* — and can tell "an invariant left
+its band" apart from "the harness produced nothing", which one exit code cannot.
+`doctor` carries the rows into `report.json` and runs a banded task one
+verification at a time, because two containers measuring latency on one machine
+measure each other.
+
+The gate's bands are narrow and the project documents a run of unchanged code
+that went PASS, FAIL, PASS. So **the first thing the doctor does there is
+measure the false-positive rate** — `doctor.reference_runs` is 5 — and that
+number is the point of the task, not a preliminary to it. The example's README
+says what that costs and what it does not prove.
+
 ## The specification is a graph
 
 The corpus is a [DocDag](https://github.com/Kaikei-e/DocDag) v0.4.0 `spec`

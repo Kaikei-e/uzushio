@@ -41,9 +41,10 @@ cmoa verify --task . --diff /dev/null             # the seed state: fail, exit 1
   `TestAdd` notices.
 - `doctor.kill_rate_min` and `doctor.reference_runs` are the thresholds the
   task is judged against.
-- `verify.kind` is `exit-code`: the service passes when it exits 0. (`band`
-  is accepted by the schema and not implemented; a command that would run it
-  stops with an error.) `verify.timeout_seconds` bounds the container, and
+- `verify.kind` is `exit-code`: the service passes when it exits 0. (The other
+  kind is `band`, whose answer is read off the rows the verifier prints rather
+  than off its exit code — see `examples/task-plecto-gate`.)
+  `verify.timeout_seconds` bounds the container, and
   overrides `verify.timeout_seconds` in `cmoa.json` for both `select` and
   `verify`; `cmoa verify --timeout` overrides both.
 

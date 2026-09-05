@@ -10,6 +10,7 @@ import (
 
 	"github.com/Kaikei-e/uzushio/internal/doc"
 	"github.com/Kaikei-e/uzushio/internal/task"
+	"github.com/Kaikei-e/uzushio/internal/verifyrunner"
 	"github.com/Kaikei-e/uzushio/internal/vocab"
 )
 
@@ -34,9 +35,17 @@ func (r *Report) Document(reportPath string) (doc.Verifier, error) {
 	if err != nil {
 		return doc.Verifier{}, err
 	}
+	// A rate that is not evidence is written as a word rather than a number.
+	// The record outlives the run and is read by somebody deciding whether the
+	// task is usable; `kill_rate: "1.00"` beside `verdict: unhealthy` is the
+	// pair a hurried reader gets backwards, and the numbers are in the report
+	// the `report:` key names for anyone who wants them.
 	rate := doc.NoKillRate
 	if r.Aggregates.KillRate != nil {
 		rate = *r.Aggregates.KillRate
+		if !r.Aggregates.KillRateMeaningful {
+			rate = doc.KillRateNotEvidence
+		}
 	}
 	return doc.Verifier{
 		Task:          r.Task,
@@ -103,20 +112,69 @@ func (r *Report) Summary() []string {
 			counts.ReferenceRuns, counts.ReferenceFailures, counts.ReferenceInconclusive),
 		fmt.Sprintf("mutants: %d killed, %d survived, %d inconclusive, %d equivalent",
 			counts.Killed, counts.Survived, counts.Inconclusive, counts.Equivalent),
-		"kill rate: " + rateText(counts.KillRate) +
-			" (minimum " + strconv.FormatFloat(counts.KillRateMin, 'f', 2, 64) + ")",
+		killRateLine(counts),
 	}
 	for _, run := range r.Runs {
 		switch {
 		case run.Kind == RunReference && run.Status != "pass":
-			lines = append(lines, fmt.Sprintf("  %s: %s", run.Label, run.Status))
+			lines = append(lines, fmt.Sprintf("  %s: %s%s", run.Label, run.Status, bandText(run.Band)))
 		case run.Outcome == OutcomeSurvived && run.Expect == task.ExpectKilled:
-			lines = append(lines, fmt.Sprintf("  survived: %s (%s)", run.Diff, describe(run)))
+			lines = append(lines, fmt.Sprintf("  survived: %s (%s)%s",
+				run.Diff, describe(run), bandText(run.Band)))
 		case run.Outcome == OutcomeInconclusive:
 			lines = append(lines, fmt.Sprintf("  inconclusive: %s (%s)", run.Diff, run.Status))
+		case len(run.BandsBeyondReference) > 0:
+			// The one thing a check with a failing reference still says. Every
+			// mutant came back killed and almost none of them was detected;
+			// these are the ones that broke a band the reference held.
+			lines = append(lines, fmt.Sprintf("  beyond the reference: %s (%s)",
+				run.Diff, strings.Join(run.BandsBeyondReference, ", ")))
 		}
 	}
 	return append(lines, "verdict: "+r.Verdict.String())
+}
+
+// bandText names the invariants behind a banded verifier's answer, for the
+// lines that report something going wrong.
+//
+// A summary that said only "reference-2: fail" would leave the reader to open
+// report.json to learn which of eight measurements moved, and a mutant that
+// survived because its invariant reported `skipped` — no k6 in the image, say —
+// would look identical to one the verifier is simply blind to. The rows
+// themselves stay in the report; this is the one line that says where to look.
+func bandText(band *verifyrunner.Band) string {
+	if band == nil {
+		return ""
+	}
+	var parts []string
+	if len(band.Failed) > 0 {
+		parts = append(parts, "out of band: "+strings.Join(band.Failed, ", "))
+	}
+	if len(band.Skipped) > 0 {
+		parts = append(parts, "skipped: "+strings.Join(band.Skipped, ", "))
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf(" [%d invariant(s), all in band]", band.Judged)
+	}
+	return " [" + strings.Join(parts, "; ") + "]"
+}
+
+// killRateLine is the rate and what may be read off it.
+//
+// A rate measured against a verifier that rejected the reference is not a rate
+// anybody may compare to a threshold, so the threshold is not printed beside
+// it: the line says what the number is and then says not to use it. Printing
+// `1.00 (minimum 0.80)` under five failed reference runs is how a check that
+// found nothing reads as a check that found everything.
+func killRateLine(counts Aggregates) string {
+	line := "kill rate: " + rateText(counts.KillRate)
+	if counts.KillRateMeaningful {
+		return line + " (minimum " + strconv.FormatFloat(counts.KillRateMin, 'f', 2, 64) + ")"
+	}
+	if counts.ReferenceFailures > 0 {
+		return line + " — not evidence: the reference itself failed, so every mutant fails with it"
+	}
+	return line + " — not evidence: no reference run reached a verdict"
 }
 
 // describe says what a mutant was, for the line that reports it surviving.
