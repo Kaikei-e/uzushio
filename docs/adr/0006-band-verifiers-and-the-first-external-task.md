@@ -1,23 +1,30 @@
 ---
-title: "task doctor は verifier の健全性を偽陽性と kill rate で測り、結果を verifier kind として vault に残す"
-status: superseded
+title: "task doctor は verifier の健全性を偽陽性と kill rate で測る。帯域判定型の verifier も扱い、最初の外部 Task は uzushio 側に置いて GitHub Actions では回さない"
+status: accepted
 date: 2026-09-05
+supersedes: [0005]
 depends-on: [0002, 0003, 0004]
 ---
 
-# 0005: task doctor は verifier の健全性を偽陽性と kill rate で測り、結果を verifier kind として vault に残す
+# 0006: task doctor は verifier の健全性を偽陽性と kill rate で測る。帯域判定型の verifier も扱い、最初の外部 Task は uzushio 側に置いて GitHub Actions では回さない
 
 ## ステータス
 
-Superseded by 0006
+Accepted
 
 採択日: 2026-09-05
+
+本記録は 0005 を supersede する。0005 の D1〜D4（doctor の手順、記録、`task mutate`、`cmoa verify` の
+exec）は文言を変えずに引き継ぎ、D5「帯域判定型（band）の grader は語彙だけ」を改め、最初の外部 Task に
+ついての決定を足す。
 
 ## 日付
 
 2026-09-05
 
 ## コンテキスト
+
+0005 のコンテキストをそのまま引き継ぐ。
 
 ### 「verifier のない機能には着手しない」の verifier とは何か
 
@@ -41,6 +48,30 @@ verifier の実体は CMoA の `internal/verify`（CMoA ADR 0005）で、CMoA AD
 要素として名指しする。uzushio が再実装すると、健全性を測る層が測る対象と別の実装で測ることになる。
 CMoA ADR 0009 が `cmoa verify` を足し、1 つの diff を 1 回検証して JSON を返す口を開けた。同時に
 `task.json` が version 2 になり、reference solution・mutants・doctor の閾値を持つようになった。
+
+### その後に分かったこと：帯域判定型の verifier
+
+0005 の `task doctor` はテスト通過型（exit-code）の verifier で確かめた。しかし verifier には別の形がある。
+測定値が帯域 [lo, hi] に入るかで合否を決める性能ゲートで、所有者の別プロジェクト PlectoProxy
+（Rust の L7 リバースプロキシ）が T1 ゲートとして持っている：`run-perf.sh gate` が oha と k6 で負荷を
+かけ、`gate_verdict.py` が `gate_tolerances.toml` の帯域で不変式ごとに pass / fail / skipped を出し、
+`gate.csv` に書く。所有者は「あえてやる」と判断した。テスト通過型だけを扱う doctor は、規範の
+「grader の格」（P5）を半分しか確かめていないからである。
+
+### 事前に分かっていたこと（2026-09-05 調査）
+
+- ゲートは単一コンテナで動く。Rust 1.97.1、oha、k6（任意）、python3.11+。特権もホストネットワークも
+  要らない。ただし `just gate` はビルドしない（ラッパーが要る）、target ディレクトリの位置が
+  ハードコードされている、`taskset` を使うので `cpuset` で 2 CPU 以上を与える必要がある。
+- k6 なしでも exit 0 になる（k6 の不変式は skipped）。ただしレートリミットのトークンバケットの正しさ
+  （`enforce_allowed_ratio`）を失う。
+- 帯域は参照ホスト基準で、Plecto 自身の README が **無変更コードで PASS / FAIL / PASS** を記録している。
+  つまり偽陽性率が 1/4 前後の verifier であり、doctor が最初に測るべきものがそこにある。
+- ゲートの exit 1 は「帯域を外れた」と「ハーネスが壊れた」を区別しない。`gate.csv` は既に
+  `invariant,value,ci_half,band_lo,band_hi,verdict` の形で、区別に必要な情報を持っている。
+- GitHub Actions の hosted runner は公開リポジトリで 4 vCPU、ベンチの分散は 2.7〜30% と報告され、
+  負荷生成器と被測が同居する。GitHub は公開リポジトリでの self-hosted runner を推奨しない
+  （fork の PR が runner を侵害しうる）。ジョブのログに CPU モデルが出る。
 
 ## 決定
 
@@ -78,6 +109,13 @@ mutant がテストをハングさせた事実と、verifier がそれを検出�
   （レポートのパス）。辺とルールはまだ持たない。Step 5 で run が「健全な verifier に基づく」ことを辺で
   要求する。
 
+reference が 1 回でも落ちた（または 1 回も判定に達しなかった）ときは、kill rate を証拠として扱わない：
+どの diff も reference と同じ理由で落ちるので、mutant の「killed」は検出を示さない。レポートは
+`kill_rate_meaningful: false`、各 mutant に `outcome_note`、そして reference が外さなかった帯域を mutant が
+外した場合だけ `bands_beyond_reference` を持ち、vault の記録は `kill_rate: n/a` と書く。
+`task doctor --replay <report.json>` は既存のレポートから集計・注記・判定だけをやり直し、実行なしで
+記録を書き直す（ライブ実行と同じ `Conclude` を通る）。
+
 DocDag は数値を比較できないので、`kill_rate` は記録であって判定ではない。判定は `verdict` の語に落ちて
 いる（0003 の verdict と同じ考え方）。
 
@@ -112,11 +150,42 @@ uzushio は compose runner を持たない。`cmoa verify` の JSON（`status`�
 `command`）を読む。`cmoa` の版はレポートに記録する。テストは `Runner` インターフェースの偽実装で
 Docker なしに通し、実 Docker の経路は `UZUSHIO_E2E=1` の下だけで回す。
 
-### D5. 帯域判定型（band）の grader は語彙だけ
+### D5. Task は uzushio の `examples/task-plecto-gate` に置く。PlectoProxy には何も足さない
 
-`task.json` v2 の `verify.kind` は `exit-code` と `band` を持つが、uzushio も CMoA も `band` を実装しない。
-指定されれば「未実装」として明示的に拒否する。性能ゲート（測定値が [lo, hi] に入るか）を Task にする
-step で実装する。
+Plecto の OSS に uzushio の Task（reference、mutant、閾値）が同居するのはおかしい、という所有者の判断。
+Task は `setup.sh` が固定コミットを clone し、mutant はその固定コミットに対する diff である。
+Plecto が進んでも Task は動き続け、Plecto を追うときは固定コミットと mutant を一緒に更新する。
+
+### D6. `verify.kind: band` を CMoA に実装して使う
+
+CMoA ADR 0009 が予約だけしていた `band` を実装する（同じ PR の中で、記録も改める）。コンテナは
+`gate.csv` を標準出力に出し、`cmoa verify` が読む：`fail` 行があれば fail、CSV が無い・壊れている、
+または fail 行なしで終了コードが非ゼロなら runner_error（ハーネスの故障）、それ以外は pass。
+`skipped` 行は結果 JSON に列挙する。帯域はコンテナ内の Plecto 自身の toml をそのまま使い、CMoA は
+再判定しない。exit-code 型で包むこともできたが、「帯域を外れた」と「ビルドが落ちた」を混ぜると
+doctor の kill / inconclusive の区別が崩れる。
+
+### D7. k6 を入れる。帯域は変えない。最初に偽陽性率を測る
+
+k6 は静的バイナリで導入は容易で、トークンバケットの正しさは失いたくない。帯域は Plecto のものを
+そのまま使い、`reference_runs: 5` で無変更のツリーを 5 回回して、このコンテナ・この計算機での偽陽性率を
+まず測る。unhealthy ならそれが事実として vault に残る。帯域を動かすかどうかはその後の別の判断。
+
+### D8. mutant は手書き 7 件
+
+調査が file:line 付きで挙げた 5 件（WASM dispatch への sleep、apikey フィルタへの余分な kv get、
+ラウンドロビンの `fetch_add`→`load`、health tick の下限の引き上げ、レートリミットへの余分な kv probe）を
+`expect: killed`、コールドパスと計測対象にリンクされないクレートの 2 件を `expect: equivalent` にする。
+それぞれどの帯域を外すはずかを `note` に書く。3 つの tail 系帯域は幅が広く、微妙な mutant では
+外せないことが分かっている——それも記録に残す。
+
+### D9. 逐次実行。GitHub Actions では回さない
+
+性能ゲートは CPU を共有すると測定が壊れるので doctor は `--parallel 1` で回す（band の Task では
+既定で 1 に落とし、明示されたときだけ従う）。実行は所有者の計算機で行い、結果は vault の
+`verifier` 文書として残す。GitHub Actions には入れない：hosted runner の分散は帯域の幅より大きく、
+無変更でも外れる。self-hosted は公開リポジトリで推奨されず、ログに計算機の情報が出る。
+「情報提供の定期ジョブ」という折衷はあるが、所有者はローカルのみと判断した。
 
 ## 根拠（調査結果・出典）
 
@@ -132,6 +201,16 @@ step で実装する。
   `git diff` で作り、Go の依存を足さない。
 - gremlins の efficacy は killed / (killed + lived) で timeout と not-viable を分母から除く。Stryker の既定閾値は
   high 80 / low 60。PIT は timeout を検出に数えるが、本記録は数えない。
+
+- PlectoProxy `bench/perf/run-perf.sh`、`gate_verdict.py`、`gate_tolerances.toml`、`performance/README.md`
+  （2026-09-05 読了、固定コミット 39778ec）。
+- GitHub Docs：hosted runner の仕様、self-hosted runner と公開リポジトリの注意。
+- Laaber et al., "Software microbenchmarking in the cloud. How bad is it really?"（EMSE 2019）：
+  同一インスタンス上の A/B 同時計測なら 10% 以下の劣化も検出できる。CodSpeed（2025-07）：GitHub runner で
+  CV 2.66%、2% のゲートでは偽陽性 45%。github-action-benchmark の既定閾値 200% とその理由（ネットワークや
+  I/O を含むベンチは分散が大きい）。
+- k6 docs：負荷生成器に 20% の CPU 余裕がないと応答時間が人工的に伸びる。
+- CMoA ADR 0009 D3 は band を実装済みとして同じ PR の中で改めた。
 
 ## 検討した代替案
 
@@ -149,6 +228,14 @@ step で実装する。
 - **Plecto の性能ゲートを最初の Task にする。** 見送り。ライブ実行は数分かかりホスト依存で、
   最初の doctor の対象には重い。帯域判定は語彙だけ予約した（D5）。
 
+- **PlectoProxy に Task を置く。** 不採用（所有者）。他プロジェクトの OSS に評価基盤の都合を持ち込む。
+- **exit-code 型 + ラッパースクリプト。** 不採用。故障と逆脱が混ざる（D2）。
+- **CMoA 側の tolerances で再判定する band。** 不採用。帯域が Plecto と二重になる。
+- **k6 なし。** 不採用。短くなるが正しさの不変式を失う。
+- **帯域をコンテナ基準に再中心化してから測る。** 不採用。先に測る。何を測ったか分からなくなる。
+- **GitHub Actions の定期・非ブロッキングジョブ。** 見送り（所有者）。ローカルの結果を vault で共有する。
+- **self-hosted runner。** 不採用。公開リポジトリでの安全性と、ログへの計算機情報の露出。
+
 ## 影響とトレードオフ
 
 - 得るもの：verifier の健全性が数値と語で記録され、Step 5 の run が「健全な verifier で測った」ことを
@@ -157,8 +244,19 @@ step で実装する。
 - リスク：`kill_rate_min` の既定 0.8 は慣例（Stryker の high 80）から借りたもので、この repo での実測に
   基づかない。最初の数 Task で見直す。`band` の予約語が長く実装されないと形骸化する。
 
+- 得るもの：doctor がテスト通過型と帯域判定型の両方で動くことの実証。verifier の偽陽性率が
+  「README の逸話」から「vault の測定」になる。
+- 失うもの：1 回の doctor に約 1.5 時間かかる。Task が固定コミットに縛られ、Plecto の更新に手で追随する。
+- リスク：偽陽性率が高ければ、この Task の verifier は uzushio の規範上「無い」ことになる。それは
+  失敗ではなく、この記録が測りたかった答えである。
+- 最初の測定（2026-09-05、`verifier/plecto-gate@2026-09-05`）：reference 5 回すべてが同じ 4 帯域
+  （`dispatch_floor_us`、`apikey_cost_us`、`ratelimit_tax_us` は上に、`pooled_tail_p50_ms` は下に）を外し、
+  回ごとの散らばりは帯域の幅よりはるかに小さかった。つまりノイズではなくホストのオフセットであり、
+  帯域はこの環境では再中心化しなければ verifier として使えない。reference が落ちる以上、mutant の
+  「killed」は検出の証拠にならない——doctor はその場合 kill rate を証拠として扱わないことを明示する。
+  ホスト非依存の 5 不変式（RR、ejection、token bucket）は 5 回とも帯域内だった。
+
 ## 関連ADR
 
-- 0002（設定を Go で持つ）、0003（edit / pattern / run の語彙。verdict を語に落とす考え方）、
-  0004（型から文書を書く。`verifier` も `internal/doc` が書く）
-- CMoA ADR 0009
+- 0005（supersede 元）、0002（設定を Go で持つ）、0003（verdict を語に落とす考え方）、0004（型から文書を書く）
+- CMoA ADR 0009（`cmoa verify`、task.json v2、band）
