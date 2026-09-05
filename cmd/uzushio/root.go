@@ -10,6 +10,10 @@
 // patterns out of CMoA's traces and, with `--propose`, asks the proposers for
 // the harness edits that answer them; `uzushio run` measures one of those edits
 // against the baseline harness on a suite and writes what it found into the vault.
+// `uzushio judge` measures the other instrument in the loop: `import-mtbench`
+// derives a three-way calibration suite from a corpus of pairwise human
+// judgments, `calibrate` runs a judge over it and records the three
+// coefficients, and `status` says which calibrations still bind.
 package main
 
 import (
@@ -65,8 +69,8 @@ func newRootCmd() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &flagError{err: err}
 	})
-	root.AddCommand(newDocDagConfigCmd(), newHarnessCmd(), newImproveCmd(), newRunCmd(),
-		newTaskCmd(), newVersionCmd())
+	root.AddCommand(newDocDagConfigCmd(), newHarnessCmd(), newImproveCmd(), newJudgeCmd(),
+		newRunCmd(), newTaskCmd(), newVersionCmd())
 	return root
 }
 
