@@ -216,3 +216,18 @@ func requireSurface(what, name string) error {
 	}
 	return fmt.Errorf("%w: %s %q is not a harness surface (%v)", ErrDocument, what, name, all)
 }
+
+// supersedesEntries renders a list of supersessions as the frontmatter shape
+// DocDag reads. It is here rather than in one kind's file because two kinds
+// take part in the edge now: an edit replaces an edit, and a calibration
+// replaces the last measurement of the same judge.
+func supersedesEntries(all []Supersession) []supersedesEntry {
+	if len(all) == 0 {
+		return nil
+	}
+	out := make([]supersedesEntry, 0, len(all))
+	for _, one := range all {
+		out = append(out, supersedesEntry{Ref: one.Edit, Reason: one.Reason})
+	}
+	return out
+}

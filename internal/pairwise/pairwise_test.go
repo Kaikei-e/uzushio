@@ -131,6 +131,101 @@ func TestDrawnPairGivesATieGold(t *testing.T) {
 	}
 }
 
+// TestGoldIsTheUnbeatenSystem is the defect that put a third of the corpus's
+// human marginal into a category the annotators never used.
+//
+// A beat B, B beat C, and A against C is a one-all split. Nobody beat A. The
+// earlier rule asked for two wins and called the item undecided, which is a
+// label the people did not give — and it is the human side of every validity
+// table, so it depressed exactly the coefficient the verdict reads.
+func TestGoldIsTheUnbeatenSystem(t *testing.T) {
+	c := pairwise.NewCorpus()
+	for range 3 {
+		vote(t, c, "g1", "a", "b", pairwise.WinnerFirst, "p1")
+		vote(t, c, "g1", "b", "c", pairwise.WinnerFirst, "p2")
+	}
+	vote(t, c, "g1", "a", "c", pairwise.WinnerFirst, "p3")
+	vote(t, c, "g1", "a", "c", pairwise.WinnerSecond, "p4")
+
+	items, stats := derive(t, c, pairwise.Options{Seed: 1})
+	if len(items) != 1 {
+		t.Fatalf("derived %d items", len(items))
+	}
+	item := items[0]
+	if item.Gold == pairwise.GoldTie {
+		t.Fatal("a triple with an unbeaten system was called undecided")
+	}
+	if system := systemAt(item, item.Gold); system != "a" {
+		t.Fatalf("gold is system %q; a was beaten by nobody", system)
+	}
+	// It is unbeaten and not a Condorcet winner, and the corpus records which.
+	if item.Wins != 1 {
+		t.Fatalf("gold_wins = %d, want the one pair it won outright", item.Wins)
+	}
+	if stats.Condorcet != 0 || stats.TieGold != 0 {
+		t.Fatalf("stats = %+v", stats)
+	}
+
+	// Two unbeaten systems is what `tie` is for: A beat B and nobody else
+	// settled anything, so A and C are both unbeaten.
+	open := pairwise.NewCorpus()
+	vote(t, open, "g1", "a", "b", pairwise.WinnerFirst, "p1")
+	vote(t, open, "g1", "b", "c", pairwise.WinnerTie, "p2")
+	vote(t, open, "g1", "a", "c", pairwise.WinnerTie, "p3")
+	two, _ := derive(t, open, pairwise.Options{Seed: 1})
+	if len(two) != 1 || two[0].Gold != pairwise.GoldTie {
+		t.Fatalf("two unbeaten systems gave gold %q", two[0].Gold)
+	}
+}
+
+// TestATieIsAVerdictAndNotASpoiltBallot records the other half of the same
+// argument. `tie` is one of the three things the source lets a person say, so
+// five people calling two answers equal outweigh the sixth who preferred one:
+// the pair is drawn, not a defeat.
+func TestATieIsAVerdictAndNotASpoiltBallot(t *testing.T) {
+	c := pairwise.NewCorpus()
+	for range 5 {
+		vote(t, c, "g1", "a", "b", pairwise.WinnerTie, "p1")
+	}
+	vote(t, c, "g1", "a", "b", pairwise.WinnerFirst, "p2")
+	vote(t, c, "g1", "b", "c", pairwise.WinnerFirst, "p3")
+	vote(t, c, "g1", "a", "c", pairwise.WinnerFirst, "p4")
+
+	items, _ := derive(t, c, pairwise.Options{Seed: 1})
+	if len(items) != 1 {
+		t.Fatalf("derived %d items", len(items))
+	}
+	// a drew with b and beat c; b beat c. Nobody beat a and nobody beat b, so
+	// there is no unique source.
+	if items[0].Gold != pairwise.GoldTie {
+		t.Fatalf("gold = %q; five people said a and b were of a kind",
+			systemAt(items[0], items[0].Gold))
+	}
+
+	// One preference against one shrug is thin, but it is not outweighed, and
+	// this corpus is thin enough that requiring a plurality over the ties as
+	// well would leave four items in ten with no unbeaten system.
+	thin := pairwise.NewCorpus()
+	vote(t, thin, "g1", "a", "b", pairwise.WinnerFirst, "p1")
+	vote(t, thin, "g1", "a", "b", pairwise.WinnerTie, "p2")
+	vote(t, thin, "g1", "b", "c", pairwise.WinnerFirst, "p3")
+	vote(t, thin, "g1", "a", "c", pairwise.WinnerFirst, "p4")
+	decided, _ := derive(t, thin, pairwise.Options{Seed: 1})
+	if len(decided) != 1 || systemAt(decided[0], decided[0].Gold) != "a" {
+		t.Fatalf("gold = %q, want a", systemAt(decided[0], decided[0].Gold))
+	}
+}
+
+// systemAt is the system behind a position.
+func systemAt(item pairwise.Item, position string) string {
+	for n, name := range pairwise.Positions {
+		if name == position {
+			return item.Systems[n]
+		}
+	}
+	return ""
+}
+
 // TestThinTripleIsDiscarded checks the floor on how much evidence a label
 // rests on.
 func TestThinTripleIsDiscarded(t *testing.T) {
@@ -347,5 +442,83 @@ func TestRowsGivesUpOnAWrongQuestion(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("the reader asked %d times for something that is not there", calls.Load())
+	}
+}
+
+// TestWriteCandidatesFillsInASuite is the redistribution rule made runnable:
+// the corpus commits the prompts and the labels and leaves the model answers
+// out, so a clone has a suite with no answers in it and one command that fills
+// them in.
+func TestWriteCandidatesFillsInASuite(t *testing.T) {
+	items, stats := derive(t, transitive(t, "g1"), pairwise.Options{Seed: 1})
+	dir := t.TempDir()
+	provenance := pairwise.Provenance{
+		SuiteID: "suite-test", Source: "a corpus", License: "CC-BY-4.0",
+		Attribution: "# Attribution\n", Command: "uzushio judge import-something",
+		ID: func(pairwise.Item) (string, error) { return "item-1", nil },
+	}
+	if err := pairwise.Write(dir, items, stats, provenance); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	// Everything the answers are not stays; the answers go, as a clone would
+	// have them.
+	if err := os.RemoveAll(filepath.Join(dir, "item-1", "candidates")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if err := pairwise.WriteCandidates(dir, items, provenance); err != nil {
+		t.Fatalf("WriteCandidates: %v", err)
+	}
+	for _, position := range pairwise.Positions {
+		if _, err := os.Stat(filepath.Join(dir, "item-1", "candidates", position+".txt")); err != nil {
+			t.Fatalf("candidate %s was not filled in: %v", position, err)
+		}
+	}
+	// It is idempotent, which is what makes it safe to run on a clone that
+	// already has some of them.
+	if err := pairwise.WriteCandidates(dir, items, provenance); err != nil {
+		t.Fatalf("a second fill: %v", err)
+	}
+
+	// A derivation that produced other items must not write into this suite:
+	// answers beside gold labels that belong to other answers is a corpus that
+	// looks right and measures nothing.
+	other := pairwise.Provenance{
+		SuiteID: provenance.SuiteID, Source: provenance.Source, License: provenance.License,
+		ID: func(pairwise.Item) (string, error) { return "item-9", nil },
+	}
+	if err := pairwise.WriteCandidates(dir, items, other); err == nil {
+		t.Fatal("answers were written into a suite that lists other items")
+	}
+	if err := pairwise.WriteCandidates(dir, nil, provenance); err == nil {
+		t.Fatal("a derivation of a different size was accepted")
+	}
+}
+
+// TestRubricIsWrittenWhereTheAdapterAsks records the hook a candidate that is
+// not one plain answer needs: the judge has to be told what it is reading.
+func TestRubricIsWrittenWhereTheAdapterAsks(t *testing.T) {
+	items, stats := derive(t, transitive(t, "g1"), pairwise.Options{Seed: 1})
+	dir := t.TempDir()
+	if err := pairwise.Write(dir, items, stats, pairwise.Provenance{
+		SuiteID: "suite-test", Source: "a corpus", License: "CC-BY-4.0",
+		Attribution: "# Attribution\n", Command: "x",
+		ID:     func(pairwise.Item) (string, error) { return "item-1", nil },
+		Rubric: func(pairwise.Item) string { return "The candidate is a transcript.\n" },
+	}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "item-1", "rubric.md"))
+	if err != nil {
+		t.Fatalf("read rubric: %v", err)
+	}
+	if !strings.Contains(string(body), "transcript") {
+		t.Fatalf("rubric.md = %q", body)
+	}
+	task, err := os.ReadFile(filepath.Join(dir, "item-1", "task.json"))
+	if err != nil {
+		t.Fatalf("read task: %v", err)
+	}
+	if !strings.Contains(string(task), `"rubric": "rubric.md"`) {
+		t.Fatalf("the task does not name its rubric:\n%s", task)
 	}
 }

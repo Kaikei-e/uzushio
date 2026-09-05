@@ -46,13 +46,18 @@ const FaceChat = "chat"
 // judge's answer falls into besides Abstain.
 var Positions = []string{"c1", "c2", "c3"}
 
-// Abstain is the category every non-answer folds into: the judge returning no
-// candidate for any reason, and a human label of `tie` or `all_bad`.
+// Abstain is the category the protocol's own refusals fold into: a
+// `no_candidate` outcome for any of its sub-reasons — a cycle, no majority,
+// all draws, an unreadable answer — and a human label of `tie` or `all_bad`.
 //
 // It is one category rather than several because kappa needs a partition, and
 // splitting "the judge saw a cycle" from "the judge saw no majority" would make
 // a judge that abstains in two different ways disagree with itself. The
 // breakdown is reported beside the coefficient instead.
+//
+// It does **not** cover a judge that timed out, failed, or could not be run.
+// Those are the machine rather than the judgement, they are excluded from
+// every coefficient, and they are counted separately. See Judged.Measured.
 const Abstain = "abstain"
 
 // Suite is a chat calibration suite: the items, and where they came from.
@@ -173,4 +178,27 @@ func (s Suite) Candidates(t Task) []string {
 		out = append(out, filepath.Join(dir, "candidates", position+".txt"))
 	}
 	return out
+}
+
+// CheckCandidates reports the first item whose candidate answers are not on
+// disk.
+//
+// They can legitimately be absent. A derived suite commits the prompts and the
+// human labels — those are the licensed part — and leaves the model answers to
+// be fetched locally, so a fresh clone has a suite manifest, a gold file per
+// item and no answers at all. That is a state a calibration has to name rather
+// than crash in the middle of: the fix is one command, and finding out about
+// it two hours into a run is not.
+func (s Suite) CheckCandidates() error {
+	for _, task := range s.Tasks {
+		for _, name := range s.Candidates(task) {
+			if _, err := os.Stat(name); err != nil {
+				return fmt.Errorf("%w: item %s has no candidate answers (%s). "+
+					"The model responses are not kept in this repository; "+
+					"run `uzushio judge import-mtbench --out %s` to fetch them",
+					ErrJudge, task.ID, filepath.Base(name), s.Dir)
+			}
+		}
+	}
+	return nil
 }

@@ -301,7 +301,10 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 				OneOf:    vocab.Strings(vocab.AllCalibrateds()),
 				Required: true,
 			},
-			vocab.FieldReport.String():       {},
+			// UZ-C-009 makes the report a MUST, and the writer refuses a
+			// calibration without one. Declaring it required here is what
+			// makes a hand-written document answer to the same rule.
+			vocab.FieldReport.String():       {Required: true},
 			vocab.FieldInForceUntil.String(): {},
 		},
 		// No edge and no rule, for two reasons that are worth keeping apart.
@@ -350,7 +353,9 @@ func extendEdges(cfg *config.Config) error {
 	}{
 		// An edit replaces an edit, the way a clause replaces a clause. The
 		// reason attribute the preset already requires applies unchanged.
-		{config.EdgeSupersedes, []string{vocab.KindEdit.String()}, []string{vocab.KindEdit.String()}},
+		{config.EdgeSupersedes,
+			[]string{vocab.KindEdit.String(), vocab.KindCalibration.String()},
+			[]string{vocab.KindEdit.String(), vocab.KindCalibration.String()}},
 		// An edit rests on premises, names the post-mortem that motivated it,
 		// and states its subject — the last of which the preset already
 		// requires of every document the about edge starts at.
@@ -475,6 +480,40 @@ func extendProjections(cfg *config.Config) error {
 		validated(vocab.ProjectionValidatedIn, vocab.SplitHeldIn),
 		validated(vocab.ProjectionValidatedOut, vocab.SplitHeldOut),
 		config.ProjectionSpec{
+			// A later measurement of the same judge, itself still in force.
+			//
+			// The preset's has_inforce_successor cannot be reused: it asks the
+			// superseding document for `status: accepted`, and a calibration
+			// has no status at all — it is a measurement, and a measurement is
+			// not accepted. What replaces that clause here is the kind and the
+			// day, which is the whole of what "there is a newer one and it is
+			// still standing" means for a measurement.
+			//
+			// The old document is never edited. It is append-only history, and
+			// the vault has no way to mark it retired that would not be a
+			// rewrite; the edge the new one declares plus this projection is
+			// what takes it out of `binding`. That is the mechanism by which a
+			// judge measured `uncalibrated` today stops the vault answering
+			// `calibrated` from last month's document.
+			Name: vocab.ProjectionNewerCalibration.String(),
+			When: config.Condition{
+				// Scoped to the kind on both sides. The far end has to be a
+				// calibration because an edit that supersedes an edit is a
+				// different relation; the near end has to be one so that a
+				// vault holding no calibration reports nothing about a
+				// projection that has nothing to be true of, the way a
+				// kind-scoped rule does.
+				Attr: ofKind(vocab.KindCalibration),
+				ViaInbound: &config.ViaCondition{
+					Edge: config.EdgeSupersedes.String(),
+					Attr: map[string]config.AttrCondition{
+						config.KeyKind:     eq(vocab.KindCalibration.String()),
+						config.AttrInForce: isTrue(),
+					},
+				},
+			},
+		},
+		config.ProjectionSpec{
 			// A strict gain on either split. Held-out is the one that matters
 			// for generalisation, but an edit that improves the held-in split
 			// and holds the held-out one has still shown a gain, and the
@@ -491,12 +530,18 @@ func extendProjections(cfg *config.Config) error {
 		},
 	)
 
-	// What binding means for a calibration: it has not expired. There is
-	// nothing to accept — a measurement is not a decision — so the day is the
-	// whole of it, and the day is what makes the projection useful: thirty
-	// days after the window closes the calibration drops out of `binding`
-	// without anyone editing anything, and `uzushio judge status` reports a
-	// judge running on no measurement at all.
+	// What binding means for a calibration: it has not expired and nothing
+	// newer has replaced it. There is nothing to accept — a measurement is not
+	// a decision — so the day does most of the work, and the day is what makes
+	// the projection useful: thirty days after the window closes the
+	// calibration drops out of `binding` without anyone editing anything, and
+	// `uzushio judge status` reports a judge running on no measurement at all.
+	//
+	// The successor clause is the other half, and it is not decoration. Two
+	// calibrations of one judge a fortnight apart, the first `calibrated` and
+	// the second `uncalibrated`, would otherwise both bind for a month, and
+	// "does a binding calibration say this judge is calibrated" would answer
+	// yes for thirty days after the measurement that says otherwise.
 	//
 	// What binding means for an edit: accepted, in force today, not already
 	// replaced, and carrying the three things a run can show. Alternatives are
@@ -514,6 +559,9 @@ func extendProjections(cfg *config.Config) error {
 			config.KeyKind:     eq(vocab.KindCalibration.String()),
 			config.AttrInForce: isTrue(),
 		},
+		Not: &config.Condition{Attr: map[string]config.AttrCondition{
+			vocab.ProjectionNewerCalibration.String(): isTrue(),
+		}},
 	}}, config.ProjectionAlt{When: config.Condition{
 		Attr: map[string]config.AttrCondition{
 			config.KeyKind:                        eq(vocab.KindEdit.String()),

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 )
 
 // This file is the agreement half of the package: what two sets of labels over
@@ -90,6 +91,14 @@ type Table struct {
 	categories []string
 	counts     [][]int
 	n          int
+	// clusters holds each independent unit's own counts, so a leave-one-out
+	// replicate is a subtraction rather than a re-tally, and order keeps the
+	// replicates in a fixed sequence.
+	clusters map[string][][]int
+	order    []string
+	// anonymous numbers the rows that named no cluster, so Observe and
+	// ObserveIn can be mixed without one silently joining the other's unit.
+	anonymous int
 }
 
 // NewTable returns an empty table over a vocabulary. The vocabulary must hold
@@ -104,29 +113,65 @@ func NewTable(categories []string) (*Table, error) {
 			return nil, fmt.Errorf("stats: category %q is declared twice", name)
 		}
 	}
-	counts := make([][]int, len(categories))
-	for i := range counts {
-		counts[i] = make([]int, len(categories))
+	return &Table{
+		categories: slices.Clone(categories),
+		counts:     square(len(categories)),
+		clusters:   map[string][][]int{},
+	}, nil
+}
+
+// square returns a k by k count matrix.
+func square(k int) [][]int {
+	out := make([][]int, k)
+	for i := range out {
+		out[i] = make([]int, k)
 	}
-	return &Table{categories: slices.Clone(categories), counts: counts}, nil
+	return out
 }
 
 // Categories returns the vocabulary, in the order the marginals are reported
 // in.
 func (t *Table) Categories() []string { return slices.Clone(t.categories) }
 
-// N is how many items the table holds.
+// N is how many rows the table holds.
 func (t *Table) N() int { return t.n }
+
+// Clusters is how many independent units those rows came from. It is the
+// number an interval is computed over, and it is published beside n because
+// the two differing is the whole reason the interval is what it is.
+func (t *Table) Clusters() int { return len(t.order) }
 
 // Observe records one item both raters labelled. A label outside the
 // vocabulary is an error rather than a silently dropped row: an item nobody
 // counted is an item that quietly changes every rate in the report.
 func (t *Table) Observe(first, second string) error {
+	t.anonymous++
+	return t.ObserveIn("\x00row-"+strconv.Itoa(t.anonymous), first, second)
+}
+
+// ObserveIn records one item both raters labelled, as part of a named cluster.
+//
+// The cluster is the unit the interval is computed over. Two rows in one
+// cluster are allowed to agree with each other for reasons that have nothing
+// to do with the raters — the same prompt, the same run, the same seed — and
+// counting them as two independent observations is how a confidence interval
+// comes out three times narrower than the data supports.
+func (t *Table) ObserveIn(cluster, first, second string) error {
 	i := slices.Index(t.categories, first)
 	j := slices.Index(t.categories, second)
 	if i < 0 || j < 0 {
 		return fmt.Errorf("stats: (%q, %q) is outside the vocabulary %v", first, second, t.categories)
 	}
+	if cluster == "" {
+		return fmt.Errorf("stats: (%q, %q) names no cluster", first, second)
+	}
+	own, seen := t.clusters[cluster]
+	if !seen {
+		own = square(len(t.categories))
+		t.clusters[cluster] = own
+		t.order = append(t.order, cluster)
+	}
+	own[i][j]++
 	t.counts[i][j]++
 	t.n++
 	return nil
@@ -146,8 +191,11 @@ func (t *Table) Count(first, second string) int {
 // Coefficients is everything a report has to carry about one agreement, which
 // is more than the coefficient. See the note at the top of this file.
 type Coefficients struct {
-	// N is how many items were labelled by both.
-	N int `json:"n"`
+	// N is how many rows the table held, and Clusters how many independent
+	// units they came from. Where the two differ, N is the count kappa was
+	// computed from and Clusters is the count the interval was.
+	N        int `json:"n"`
+	Clusters int `json:"clusters"`
 	// Categories is the vocabulary, in marginal order.
 	Categories []string `json:"categories"`
 	// First and Second are the two raters' marginal distributions. They are
@@ -167,11 +215,14 @@ type Coefficients struct {
 	// (Byrt, Bishop & Carlin 1993). It is reported beside kappa rather than
 	// instead of it, because the pair is what says whether a low kappa is a
 	// disagreement or a prevalence artefact.
-	PABAK float64 `json:"pabak"`
-	// CI is the jackknife interval on Kappa at the level Jackknife was asked
-	// for. It is the zero interval where the coefficient is undefined or n is
-	// below two.
-	CI Interval `json:"ci"`
+	PABAK Coefficient `json:"pabak"`
+	// CI is the leave-one-cluster-out jackknife interval on Kappa at the level
+	// it was asked for. It is **null** rather than a zero interval where there
+	// is no honest number: fewer than two clusters, an undefined coefficient,
+	// or a replicate that lost its variation. An interval printed as
+	// [0.000, 0.000] beside a coefficient of 1.000 is read as a measurement,
+	// which is the one thing it must not be.
+	CI *Interval `json:"ci"`
 	// Alpha is the level CI was computed at.
 	Alpha float64 `json:"alpha"`
 }
@@ -191,10 +242,12 @@ func coefficients(t *Table) Coefficients {
 	k := len(t.categories)
 	c := Coefficients{
 		N:          t.n,
+		Clusters:   len(t.order),
 		Categories: slices.Clone(t.categories),
 		First:      make([]float64, k),
 		Second:     make([]float64, k),
 		Kappa:      Undefined(),
+		PABAK:      Undefined(),
 	}
 	if t.n == 0 {
 		return c
@@ -216,59 +269,75 @@ func coefficients(t *Table) Coefficients {
 	if c.PE < 1 {
 		c.Kappa = Coefficient((c.PO - c.PE) / (1 - c.PE))
 	}
-	c.PABAK = (float64(k)*c.PO - 1) / float64(k-1)
+	c.PABAK = Coefficient((float64(k)*c.PO - 1) / float64(k-1))
 	return c
 }
 
-// jackknife returns the leave-one-out interval on kappa.
+// jackknife returns the leave-one-cluster-out interval on kappa.
 //
-// Every item in one cell of the table leaves the same table behind when it is
-// removed, so the n recomputations are k² at most, weighted by the cell
-// counts. That is not an approximation: it is the same set of pseudo-values,
-// counted rather than enumerated.
-func jackknife(t *Table, alpha float64) Interval {
+// One replicate per cluster: every row that cluster contributed is subtracted
+// from the table at once. Where each row is its own cluster this is the
+// ordinary leave-one-out jackknife; where a hundred items each contributed
+// nine rows it is a hundred replicates rather than nine hundred, and the
+// interval is about three times wider than the row-wise one — which is the
+// width the data actually supports.
+func jackknife(t *Table, alpha float64) *Interval {
 	full := coefficients(t)
-	if !full.Kappa.Defined() || t.n < 2 {
-		return Interval{}
+	clusters := len(t.order)
+	if !full.Kappa.Defined() || clusters < 2 {
+		return nil
 	}
-	k := len(t.categories)
+	replicates := make([]float64, 0, clusters)
 	mean := 0.0
-	replicates := make([]float64, 0, k*k)
-	weights := make([]float64, 0, k*k)
-	for i := range k {
-		for j := range k {
-			if t.counts[i][j] == 0 {
-				continue
-			}
-			t.counts[i][j]--
-			t.n--
-			left := coefficients(t)
-			t.counts[i][j]++
-			t.n++
-			if !left.Kappa.Defined() {
-				// A leave-one-out table with no variation left says nothing
-				// about the spread, and there is no honest number to put in
-				// its place.
-				return Interval{}
-			}
-			weight := float64(t.counts[i][j])
-			replicates = append(replicates, left.Kappa.Float())
-			weights = append(weights, weight)
-			mean += weight * left.Kappa.Float()
+	for _, name := range t.order {
+		own := t.clusters[name]
+		rows := subtract(t, own)
+		left := coefficients(t)
+		add(t, own, rows)
+		if !left.Kappa.Defined() {
+			// A replicate with no variation left says nothing about the
+			// spread, and there is no honest number to put in its place.
+			return nil
 		}
+		replicates = append(replicates, left.Kappa.Float())
+		mean += left.Kappa.Float()
 	}
-	n := float64(t.n)
-	mean /= n
+	g := float64(clusters)
+	mean /= g
 	variance := 0.0
-	for i, value := range replicates {
-		variance += weights[i] * (value - mean) * (value - mean)
+	for _, value := range replicates {
+		variance += (value - mean) * (value - mean)
 	}
-	variance *= (n - 1) / n
+	variance *= (g - 1) / g
 	half := zFor(alpha) * math.Sqrt(variance)
-	return Interval{
+	return &Interval{
 		Lo: math.Max(-1, full.Kappa.Float()-half),
 		Hi: math.Min(1, full.Kappa.Float()+half),
 	}
+}
+
+// subtract removes one cluster's counts from the table and answers with how
+// many rows went; add puts them back. The pair exists so a replicate costs a
+// k-by-k walk rather than a re-tally of the whole corpus.
+func subtract(t *Table, own [][]int) int {
+	rows := 0
+	for i := range own {
+		for j := range own[i] {
+			t.counts[i][j] -= own[i][j]
+			rows += own[i][j]
+		}
+	}
+	t.n -= rows
+	return rows
+}
+
+func add(t *Table, own [][]int, rows int) {
+	for i := range own {
+		for j := range own[i] {
+			t.counts[i][j] += own[i][j]
+		}
+	}
+	t.n += rows
 }
 
 // Wilson returns the score interval for a proportion: the set of p the score
@@ -293,18 +362,114 @@ func Wilson(successes, trials int, alpha float64) Interval {
 	return Interval{Lo: math.Max(0, centre-half), Hi: math.Min(1, centre+half)}
 }
 
-// zFor returns the two-sided normal quantile for a level. Only the levels an
-// eval actually runs at are tabulated; anything else falls back to 1.96, which
-// is stated rather than silent because a made-up quantile is worse than a
-// familiar one.
+// zFor returns the two-sided standard normal quantile for a level: the z with
+// P(|Z| <= z) = 1 - alpha, which is sqrt(2)*erfinv(1 - alpha).
+//
+// It is computed rather than tabulated. A table gets the three levels somebody
+// thought of and quietly hands back 1.96 for the fourth, so a report asked for
+// an 80% interval prints "80% CI" over a 95% one — a mislabelled interval,
+// which is worse than a missing one.
 func zFor(alpha float64) float64 {
 	switch {
-	case alpha >= 0.999:
+	case alpha <= 0:
+		return math.Inf(1)
+	case alpha >= 1:
 		return 0
-	case math.Abs(alpha-0.10) < 1e-9:
-		return 1.6448536269514722
-	case math.Abs(alpha-0.01) < 1e-9:
-		return 2.5758293035489004
 	}
-	return 1.959963984540054
+	return math.Sqrt2 * math.Erfinv(1-alpha)
+}
+
+// Proportion is a rate whose rows come in clusters, with the interval that
+// fact demands.
+//
+// It exists because Wilson does not apply to most of the rates a calibration
+// reports. A swap flip rate is one row per (item, seed, pair): nine rows of one
+// item move together, and a score interval computed over nine hundred of them
+// is about three times too narrow. Where the rows really are independent — one
+// per item — Wilson is the better tool and this is not needed, which is why
+// both live here and every reported rate says which it used.
+type Proportion struct {
+	// Value is the pooled rate, successes over trials.
+	Value float64 `json:"value"`
+	// Successes and Trials are the totals it came from.
+	Successes int `json:"successes"`
+	Trials    int `json:"trials"`
+	// Clusters is how many independent units the rows came from.
+	Clusters int `json:"clusters"`
+	// CI is the leave-one-cluster-out jackknife interval, null where there
+	// are fewer than two clusters or no trials.
+	CI *Interval `json:"ci"`
+	// Level is the coverage, 1 - alpha, and Method names how CI was made, so a
+	// number quoted out of a report carries how much to trust its width.
+	Level  float64 `json:"level"`
+	Method string  `json:"method"`
+}
+
+// The two ways this package makes an interval on a rate.
+const (
+	// MethodClusterJackknife deletes one whole cluster per replicate.
+	MethodClusterJackknife = "cluster-jackknife"
+	// MethodWilson is the score interval, which assumes independent rows.
+	MethodWilson = "wilson"
+)
+
+// ClusteredProportion pools per-cluster counts and puts a leave-one-cluster-out
+// jackknife interval on the ratio.
+func ClusteredProportion(successes, trials []int, alpha float64) Proportion {
+	p := Proportion{Level: 1 - alpha, Method: MethodClusterJackknife}
+	for i := range trials {
+		if trials[i] == 0 {
+			continue
+		}
+		p.Successes += successes[i]
+		p.Trials += trials[i]
+		p.Clusters++
+	}
+	if p.Trials == 0 {
+		return p
+	}
+	p.Value = float64(p.Successes) / float64(p.Trials)
+	if p.Clusters < 2 {
+		return p
+	}
+	replicates := make([]float64, 0, p.Clusters)
+	mean := 0.0
+	for i := range trials {
+		if trials[i] == 0 {
+			continue
+		}
+		left := p.Trials - trials[i]
+		if left == 0 {
+			return p
+		}
+		value := float64(p.Successes-successes[i]) / float64(left)
+		replicates = append(replicates, value)
+		mean += value
+	}
+	g := float64(p.Clusters)
+	mean /= g
+	variance := 0.0
+	for _, value := range replicates {
+		variance += (value - mean) * (value - mean)
+	}
+	variance *= (g - 1) / g
+	half := zFor(alpha) * math.Sqrt(variance)
+	p.CI = &Interval{Lo: math.Max(0, p.Value-half), Hi: math.Min(1, p.Value+half)}
+	return p
+}
+
+// IndependentProportion is the same summary for rows that really are
+// independent — one per item — with the Wilson score interval on it.
+func IndependentProportion(successes, trials int, alpha float64) Proportion {
+	p := Proportion{
+		Successes: successes, Trials: trials, Clusters: trials,
+		Level: 1 - alpha, Method: MethodWilson,
+	}
+	if trials == 0 {
+		return p
+	}
+	p.Value = float64(successes) / float64(trials)
+	interval := Wilson(successes, trials, alpha)
+	p.CI = &interval
+	return p
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Kaikei-e/uzushio/internal/doc"
 	"github.com/Kaikei-e/uzushio/internal/judge"
+	"github.com/Kaikei-e/uzushio/internal/stats"
 	"github.com/Kaikei-e/uzushio/internal/vocab"
 )
 
@@ -37,9 +38,16 @@ func (f fakeRunner) Judge(_ context.Context, _ judge.Suite, task judge.Task, see
 		return judge.Judged{}, fmt.Errorf("no script for %s", task.ID)
 	}
 	s := all[min(seed-judge.DefaultSeed, len(all)-1)]
+	if s.outcome == errorOutcome {
+		return judge.Judged{}, fmt.Errorf("%s seed %d: the harness would not run", task.ID, seed)
+	}
 	out := judge.Judged{
 		Seed: seed, Outcome: s.outcome, Candidate: s.choice, Reason: s.reason,
 		LatencyMS: 1000,
+	}
+	if !out.Measured() {
+		// A run that measured nothing left no pairs behind either.
+		return out, nil
 	}
 	pairs := [3][2]string{{"c1", "c2"}, {"c1", "c3"}, {"c2", "c3"}}
 	for i, members := range pairs {
@@ -69,6 +77,10 @@ func (f fakeRunner) Judge(_ context.Context, _ judge.Suite, task judge.Task, see
 	}
 	return out, nil
 }
+
+// errorOutcome makes the fake runner fail the invocation itself, which is
+// what a harness that will not start looks like from here.
+const errorOutcome = "error"
 
 // agrees is a script where the judge picks one candidate in both orders of
 // every pair it is in, and the loser of the other pair consistently.
@@ -217,11 +229,11 @@ func TestPositionBiasIsVisible(t *testing.T) {
 	result := calibrate(t, suite(t, gold), fakeRunner{answers: answers}, judge.Options{Reruns: 0})
 	report := result.Report
 
-	if report.Swap.FlipRate != 1 {
-		t.Fatalf("flip rate = %v, want 1", report.Swap.FlipRate)
+	if report.Swap.Rate.Value != 1 {
+		t.Fatalf("flip rate = %v, want 1", report.Swap.Rate.Value)
 	}
-	if report.Swap.FlipCI.Lo <= 0.5 {
-		t.Fatalf("flip CI = %v, want a lower bound well above a coin", report.Swap.FlipCI)
+	if report.Swap.Rate.Method != stats.MethodClusterJackknife {
+		t.Fatalf("the flip rate's interval is a %s; its rows share items", report.Swap.Rate.Method)
 	}
 	if report.Outcomes.ByKind[judge.OutcomeNoCandidate] != 4 {
 		t.Fatalf("outcomes = %+v", report.Outcomes)
@@ -237,7 +249,7 @@ func TestPositionBiasIsVisible(t *testing.T) {
 	}
 	// Under the secondary handling every item is dropped, and a coefficient
 	// over nothing must be undefined rather than zero.
-	if human.Secondary.N != 0 || human.Secondary.Kappa.Defined() {
+	if human.Secondary.N != 0 || human.Secondary.Kappa.Defined() || human.Secondary.CI != nil {
 		t.Fatalf("decided-only over no decided items = %+v", human.Secondary)
 	}
 	if report.Verdict != vocab.CalibratedNo {
@@ -352,8 +364,19 @@ func TestNoHumanLabelIsUnmeasured(t *testing.T) {
 	}
 	// The period is the whole staleness mechanism, and it is derived rather
 	// than carried so no document can claim a longer life than it earned.
-	if front.InForceUntil != "2026-10-06" {
-		t.Fatalf("in_force_until = %q, want thirty days after the window", front.InForceUntil)
+	// DocDag reads `until` as exclusive, so the frontmatter carries the day
+	// *after* the last day in force: thirty days of force from a window that
+	// closed on the sixth means binding through 2026-10-06 and not on the
+	// seventh.
+	last, err := document.LastDay()
+	if err != nil {
+		t.Fatalf("LastDay: %v", err)
+	}
+	if last != "2026-10-06" {
+		t.Fatalf("last day in force = %q, want window_to + 30", last)
+	}
+	if front.InForceUntil != "2026-10-07" {
+		t.Fatalf("in_force_until = %q, want the day after the last one", front.InForceUntil)
 	}
 }
 
@@ -545,8 +568,11 @@ func TestStatusWarnings(t *testing.T) {
 	// whole vocabulary exists to name.
 	consistent := judge.StatusOf("2026-09-05", []string{unmeasured.ID()},
 		[]doc.Calibration{unmeasured})
-	if len(consistent.Warnings) != 2 {
+	if len(consistent.Warnings) != 3 {
 		t.Fatalf("warnings = %v", consistent.Warnings)
+	}
+	if !strings.Contains(strings.Join(consistent.Warnings, "\n"), "is binding and says `unmeasured`") {
+		t.Fatalf("a binding calibration that measured no validity did not say so: %v", consistent.Warnings)
 	}
 	if !strings.Contains(strings.Join(consistent.Warnings, "\n"), "never been measured") {
 		t.Fatalf("warnings = %v", consistent.Warnings)
@@ -591,5 +617,202 @@ func TestKappaRoundTrip(t *testing.T) {
 	}
 	if _, err := doc.ParseKappa("about a half"); err == nil {
 		t.Fatal("a coefficient nobody can parse was accepted")
+	}
+}
+
+// TestTechnicalFailuresAreUnmeasured is the defect where a fleet outage read
+// as a judge that abstains consistently. A timeout and a failed judge are the
+// machine, not the judgement: they enter no coefficient, they are counted, and
+// two of them in a row must not agree with each other.
+func TestTechnicalFailuresAreUnmeasured(t *testing.T) {
+	gold := map[string]string{"i1": "c1", "i2": "c2", "i3": "c3", "i4": "c1"}
+	answers := map[string][]script{
+		// Two items the judge answered, two it could not.
+		"i1": {agrees("c1"), agrees("c1")},
+		"i2": {agrees("c2"), agrees("c2")},
+		"i3": {{outcome: judge.OutcomeJudgeTimeout}, {outcome: judge.OutcomeJudgeTimeout}},
+		"i4": {{outcome: judge.OutcomeJudgeFailed}, {outcome: judge.OutcomeJudgeFailed}},
+	}
+	result := calibrate(t, suite(t, gold), fakeRunner{answers: answers}, judge.Options{
+		Reruns: 1, MaxUnmeasured: 0.75,
+	})
+	report := result.Report
+
+	if report.Unmeasured != 2 {
+		t.Fatalf("unmeasured items = %d, want the two the judge never answered", report.Unmeasured)
+	}
+	if report.Outcomes.Unmeasured != 4 {
+		t.Fatalf("unmeasured runs = %d, want four", report.Outcomes.Unmeasured)
+	}
+	if report.Outcomes.ByKind[judge.OutcomeJudgeTimeout] != 2 ||
+		report.Outcomes.ByKind[judge.OutcomeJudgeFailed] != 2 {
+		t.Fatalf("outcomes = %+v", report.Outcomes.ByKind)
+	}
+	// Two timeouts of one item used to be two abstentions that agreed, which
+	// pushed the re-run coefficient up. Only the two answered items count.
+	if report.Rerun.Comparisons != 2 {
+		t.Fatalf("re-run comparisons = %d, want one per measured item", report.Rerun.Comparisons)
+	}
+	if report.Validity[judge.ReferenceHuman].Primary.N != 2 {
+		t.Fatalf("validity over %d items, want the two that were measured",
+			report.Validity[judge.ReferenceHuman].Primary.N)
+	}
+	// A failed run left no pairs, so nothing of it reaches the swap table.
+	if report.Swap.Pairs != 12 {
+		t.Fatalf("swap pairs = %d, want three per measured run over two items at two seeds",
+			report.Swap.Pairs)
+	}
+	// The abstention category is the protocol's own refusal and nothing else,
+	// so an outage does not appear in it.
+	if report.Outcomes.NoCandidateByReason["unstated"] != 0 {
+		t.Fatalf("a technical failure was counted as a no-candidate: %+v",
+			report.Outcomes.NoCandidateByReason)
+	}
+	for _, item := range result.Items {
+		if item.Item == "i3" && (!item.Unmeasured || item.Error == "") {
+			t.Fatalf("the timed-out item reads as %+v", item)
+		}
+	}
+}
+
+// TestAFailingInvocationCostsOneItem is the resilience defect: the run used to
+// return the first error and write nothing, throwing away every judgement made
+// before it.
+func TestAFailingInvocationCostsOneItem(t *testing.T) {
+	gold := map[string]string{}
+	answers := map[string][]script{}
+	for i := range 20 {
+		id := fmt.Sprintf("i%02d", i)
+		gold[id] = judge.Positions[i%3]
+		answers[id] = []script{agrees(gold[id])}
+	}
+	answers["i07"] = []script{{outcome: errorOutcome}}
+
+	result := calibrate(t, suite(t, gold), fakeRunner{answers: answers}, judge.Options{Reruns: 0})
+	report := result.Report
+	if report.Unmeasured != 1 {
+		t.Fatalf("unmeasured = %d, want the one that failed", report.Unmeasured)
+	}
+	if report.Validity[judge.ReferenceHuman].Primary.N != 19 {
+		t.Fatalf("nineteen items were judged and %d were scored",
+			report.Validity[judge.ReferenceHuman].Primary.N)
+	}
+	if report.OverUnmeasuredBudget {
+		t.Fatal("one item in twenty is inside the default budget")
+	}
+	if report.Verdict != vocab.CalibratedYes {
+		t.Fatalf("verdict = %s; one flaky invocation must not take the verdict away", report.Verdict)
+	}
+	var failed ItemLike
+	for _, item := range result.Items {
+		if item.Item == "i07" {
+			failed = ItemLike{item.Unmeasured, item.Error}
+		}
+	}
+	if !failed.unmeasured || !strings.Contains(failed.err, "would not run") {
+		t.Fatalf("the failed item reads as %+v", failed)
+	}
+
+	// Past the budget the numbers are still written and the verdict is not.
+	half := map[string][]script{}
+	for id, s := range answers {
+		half[id] = s
+	}
+	for i := range 10 {
+		half[fmt.Sprintf("i%02d", i)] = []script{{outcome: errorOutcome}}
+	}
+	over := calibrate(t, suite(t, gold), fakeRunner{answers: half}, judge.Options{Reruns: 0})
+	if !over.Report.OverUnmeasuredBudget {
+		t.Fatalf("half the suite lost and the budget held: %+v", over.Report.UnmeasuredRate)
+	}
+	if over.Report.Verdict != vocab.CalibratedUnmeasured {
+		t.Fatalf("verdict = %s over a half-lost suite", over.Report.Verdict)
+	}
+	if over.Report.Validity[judge.ReferenceHuman].Primary.N == 0 {
+		t.Fatal("the numbers were thrown away rather than reported")
+	}
+	if !strings.Contains(over.Report.Summary(), "not a random sample") {
+		t.Fatalf("the summary does not say why the verdict was withheld:\n%s", over.Report.Summary())
+	}
+}
+
+// ItemLike is the two fields TestAFailingInvocationCostsOneItem reads back.
+type ItemLike struct {
+	unmeasured bool
+	err        string
+}
+
+// TestIntervalsAreClusteredByItem is the honesty defect: the swap table takes
+// nine rows from each item, and an interval computed as though they were nine
+// items is about three times too narrow.
+func TestIntervalsAreClusteredByItem(t *testing.T) {
+	gold := map[string]string{}
+	answers := map[string][]script{}
+	for i := range 12 {
+		id := fmt.Sprintf("i%02d", i)
+		gold[id] = judge.Positions[i%3]
+		if i%3 == 0 {
+			answers[id] = []script{flips(), flips(), flips()}
+			continue
+		}
+		answers[id] = []script{agrees(gold[id]), agrees(gold[id]), agrees(gold[id])}
+	}
+	result := calibrate(t, suite(t, gold), fakeRunner{answers: answers}, judge.Options{Reruns: 2})
+	swap := result.Report.Swap
+
+	// Twelve items, three seeds, three pairs: a hundred and eight rows from
+	// twelve independent units.
+	if swap.Agreement.N != 108 {
+		t.Fatalf("swap rows = %d, want 108", swap.Agreement.N)
+	}
+	if swap.Agreement.Clusters != 12 {
+		t.Fatalf("swap clusters = %d, want one per item", swap.Agreement.Clusters)
+	}
+	if swap.Agreement.CIMethod != stats.MethodClusterJackknife {
+		t.Fatalf("swap CI method = %q", swap.Agreement.CIMethod)
+	}
+	if swap.Rate.Clusters != 12 {
+		t.Fatalf("flip rate clusters = %d, want one per item", swap.Rate.Clusters)
+	}
+	rerun := result.Report.Rerun.Agreement
+	if rerun.N != 24 || rerun.Clusters != 12 {
+		t.Fatalf("re-run rows = %d over %d clusters, want 24 over 12", rerun.N, rerun.Clusters)
+	}
+	// The no-candidate rate is the one with a row per item, and the only one
+	// that gets a score interval.
+	if result.Report.Outcomes.NoCandidateRate.Method != stats.MethodWilson {
+		t.Fatalf("the no-candidate rate uses %q", result.Report.Outcomes.NoCandidateRate.Method)
+	}
+	if !strings.Contains(result.Report.Summary(), stats.MethodClusterJackknife) {
+		t.Fatal("the summary does not say how its intervals were made")
+	}
+}
+
+// TestAlphaLabelsTheInterval is the mislabelled-level defect.
+func TestAlphaLabelsTheInterval(t *testing.T) {
+	gold := map[string]string{}
+	answers := map[string][]script{}
+	for i := range 12 {
+		id := fmt.Sprintf("i%02d", i)
+		gold[id] = judge.Positions[i%3]
+		answers[id] = []script{agrees(judge.Positions[(i+i/3)%3])}
+	}
+	wide := calibrate(t, suite(t, gold), fakeRunner{answers: answers},
+		judge.Options{Reruns: 0, Alpha: 0.20})
+	if wide.Report.Level != 0.8 {
+		t.Fatalf("level = %v, want 0.8 at alpha 0.2", wide.Report.Level)
+	}
+	if !strings.Contains(wide.Report.Summary(), "80% cluster-jackknife CI") {
+		t.Fatalf("the summary does not label the level it computed at:\n%s", wide.Report.Summary())
+	}
+	narrow := calibrate(t, suite(t, gold), fakeRunner{answers: answers},
+		judge.Options{Reruns: 0, Alpha: 0.05})
+	a := wide.Report.Validity[judge.ReferenceHuman].Primary.CI
+	b := narrow.Report.Validity[judge.ReferenceHuman].Primary.CI
+	if a == nil || b == nil {
+		t.Fatal("no interval")
+	}
+	if (a.Hi - a.Lo) >= (b.Hi - b.Lo) {
+		t.Fatalf("an 80%% interval %v is not narrower than a 95%% one %v", a, b)
 	}
 }

@@ -196,6 +196,10 @@ func ParseCalibration(raw []byte) (Calibration, error) {
 		Report:      parsed.Report,
 		Body:        body,
 	}
+	for _, entry := range parsed.Supersedes {
+		calibration.Supersedes = append(calibration.Supersedes,
+			Supersession{Edit: entry.Ref, Reason: entry.Reason})
+	}
 	for _, count := range []struct {
 		what string
 		text string

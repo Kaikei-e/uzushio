@@ -179,7 +179,7 @@ func TestJudgeCalibrateEndToEnd(t *testing.T) {
 		"verdict: calibrated",
 		"tie_handling: abstain-as-category",
 		"human_kappa: \"1.000\"",
-		"in_force_until: \"2026-10-06\"",
+		"in_force_until: \"2026-10-07\"",
 		"report: calibrations/gpt-oss-20b@2026-09-06/report.json",
 	} {
 		if !strings.Contains(string(body), want) {
@@ -496,5 +496,163 @@ func copyTree(t *testing.T, from, to, only string) {
 	})
 	if err != nil {
 		t.Fatalf("copy %s: %v", from, err)
+	}
+}
+
+// TestJudgeCalibrateSupersedesTheLastOne is the "a contradicted calibration
+// keeps binding" defect. The second measurement of one judge declares the
+// first, and the projection that reads the edge is what takes the first out of
+// `binding` — the document itself is append-only and is never touched.
+func TestJudgeCalibrateSupersedesTheLastOne(t *testing.T) {
+	dir := t.TempDir()
+	suite := judgeSuite(t, filepath.Join(dir, "suite"))
+	bin := fakeJudgeCMoA(t, dir)
+	config := judgeConfig(t, dir, "gpt-oss-20b")
+	vault := t.TempDir()
+
+	first := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", bin, "--config", config,
+		"--vault", vault, "--rerun", "0", "--as-of", "2026-09-06")
+	if first.code != exitOK {
+		t.Fatalf("the first calibrate exited %d\n%s", first.code, first.stderr)
+	}
+	second := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", bin, "--config", config,
+		"--vault", vault, "--rerun", "0", "--as-of", "2026-09-20")
+	if second.code != exitOK {
+		t.Fatalf("the second calibrate exited %d\n%s", second.code, second.stderr)
+	}
+	body := judgeRead(t, vault, strings.TrimSpace(second.stdout))
+	if !strings.Contains(body, "supersedes:") ||
+		!strings.Contains(body, strings.TrimSpace(first.stdout)) {
+		t.Fatalf("the second calibration does not replace the first:\n%s", body)
+	}
+	// The first document is untouched: it is history, and the vault has no way
+	// to mark it retired that would not be a rewrite.
+	if strings.Contains(judgeRead(t, vault, strings.TrimSpace(first.stdout)), "superseded") {
+		t.Fatal("the earlier calibration was edited")
+	}
+
+	// And a third on a day past the first's period declares nothing, because
+	// there is nothing still standing to replace.
+	third := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", bin, "--config", config,
+		"--vault", vault, "--rerun", "0", "--as-of", "2026-12-01")
+	if third.code != exitOK {
+		t.Fatalf("the third calibrate exited %d\n%s", third.code, third.stderr)
+	}
+	if strings.Contains(judgeRead(t, vault, strings.TrimSpace(third.stdout)), "supersedes:") {
+		t.Fatal("a calibration replaced one that had already expired")
+	}
+}
+
+// judgeRead reads a document out of a vault by its identifier.
+func judgeRead(t *testing.T, vault, id string) string {
+	t.Helper()
+	relative, err := vocab.Path(vocab.KindCalibration, id)
+	if err != nil {
+		t.Fatalf("%q: %v", id, err)
+	}
+	body, err := os.ReadFile(filepath.Join(vault, filepath.FromSlash(relative)))
+	if err != nil {
+		t.Fatalf("read %s: %v", id, err)
+	}
+	return string(body)
+}
+
+// TestJudgeCalibrateNeverOverwritesAReport is the shared-directory defect: two
+// append-only documents naming one report is a document whose evidence is
+// another measurement's numbers.
+func TestJudgeCalibrateNeverOverwritesAReport(t *testing.T) {
+	dir := t.TempDir()
+	suite := judgeSuite(t, filepath.Join(dir, "suite"))
+	bin := fakeJudgeCMoA(t, dir)
+	config := judgeConfig(t, dir, "gpt-oss-20b")
+	vault := t.TempDir()
+	out := filepath.Join(dir, "named")
+
+	var reports []string
+	for range 2 {
+		got := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", bin, "--config", config,
+			"--vault", vault, "--out", out, "--rerun", "0", "--as-of", "2026-09-06")
+		if got.code != exitOK {
+			t.Fatalf("calibrate exited %d\n%s", got.code, got.stderr)
+		}
+		body := judgeRead(t, vault, strings.TrimSpace(got.stdout))
+		for _, line := range strings.Split(body, "\n") {
+			if after, found := strings.CutPrefix(line, "report: "); found {
+				reports = append(reports, strings.TrimSpace(after))
+			}
+		}
+	}
+	if len(reports) != 2 {
+		t.Fatalf("read %d report paths", len(reports))
+	}
+	if reports[0] == reports[1] {
+		t.Fatalf("both calibrations name %s; the second overwrote the first's evidence", reports[0])
+	}
+	for _, report := range reports {
+		if _, err := os.Stat(filepath.Join(vault, filepath.FromSlash(report))); err != nil {
+			t.Fatalf("report %s: %v", report, err)
+		}
+	}
+}
+
+// TestJudgeCalibrateNeedsTheAnswers is the redistribution rule at the point it
+// bites: a fresh clone has the suite and no model answers in it, and finding
+// that out two hours into a run is not the same as being told now.
+func TestJudgeCalibrateNeedsTheAnswers(t *testing.T) {
+	dir := t.TempDir()
+	suite := judgeSuite(t, filepath.Join(dir, "suite"))
+	if err := os.RemoveAll(filepath.Join(dir, "suite", "i2", "candidates")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	got := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", fakeJudgeCMoA(t, dir),
+		"--config", judgeConfig(t, dir, "gpt-oss-20b"), "--vault", t.TempDir(), "--rerun", "0")
+	if got.code != exitUsage {
+		t.Fatalf("exit = %d, want %d\n%s", got.code, exitUsage, got.stderr)
+	}
+	if !strings.Contains(got.stderr, "import-mtbench") {
+		t.Fatalf("the message does not say how to fix it: %q", got.stderr)
+	}
+}
+
+// TestJudgeStatusBoundaryDay pins the off-by-one. DocDag reads `period.until`
+// as exclusive, so "in force for thirty days after the window" is
+// window_to + 31 in the frontmatter and window_to + 30 as the last day that
+// binds. The day itself is what this checks.
+func TestJudgeStatusBoundaryDay(t *testing.T) {
+	engine := requireDocDag(t)
+	vault := t.TempDir()
+	copyTree(t, filepath.Join("..", ".."), vault, "docdag.yaml")
+	copyTree(t, filepath.Join("..", "..", "spec"), filepath.Join(vault, "spec"), "")
+	dir := t.TempDir()
+	got := run(t, "judge", "calibrate",
+		"--suite", judgeSuite(t, filepath.Join(dir, "suite")),
+		"--cmoa", fakeJudgeCMoA(t, dir), "--config", judgeConfig(t, dir, "gpt-oss-20b"),
+		"--vault", vault, "--rerun", "0", "--as-of", "2026-09-06")
+	if got.code != exitOK {
+		t.Fatalf("calibrate exit = %d\n%s", got.code, got.stderr)
+	}
+
+	// The thirtieth day: still binding, and nothing to warn about.
+	last := run(t, "judge", "status", "--vault", vault, "--docdag", engine, "--as-of", "2026-10-06")
+	if last.code != exitOK {
+		t.Fatalf("on the last day in force the status exited %d:\n%s", last.code, last.stdout)
+	}
+	if !strings.Contains(last.stdout, "in force through 2026-10-06") {
+		t.Fatalf("stdout:\n%s", last.stdout)
+	}
+	if !strings.Contains(last.stdout, "binding calibrations as of 2026-10-06: 1") {
+		t.Fatalf("the calibration stopped binding a day early:\n%s", last.stdout)
+	}
+
+	// The day after: nothing binds, and the warning says how long it has been.
+	past := run(t, "judge", "status", "--vault", vault, "--docdag", engine, "--as-of", "2026-10-07")
+	if past.code == exitOK {
+		t.Fatalf("an expired calibration exited zero:\n%s", past.stdout)
+	}
+	if !strings.Contains(past.stdout, "binding calibrations as of 2026-10-07: 0") {
+		t.Fatalf("stdout:\n%s", past.stdout)
+	}
+	if !strings.Contains(past.stdout, "validity not measured for 31 days") {
+		t.Fatalf("stdout:\n%s", past.stdout)
 	}
 }

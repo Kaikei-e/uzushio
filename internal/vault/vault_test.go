@@ -623,13 +623,52 @@ func TestCalibrationKind(t *testing.T) {
 	if !found {
 		t.Fatal("nothing makes a calibration binding; judge status would always report none")
 	}
-	// Like a verifier check, a calibration has no edge and no rule, so it
-	// needs no fixture.
+	// A calibration takes part in exactly one edge, and it is the one that
+	// retires the previous measurement of the same judge. Any other would be
+	// a relation nothing writes.
 	for _, edge := range cfg.Edges {
-		if slices.Contains(edge.From, vocab.KindCalibration.String()) ||
-			slices.Contains(edge.To, vocab.KindCalibration.String()) {
-			t.Fatalf("edge %s admits a calibration; this step declares none", edge.Name)
+		touches := slices.Contains(edge.From, vocab.KindCalibration.String()) ||
+			slices.Contains(edge.To, vocab.KindCalibration.String())
+		if touches && edge.Name != config.EdgeSupersedes.String() {
+			t.Fatalf("edge %s admits a calibration; only supersedes should", edge.Name)
 		}
+	}
+	supersedes := slices.IndexFunc(cfg.Edges, func(spec config.EdgeSpec) bool {
+		return spec.Name == config.EdgeSupersedes.String()
+	})
+	if supersedes < 0 {
+		t.Fatal("no supersedes edge")
+	}
+	for _, end := range [][]string{cfg.Edges[supersedes].From, cfg.Edges[supersedes].To} {
+		if !slices.Contains(end, vocab.KindCalibration.String()) {
+			t.Fatal("a calibration cannot supersede a calibration; a worse measurement " +
+				"would never retire a better one")
+		}
+	}
+	// And the projection that reads the edge has to reach the effective one,
+	// or a superseded calibration keeps binding for the rest of its period.
+	newer := slices.IndexFunc(cfg.Projections, func(spec config.ProjectionSpec) bool {
+		return spec.Name == vocab.ProjectionNewerCalibration.String()
+	})
+	if newer < 0 {
+		t.Fatal("no has_newer_calibration projection")
+	}
+	retired := false
+	for _, alternative := range cfg.Projections[index].AnyOf {
+		kind, ok := alternative.When.Attr[config.KeyKind]
+		if !ok || kind.Eq == nil || *kind.Eq != vocab.KindCalibration.String() {
+			continue
+		}
+		if alternative.When.Not == nil {
+			continue
+		}
+		if match, ok := alternative.When.Not.Attr[vocab.ProjectionNewerCalibration.String()]; ok &&
+			match.Eq != nil && *match.Eq == config.ProjectionTrue {
+			retired = true
+		}
+	}
+	if !retired {
+		t.Fatal("a calibration keeps binding after a newer one replaces it")
 	}
 	for _, rule := range cfg.Rules {
 		if match, ok := rule.When.Attr[config.KeyKind]; ok && match.Eq != nil &&

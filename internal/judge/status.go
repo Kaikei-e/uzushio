@@ -48,7 +48,7 @@ func ReadStatus(ctx context.Context, docdag, vault, asOf string) (Status, error)
 	if err != nil {
 		return Status{}, err
 	}
-	all, err := allCalibrations(vault)
+	all, err := Calibrations(vault)
 	if err != nil {
 		return Status{}, err
 	}
@@ -88,21 +88,45 @@ func StatusOf(asOf string, binding []string, all []doc.Calibration) Status {
 			"validity has never been measured: no calibration in this vault compares a judge "+
 				"with people, so nothing here says the judge is measuring the right thing")
 	case status.DaysSinceHuman > doc.ValidityDays:
+		// Strictly greater, and the boundary is the point: a calibration is in
+		// force *through* window_to + ValidityDays, so on that day it is still
+		// binding and there is nothing to warn about. The engine's
+		// `period.until` is exclusive, which is why the frontmatter carries one
+		// more day than this number; see doc.Calibration.InForceUntil.
 		status.Warnings = append(status.Warnings, fmt.Sprintf(
 			"validity not measured for %d days: the last comparison with people closed on %s "+
-				"and a calibration carries force for %d days",
+				"and a calibration is in force for %d days after that",
 			status.DaysSinceHuman, status.LastHuman.WindowTo, doc.ValidityDays))
 	}
-	if len(status.Binding) == 0 {
+	switch {
+	case len(status.Binding) == 0:
 		status.Warnings = append(status.Warnings,
 			"no calibration is binding today: whatever the judge is deciding, it is deciding it "+
 				"on a measurement that has expired or was never made")
-	} else if !slices.ContainsFunc(status.Binding, func(c doc.Calibration) bool {
+	case !slices.ContainsFunc(status.Binding, func(c doc.Calibration) bool {
 		return c.HumanKappa != doc.KappaUnmeasured
-	}) {
+	}):
 		status.Warnings = append(status.Warnings,
 			"every binding calibration says human_kappa: unmeasured — the judge has been shown "+
 				"consistent with itself and never compared with a person")
+	}
+	// A binding calibration that says the judge does not agree with people is
+	// not a quiet state. It is the one the whole kind exists to make loud:
+	// something is deciding with a judge the vault has measured and rejected.
+	for _, calibration := range status.Binding {
+		switch calibration.Verdict {
+		case vocab.CalibratedYes:
+			// The state the whole apparatus exists to reach. Nothing to say.
+		case vocab.CalibratedNo:
+			status.Warnings = append(status.Warnings, fmt.Sprintf(
+				"%s is binding and says `%s`: agreement with people was measured at %s and did "+
+					"not clear the threshold, so nothing should be deciding with this judge alone",
+				calibration.ID(), calibration.Verdict, doc.Kappa(calibration.HumanKappa)))
+		case vocab.CalibratedUnmeasured:
+			status.Warnings = append(status.Warnings, fmt.Sprintf(
+				"%s is binding and says `%s`: its consistency was measured and its agreement "+
+					"with people was not", calibration.ID(), calibration.Verdict))
+		}
 	}
 	return status
 }
@@ -111,15 +135,18 @@ func StatusOf(asOf string, binding []string, all []doc.Calibration) Status {
 func (s Status) Lines() []string {
 	out := []string{fmt.Sprintf("binding calibrations as of %s: %d", s.AsOf, len(s.Binding))}
 	for _, calibration := range s.Binding {
-		until, err := calibration.InForceUntil()
+		// The last day it binds, not the exclusive day the frontmatter
+		// carries: a line reading "in force until" a day the document is not
+		// in force on is the off-by-one made visible.
+		last, err := calibration.LastDay()
 		if err != nil {
-			until = "?"
+			last = "?"
 		}
 		out = append(out, fmt.Sprintf(
-			"  %s  verdict=%s  human_kappa=%s (n=%d)  swap=%s  rerun=%s  in force until %s",
+			"  %s  verdict=%s  human_kappa=%s (n=%d)  swap=%s  rerun=%s  in force through %s",
 			calibration.ID(), calibration.Verdict, doc.Kappa(calibration.HumanKappa),
 			calibration.NHuman, doc.Kappa(calibration.SwapKappa), doc.Kappa(calibration.RerunKappa),
-			until))
+			last))
 		out = append(out, fmt.Sprintf("    tie handling: %s; report: %s",
 			calibration.TieHandling, calibration.Report))
 	}
@@ -165,8 +192,8 @@ func bindingCalibrations(ctx context.Context, binary, vault, asOf string) ([]str
 	return ids, nil
 }
 
-// allCalibrations reads every calibration document in the vault, in file order.
-func allCalibrations(vault string) ([]doc.Calibration, error) {
+// Calibrations reads every calibration document in the vault, in file order.
+func Calibrations(vault string) ([]doc.Calibration, error) {
 	dir := filepath.Join(vault, filepath.FromSlash(vocab.DirCalibrations))
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {

@@ -61,8 +61,17 @@ type Calibration struct {
 	// Verdict is what the calibration concluded about the judge.
 	Verdict vocab.Calibrated
 	// Report is the path to the report.json the calibration wrote, relative
-	// to the vault root.
+	// to the vault root. It is required: the three coefficients cannot be read
+	// without the marginals and the intervals beside them, and those are in
+	// the report (UZ-C-009).
 	Report string
+	// Supersedes is the calibration this one replaces: the last measurement of
+	// the same judge that was still binding when this one was made. The old
+	// document is not touched — it is append-only history — and what retires
+	// it is the edge plus the projection that reads it, so a judge that has
+	// just been measured as uncalibrated stops being a judge the vault says is
+	// calibrated.
+	Supersedes []Supersession
 	// Body is the Markdown under the heading.
 	Body string
 }
@@ -79,8 +88,8 @@ const PoolExternal = "external"
 // judge whose agreement is `unmeasured` has not been checked at all.
 const KappaUnmeasured float64 = -2
 
-// ValidityDays is how long a calibration carries force after its window
-// closes.
+// ValidityDays is how many days a calibration carries force for after its
+// window closes. It binds through window_to + ValidityDays, inclusive.
 //
 // Thirty days is not a property of any judge. It is the interval at which the
 // measurement has to be repeated for the word `calibrated` to keep meaning
@@ -94,23 +103,24 @@ const ValidityDays = 30
 // CalibrationFrontmatter is a calibration's frontmatter in the order it is
 // written.
 type CalibrationFrontmatter struct {
-	ID           string `yaml:"id"`
-	Kind         string `yaml:"kind"`
-	Title        string `yaml:"title"`
-	Date         string `yaml:"date"`
-	Judge        string `yaml:"judge"`
-	Pool         string `yaml:"pool"`
-	WindowFrom   string `yaml:"window_from"`
-	WindowTo     string `yaml:"window_to"`
-	InForceUntil string `yaml:"in_force_until"`
-	NItems       string `yaml:"n_items"`
-	TieHandling  string `yaml:"tie_handling"`
-	SwapKappa    string `yaml:"swap_kappa"`
-	RerunKappa   string `yaml:"rerun_kappa"`
-	HumanKappa   string `yaml:"human_kappa"`
-	NHuman       string `yaml:"n_human"`
-	Verdict      string `yaml:"verdict"`
-	Report       string `yaml:"report,omitempty"`
+	ID           string            `yaml:"id"`
+	Kind         string            `yaml:"kind"`
+	Title        string            `yaml:"title"`
+	Date         string            `yaml:"date"`
+	Judge        string            `yaml:"judge"`
+	Pool         string            `yaml:"pool"`
+	WindowFrom   string            `yaml:"window_from"`
+	WindowTo     string            `yaml:"window_to"`
+	InForceUntil string            `yaml:"in_force_until"`
+	NItems       string            `yaml:"n_items"`
+	TieHandling  string            `yaml:"tie_handling"`
+	SwapKappa    string            `yaml:"swap_kappa"`
+	RerunKappa   string            `yaml:"rerun_kappa"`
+	HumanKappa   string            `yaml:"human_kappa"`
+	NHuman       string            `yaml:"n_human"`
+	Verdict      string            `yaml:"verdict"`
+	Report       string            `yaml:"report"`
+	Supersedes   []supersedesEntry `yaml:"supersedes,omitempty"`
 }
 
 // ID returns the calibration's identifier, or the empty string where the parts
@@ -135,15 +145,38 @@ func (c Calibration) Path() (string, error) {
 	return vocab.Path(vocab.KindCalibration, id)
 }
 
-// InForceUntil is the last day the calibration carries force: ValidityDays
-// after the window closed. It is derived rather than carried so that no
+// LastDay is the last day the calibration is in force: ValidityDays after the
+// window closed, inclusive. It is derived rather than carried so that no
 // document can claim a longer life than the measurement behind it earns.
-func (c Calibration) InForceUntil() (string, error) {
+func (c Calibration) LastDay() (string, error) {
 	closed, err := time.Parse(vocab.DayLayout, c.WindowTo)
 	if err != nil {
-		return "", fmt.Errorf("%w: calibration window_to %q is not a %s day", ErrDocument, c.WindowTo, vocab.DayLayout)
+		return "", fmt.Errorf("%w: calibration window_to %q is not a %s day",
+			ErrDocument, c.WindowTo, vocab.DayLayout)
 	}
 	return closed.AddDate(0, 0, ValidityDays).Format(vocab.DayLayout), nil
+}
+
+// InForceUntil is the day the frontmatter writes, which is one day past
+// LastDay.
+//
+// DocDag reads `period.until` as **exclusive**: a document with
+// `in_force_until: 2026-10-06` binds on the fifth and not on the sixth. So
+// writing window_to + 30 would give twenty-nine days of force under a clause,
+// a README and a warning that all say thirty, and the boundary day would be
+// the one where `judge status` printed "in force until" a day the document was
+// no longer in force on. The off-by-one is the engine's convention, not a
+// choice, and it is handled here — once — rather than in each reader.
+func (c Calibration) InForceUntil() (string, error) {
+	last, err := c.LastDay()
+	if err != nil {
+		return "", err
+	}
+	day, err := time.Parse(vocab.DayLayout, last)
+	if err != nil {
+		return "", err
+	}
+	return day.AddDate(0, 0, 1).Format(vocab.DayLayout), nil
 }
 
 // Validate reports the first thing about the calibration DocDag would refuse.
@@ -203,6 +236,21 @@ func (c Calibration) Validate() error {
 	if c.NHuman < 0 {
 		return fmt.Errorf("%w: %sn_human %d is negative", ErrDocument, where, c.NHuman)
 	}
+	// UZ-C-009: the coefficients are unreadable without the marginals and the
+	// intervals, and those are in the report. A document without one is a
+	// verdict with its evidence deleted.
+	if err := requireText(where+"report", c.Report); err != nil {
+		return err
+	}
+	for _, superseded := range c.Supersedes {
+		if !vocab.ValidCalibrationID(superseded.Edit) {
+			return fmt.Errorf("%w: %ssupersedes %q, which is not a calibration identifier",
+				ErrDocument, where, superseded.Edit)
+		}
+		if err := requireText(where+"supersedes reason", superseded.Reason); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -233,6 +281,7 @@ func (c Calibration) Frontmatter() (CalibrationFrontmatter, error) {
 		NHuman:       strconv.Itoa(c.NHuman),
 		Verdict:      c.Verdict.String(),
 		Report:       c.Report,
+		Supersedes:   supersedesEntries(c.Supersedes),
 	}, nil
 }
 

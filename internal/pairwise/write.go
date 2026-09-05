@@ -97,6 +97,12 @@ type Provenance struct {
 	// GoldExtra returns the source-specific keys of a gold file, written after
 	// the licence and before the label.
 	GoldExtra func(Item) []Field
+	// Rubric returns the judge-only note an item carries, or the empty string
+	// for none. It exists because a candidate is not always one answer: where
+	// the adapter renders something else into the candidate file — a
+	// transcript, a document with sections — the judge has to be told what it
+	// is looking at, and the task manifest has a place for exactly that.
+	Rubric func(Item) string
 }
 
 // Write materialises a derived corpus under dir: one task directory per item,
@@ -163,23 +169,72 @@ func Write(dir string, items []Item, stats Stats, p Provenance) error {
 	return writeFile(filepath.Join(dir, "DERIVATION.md"), []byte(derivation(stats, p)))
 }
 
-// writeItem materialises one task directory.
-func writeItem(dir, id string, item Item, p Provenance) error {
+// WriteCandidates re-materialises only the candidate answers of a suite that
+// is already on disk.
+//
+// It exists because the answers are not the corpus's to redistribute. A
+// derived suite commits what its licence covers — the prompts, the human
+// labels, the manifest — and leaves every `candidates/*.txt` out, so a clone
+// has a suite with no answers in it until somebody fetches them. This is that
+// fetch: the same seed over the same source yields the same items, and this
+// checks that it did before writing anything.
+//
+// The check is the point. Writing answers into item directories whose
+// identifiers happen to match, from a derivation that sampled differently,
+// would produce a suite whose gold labels belong to other answers — a corpus
+// that looks right and measures nothing.
+func WriteCandidates(dir string, items []Item, p Provenance) error {
+	if p.ID == nil {
+		return fmt.Errorf("%w: the provenance names no way to identify an item", ErrCorpus)
+	}
+	manifest := filepath.Join(dir, "suite.json")
+	body, err := os.ReadFile(manifest) //nolint:gosec // the caller names the suite
+	if err != nil {
+		return fmt.Errorf("%w: %s holds no suite to fill in: %w", ErrCorpus, dir, err)
+	}
+	var suite struct {
+		Tasks []struct {
+			ID  string `json:"id"`
+			Dir string `json:"dir"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal(body, &suite); err != nil {
+		return fmt.Errorf("%w: %s: %w", ErrCorpus, manifest, err)
+	}
+	if len(suite.Tasks) != len(items) {
+		return fmt.Errorf("%w: %s lists %d item(s) and this derivation produced %d; "+
+			"the seed, the target or the source has changed",
+			ErrCorpus, manifest, len(suite.Tasks), len(items))
+	}
+	on := map[string]bool{}
+	for _, task := range suite.Tasks {
+		on[task.ID] = true
+	}
+	written := 0
+	for _, item := range items {
+		id, err := p.ID(item)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrCorpus, err)
+		}
+		if !on[id] {
+			return fmt.Errorf("%w: this derivation produced item %s, which %s does not list; "+
+				"the seed, the target or the source has changed", ErrCorpus, id, manifest)
+		}
+		if err := writeCandidates(filepath.Join(dir, id), item); err != nil {
+			return err
+		}
+		written++
+	}
+	if written != len(suite.Tasks) {
+		return fmt.Errorf("%w: filled in %d of %d item(s)", ErrCorpus, written, len(suite.Tasks))
+	}
+	return nil
+}
+
+// writeCandidates puts one item's three answers on disk.
+func writeCandidates(dir string, item Item) error {
 	if err := os.MkdirAll(filepath.Join(dir, "candidates"), 0o755); err != nil {
 		return fmt.Errorf("%w: %w", ErrCorpus, err)
-	}
-	task := object{
-		{"version", TaskVersion},
-		{"id", id},
-		{"face", FaceChat},
-		{"conversation", "conversation.json"},
-		{"judge", map[string]bool{"allow_tie": true}},
-	}
-	if err := writeJSON(filepath.Join(dir, "task.json"), task); err != nil {
-		return err
-	}
-	if err := writeJSON(filepath.Join(dir, "conversation.json"), item.Conversation); err != nil {
-		return err
 	}
 	for n, position := range Positions {
 		// The answers are somebody else's model outputs. They are written
@@ -189,6 +244,38 @@ func writeItem(dir, id string, item Item, p Provenance) error {
 		if err := writeFile(filepath.Join(dir, "candidates", position+".txt"), []byte(body)); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// writeItem materialises one task directory.
+func writeItem(dir, id string, item Item, p Provenance) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("%w: %w", ErrCorpus, err)
+	}
+	task := object{
+		{"version", TaskVersion},
+		{"id", id},
+		{"face", FaceChat},
+		{"conversation", "conversation.json"},
+	}
+	if p.Rubric != nil {
+		if rubric := p.Rubric(item); rubric != "" {
+			if err := writeFile(filepath.Join(dir, "rubric.md"), []byte(rubric)); err != nil {
+				return err
+			}
+			task = append(task, Field{"rubric", "rubric.md"})
+		}
+	}
+	task = append(task, Field{"judge", map[string]bool{"allow_tie": true}})
+	if err := writeJSON(filepath.Join(dir, "task.json"), task); err != nil {
+		return err
+	}
+	if err := writeJSON(filepath.Join(dir, "conversation.json"), item.Conversation); err != nil {
+		return err
+	}
+	if err := writeCandidates(dir, item); err != nil {
+		return err
 	}
 
 	models := object{}
@@ -206,6 +293,7 @@ func writeItem(dir, id string, item Item, p Provenance) error {
 	gold = append(gold,
 		Field{"models", models},
 		Field{"gold", item.Gold},
+		Field{"gold_wins", item.Wins},
 		Field{"method", MethodAcyclicMajority},
 		Field{"margin_stratum", item.Stratum},
 		Field{"bt_top", item.BTTop},
@@ -241,7 +329,10 @@ func derivation(stats Stats, p Provenance) string {
 		{"eligible", fmt.Sprint(stats.Eligible)},
 		{"sampled into this suite", fmt.Sprint(stats.Sampled)},
 		{"prompts contributing an item", fmt.Sprint(stats.GroupsUsed)},
-		{"sampled items the people left undecided (`gold: tie`)", fmt.Sprint(stats.TieGold)},
+		{"sampled items with no unbeaten system (`gold: tie`)", fmt.Sprint(stats.TieGold)},
+		{"labelled items whose system beat both others", fmt.Sprint(stats.Condorcet)},
+		{"labelled items whose system was unbeaten but drew a pair",
+			fmt.Sprint(stats.Sampled - stats.TieGold - stats.Condorcet)},
 		{"sampled items the majorities and the fit disagree about", fmt.Sprint(stats.Hard)},
 	}
 	for _, row := range rows {
@@ -271,11 +362,20 @@ func derivation(stats Stats, p Provenance) string {
 			b.WriteString("\n" + note + "\n")
 		}
 	}
-	b.WriteString("\n## What a gold label is not\n\n")
-	b.WriteString("`gold` is the answer the human majorities point at. It is not a statement\n")
-	b.WriteString("that the answer is good, and `gold: tie` is not a statement that the three\n")
-	b.WriteString("are equal — it says the majorities left no single winner. A calibration\n")
-	b.WriteString("reports every number under a named tie handling for exactly this reason.\n")
+	b.WriteString("\n## What a gold label is\n\n")
+	b.WriteString("`gold` is the **source of the acyclic tournament**: the one system no\n")
+	b.WriteString("majority beat. That is weaker than beating both others, and deliberately\n")
+	b.WriteString("so — an item where A beat B, B beat C and A drew with C has an unbeaten\n")
+	b.WriteString("system, and calling it undecided would put a label the annotators never\n")
+	b.WriteString("gave into the human side of every agreement table. `gold_wins` says which\n")
+	b.WriteString("of the two an item is.\n\n")
+	b.WriteString("A pair is won where more people preferred one side than the other and the\n")
+	b.WriteString("people who saw no difference did not outnumber them, so five saying \"of a\n")
+	b.WriteString("kind\" and one preferring A is a drawn pair rather than a defeat for B.\n\n")
+	b.WriteString("`gold` is not a statement that the answer is good, and `gold: tie` is not a\n")
+	b.WriteString("statement that the three are equal — it says no single system was left\n")
+	b.WriteString("unbeaten. A calibration reports every number under a named tie handling for\n")
+	b.WriteString("exactly this reason.\n")
 	return b.String()
 }
 

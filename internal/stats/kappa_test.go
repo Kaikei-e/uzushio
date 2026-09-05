@@ -2,7 +2,9 @@ package stats_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/Kaikei-e/uzushio/internal/stats"
@@ -62,7 +64,7 @@ func TestCohen1960(t *testing.T) {
 	near(t, "p_e", got.PE, 0.41)
 	near(t, "kappa", got.Kappa.Float(), 0.29/0.59)
 	// PABAK fixes the chance term at 1/k, so it reads (3·0.70 − 1)/2.
-	near(t, "pabak", got.PABAK, 0.55)
+	near(t, "pabak", got.PABAK.Float(), 0.55)
 	for i, want := range []float64{0.60, 0.30, 0.10} {
 		near(t, "first marginal", got.First[i], want)
 	}
@@ -72,6 +74,9 @@ func TestCohen1960(t *testing.T) {
 	// The interval is a jackknife rather than a closed form, so the test
 	// checks the properties a caller relies on rather than a digit string:
 	// it brackets the estimate and stays inside the coefficient's range.
+	if got.CI == nil {
+		t.Fatal("no jackknife interval at n=200")
+	}
 	if got.CI.Lo > got.Kappa.Float() || got.CI.Hi < got.Kappa.Float() {
 		t.Fatalf("jackknife interval %v does not bracket kappa %v", got.CI, got.Kappa)
 	}
@@ -94,7 +99,7 @@ func TestTwoByTwoByHand(t *testing.T) {
 	near(t, "p_o", got.PO, 0.70)
 	near(t, "p_e", got.PE, 0.50)
 	near(t, "kappa", got.Kappa.Float(), 0.40)
-	near(t, "pabak", got.PABAK, 0.40)
+	near(t, "pabak", got.PABAK.Float(), 0.40)
 }
 
 // TestPrevalenceParadox is the reason PABAK and the marginals are reported at
@@ -111,8 +116,8 @@ func TestPrevalenceParadox(t *testing.T) {
 	}), 0.05)
 	near(t, "balanced p_o", balanced.PO, 0.90)
 	near(t, "skewed p_o", skewed.PO, 0.90)
-	near(t, "balanced pabak", balanced.PABAK, 0.80)
-	near(t, "skewed pabak", skewed.PABAK, 0.80)
+	near(t, "balanced pabak", balanced.PABAK.Float(), 0.80)
+	near(t, "skewed pabak", skewed.PABAK.Float(), 0.80)
 	if skewed.Kappa.Float() >= 0.1 {
 		t.Fatalf("skewed kappa = %v, want the paradox: near zero at p_o = 0.9", skewed.Kappa)
 	}
@@ -191,5 +196,135 @@ func TestTableRefusesNonsense(t *testing.T) {
 	empty := stats.Agreement(built, 0.05)
 	if empty.Kappa.Defined() {
 		t.Fatalf("kappa over no items = %v, want undefined", empty.Kappa)
+	}
+}
+
+// TestClusterJackknifeIsWiderThanTheRowWise is the defect this exists for.
+// Nine rows from one item are not nine observations: they move together, and a
+// resample that deletes one row at a time reports an interval about the square
+// root of the cluster size too narrow.
+func TestClusterJackknifeIsWiderThanTheRowWise(t *testing.T) {
+	// The same table twice: once with every row independent, once with the
+	// rows grouped nine to an item, as a swap table over three seeds and three
+	// pairs of one hundred items would be.
+	build := func(clustered bool) *stats.Table {
+		table, err := stats.NewTable([]string{"a", "b", "c"})
+		if err != nil {
+			t.Fatalf("NewTable: %v", err)
+		}
+		// Every row of an item lands in the same cell. That is the case the
+		// correction is for: a judge biased on one prompt flips all three of
+		// its pairs together, and the nine rows carry one item's worth of
+		// information rather than nine.
+		for item := range 100 {
+			for range 9 {
+				first, second := "a", "a"
+				switch item % 5 {
+				case 0:
+					first, second = "a", "b"
+				case 1:
+					first, second = "b", "b"
+				case 2:
+					first, second = "c", "c"
+				case 3:
+					first, second = "b", "c"
+				}
+				var err error
+				if clustered {
+					err = table.ObserveIn(fmt.Sprintf("item-%d", item), first, second)
+				} else {
+					err = table.Observe(first, second)
+				}
+				if err != nil {
+					t.Fatalf("Observe: %v", err)
+				}
+			}
+		}
+		return table
+	}
+	rowWise := stats.Agreement(build(false), 0.05)
+	clustered := stats.Agreement(build(true), 0.05)
+
+	if rowWise.Kappa.Float() != clustered.Kappa.Float() {
+		t.Fatalf("clustering moved the point estimate: %v against %v", clustered.Kappa, rowWise.Kappa)
+	}
+	if rowWise.N != clustered.N || rowWise.N != 900 {
+		t.Fatalf("n = %d and %d, want 900 both", rowWise.N, clustered.N)
+	}
+	if rowWise.Clusters != 900 || clustered.Clusters != 100 {
+		t.Fatalf("clusters = %d and %d, want 900 and 100", rowWise.Clusters, clustered.Clusters)
+	}
+	if rowWise.CI == nil || clustered.CI == nil {
+		t.Fatal("no interval")
+	}
+	narrow := rowWise.CI.Hi - rowWise.CI.Lo
+	wide := clustered.CI.Hi - clustered.CI.Lo
+	if wide <= narrow {
+		t.Fatalf("the clustered interval %v is not wider than the row-wise one %v", clustered.CI, rowWise.CI)
+	}
+	// Nine rows per cluster: the honest interval is around three times the
+	// dishonest one. The bound is loose because the ratio depends on how much
+	// of the variance is between clusters, and the claim being tested is that
+	// the correction is of the right order rather than of the right digit.
+	if ratio := wide / narrow; ratio < 2 || ratio > 4 {
+		t.Fatalf("the clustered interval is %.2fx the row-wise one, want about 3x", ratio)
+	}
+}
+
+// TestUndefinedIntervalIsNull is the other half: an interval nobody can
+// compute must not be published as a zero-width one beside a real coefficient.
+func TestUndefinedIntervalIsNull(t *testing.T) {
+	got := stats.Agreement(table(t, []string{"a", "b"}, [][]int{
+		{1, 0},
+		{0, 1},
+	}), 0.05)
+	if got.Kappa.Float() != 1 {
+		t.Fatalf("kappa = %v, want 1", got.Kappa)
+	}
+	if got.CI != nil {
+		t.Fatalf("CI = %v over two items whose replicates lose their variation, want none", got.CI)
+	}
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(body), `"ci":null`) {
+		t.Fatalf("an absent interval marshals as something other than null:\n%s", body)
+	}
+	// A table with nothing in it has no PABAK either, and a zero there reads
+	// as a computed value.
+	empty, err := stats.NewTable([]string{"a", "b"})
+	if err != nil {
+		t.Fatalf("NewTable: %v", err)
+	}
+	if none := stats.Agreement(empty, 0.05); none.PABAK.Defined() {
+		t.Fatalf("PABAK over no items = %v, want undefined", none.PABAK)
+	}
+}
+
+// TestAlphaDrivesTheQuantile is the mislabelled-interval defect: an alpha the
+// package did not think of used to come back at z = 1.96 while the report
+// printed the level it was asked for.
+func TestAlphaDrivesTheQuantile(t *testing.T) {
+	// Hand-checked normal quantiles.
+	for _, tt := range []struct {
+		alpha float64
+		z     float64
+	}{
+		{0.05, 1.959963984540054},
+		{0.10, 1.6448536269514722},
+		{0.01, 2.5758293035489004},
+		{0.20, 1.2815515655446004},
+		{0.32, 0.9944578832097535},
+	} {
+		// Wilson at p = 1/2 has half-width z/(2*sqrt(n)) / (1 + z^2/n) * ...,
+		// so the quantile is read back through an interval rather than through
+		// an unexported function.
+		got := stats.Wilson(50, 100, tt.alpha)
+		width := got.Hi - got.Lo
+		reference := 2 * tt.z / (1 + tt.z*tt.z/100) * math.Sqrt(0.25/100+tt.z*tt.z/40000)
+		if math.Abs(width-reference) > 1e-9 {
+			t.Fatalf("at alpha %v the interval is %.9f wide, want %.9f", tt.alpha, width, reference)
+		}
 	}
 }

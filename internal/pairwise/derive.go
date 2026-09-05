@@ -40,7 +40,7 @@ type Stratum struct {
 var Positions = []string{"c1", "c2", "c3"}
 
 // GoldTie is the gold label of an item the people did not settle: the three
-// majorities are acyclic but no system beat both others.
+// majorities are acyclic and leave no single system unbeaten.
 const GoldTie = "tie"
 
 // Item is one three-way selection item.
@@ -55,8 +55,15 @@ type Item struct {
 	Answers [3]string
 	// Conversation is the shared turns, ending with the user turn answered.
 	Conversation []Message
-	// Gold is the position the human majorities point at, or GoldTie.
+	// Gold is the position the human majorities point at, or GoldTie. It is
+	// the unique system no majority beat — the source of the acyclic
+	// tournament — which is not the same as the system that beat both others.
 	Gold string
+	// Wins is how many of its two pairs the gold system won outright. Two is a
+	// Condorcet winner; one is a system that won a pair and drew the other,
+	// and is unbeaten all the same. Zero happens where every pair was drawn,
+	// and then Gold is GoldTie.
+	Wins int
 	// BTTop is the position the Bradley-Terry fit puts first. Where it differs
 	// from Gold the item is hard: the transitive model and the raw majorities
 	// disagree about it.
@@ -96,10 +103,13 @@ type Stats struct {
 	// Eligible is what survived, Sampled what was taken.
 	Eligible int `json:"eligible"`
 	Sampled  int `json:"sampled"`
-	// TieGold is how many of the sampled items the people left undecided, and
-	// Hard how many the majorities and the fit disagree about.
-	TieGold int `json:"tie_gold"`
-	Hard    int `json:"hard"`
+	// TieGold is how many of the sampled items left no single system unbeaten;
+	// Condorcet how many of the labelled ones were won outright, so a reader
+	// can see how much of the label set rests on a drawn pair; and Hard how
+	// many the majorities and the fit disagree about.
+	TieGold   int `json:"tie_gold"`
+	Condorcet int `json:"condorcet"`
+	Hard      int `json:"hard"`
 	// PerStratum counts the sample by band, PerGroup the number of groups
 	// contributing one, two or more items.
 	PerStratum map[string]int `json:"per_stratum"`
@@ -167,6 +177,9 @@ func Derive(c *Corpus, opts Options) ([]Item, Stats, error) {
 		if item.Gold == GoldTie {
 			stats.TieGold++
 		}
+		if item.Wins == 2 {
+			stats.Condorcet++
+		}
 		if item.Hard() {
 			stats.Hard++
 		}
@@ -227,7 +240,7 @@ const (
 func deriveTriple(g *Group, all map[string]*tally, strength map[string]float64,
 	triple [3]string, minJudgments int,
 ) (Item, int) {
-	wins := map[string]int{}
+	wins, losses := map[string]int{}, map[string]int{}
 	votes := 0
 	for a := range 3 {
 		for b := a + 1; b < 3; b++ {
@@ -236,9 +249,15 @@ func deriveTriple(g *Group, all map[string]*tally, strength map[string]float64,
 				return Item{}, tripleIncomplete
 			}
 			votes += n
-			if winner != "" {
-				wins[winner]++
+			if winner == "" {
+				continue
 			}
+			wins[winner]++
+			loser := triple[a]
+			if winner == loser {
+				loser = triple[b]
+			}
+			losses[loser]++
 		}
 	}
 	if votes < minJudgments {
@@ -249,11 +268,23 @@ func deriveTriple(g *Group, all map[string]*tally, strength map[string]float64,
 	if len(wins) == 3 {
 		return Item{}, tripleCyclic
 	}
-	gold := GoldTie
-	for system, won := range wins {
-		if won == 2 {
-			gold = system
+	// The gold label is the source of the acyclic tournament: the one system
+	// no majority beat. That is a weaker condition than beating both others,
+	// and the difference is a third of the corpus — an item where A beat B,
+	// B beat C and A drew with C has an unbeaten system, and calling it
+	// undecided puts a label the people did not give into the human marginal
+	// of every validity table. `tie` is reserved for a triple with no unique
+	// unbeaten system, which is what "the people left this open" means.
+	gold, goldWins := GoldTie, 0
+	unbeaten := make([]string, 0, 3)
+	for _, system := range triple {
+		if losses[system] == 0 {
+			unbeaten = append(unbeaten, system)
 		}
+	}
+	if len(unbeaten) == 1 {
+		gold = unbeaten[0]
+		goldWins = wins[gold]
 	}
 
 	ordered := slices.Clone(triple[:])
@@ -265,6 +296,7 @@ func deriveTriple(g *Group, all map[string]*tally, strength map[string]float64,
 		Systems:      triple,
 		Conversation: g.Conversation,
 		Gold:         gold,
+		Wins:         goldWins,
 		BTTop:        ordered[0],
 		Margin:       margin,
 		Judgments:    votes,

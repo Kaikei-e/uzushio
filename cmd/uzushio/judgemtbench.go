@@ -34,20 +34,20 @@ const (
 // prompt's identity, the two systems, and the verdict; the conversations carry
 // the answers.
 type mtbRow struct {
-	QuestionID int    `json:"question_id"`
-	ModelA     string `json:"model_a"`
-	ModelB     string `json:"model_b"`
-	Winner     string `json:"winner"`
-	Judge      string `json:"judge"`
-	Turn       int    `json:"turn"`
-	Conversion []struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	} `json:"conversation_a"`
-	ConversationB []struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	} `json:"conversation_b"`
+	QuestionID    int       `json:"question_id"`
+	ModelA        string    `json:"model_a"`
+	ModelB        string    `json:"model_b"`
+	Winner        string    `json:"winner"`
+	Judge         string    `json:"judge"`
+	Turn          int       `json:"turn"`
+	ConversationA []mtbTurn `json:"conversation_a"`
+	ConversationB []mtbTurn `json:"conversation_b"`
+}
+
+// mtbTurn is one turn of one system's conversation.
+type mtbTurn struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 // The verdict words this corpus uses.
@@ -59,13 +59,14 @@ const (
 // newJudgeImportMTBenchCmd builds the import command.
 func newJudgeImportMTBenchCmd() *cobra.Command {
 	var (
-		out          string
-		endpoint     string
-		minJudgments int
-		target       int
-		seed         uint64
-		limit        int
-		suiteID      string
+		out            string
+		endpoint       string
+		minJudgments   int
+		target         int
+		seed           uint64
+		limit          int
+		suiteID        string
+		candidatesOnly bool
 	)
 	cmd := &cobra.Command{
 		Use:   "import-mtbench",
@@ -81,7 +82,14 @@ func newJudgeImportMTBenchCmd() *cobra.Command {
 			"written into DERIVATION.md, because it bounds the agreement any judge could\n" +
 			"reach on this corpus.\n\n" +
 			"The answers are reproduced verbatim. They are model outputs from 2023 and are\n" +
-			"not this repository's to edit.\n\n" +
+			"neither this repository's to edit nor this repository's to redistribute, so\n" +
+			"they are written to disk and never committed. A fresh clone has the suite and\n" +
+			"no answers in it; this command is how the answers arrive.\n\n" +
+			"With --candidates-only it fills in the answers of a suite that is already on\n" +
+			"disk and touches nothing else. The same --seed over the same source yields the\n" +
+			"same items, and it refuses to write unless the items it derived are exactly the\n" +
+			"ones the manifest lists — answers written into a differently sampled suite\n" +
+			"would sit beside gold labels that belong to other answers.\n\n" +
 			"The suite is licensed " + mtbLicense + " by way of its source; see ATTRIBUTION.md.\n" +
 			"The import is deterministic given --seed.",
 		Args: cobra.NoArgs,
@@ -117,7 +125,7 @@ func newJudgeImportMTBenchCmd() *cobra.Command {
 			command := fmt.Sprintf(
 				"uzushio judge import-mtbench --out %s --min-judgments %d --target %d --seed %d",
 				out, minJudgments, target, seed)
-			if err := pairwise.Write(out, items, stats, pairwise.Provenance{
+			provenance := pairwise.Provenance{
 				SuiteID:     suiteID,
 				Source:      mtbDataset,
 				License:     mtbLicense,
@@ -126,7 +134,17 @@ func newJudgeImportMTBenchCmd() *cobra.Command {
 				Notes:       mtbNotes(),
 				ID:          mtbID,
 				GoldExtra:   mtbGoldExtra,
-			}); err != nil {
+				Rubric:      mtbRubric,
+			}
+			if candidatesOnly {
+				if err := pairwise.WriteCandidates(out, items, provenance); err != nil {
+					return err
+				}
+				fmt.Fprintf(errOut, "filled in the answers of %d item(s) in %s\n", len(items), out)
+				fmt.Fprintln(cmd.OutOrStdout(), out)
+				return nil
+			}
+			if err := pairwise.Write(out, items, stats, provenance); err != nil {
 				return err
 			}
 			fmt.Fprintf(errOut,
@@ -146,17 +164,28 @@ func newJudgeImportMTBenchCmd() *cobra.Command {
 	cmd.Flags().Uint64Var(&seed, "seed", 1, "fixes the sampling and the candidate order")
 	cmd.Flags().IntVar(&limit, "limit", 0, "stop after this many rows; 0 reads the split")
 	cmd.Flags().StringVar(&suiteID, "suite-id", "suite-chat", "the identifier the suite carries")
+	cmd.Flags().BoolVar(&candidatesOnly, "candidates-only", false,
+		"fill in the answers of a suite already on disk and change nothing else")
 	return cmd
 }
 
 // mtbCorpus turns rows into the corpus the derivation reads.
 //
-// A group is one (question, turn) pair. The conversation a group carries is
-// the *shared* turns: the user turns up to and including the one the answers
-// respond to. On the second turn the assistant turn between them is not
-// shared — each system answered the first question its own way — so it is not
-// in the conversation, and each candidate file holds only the answer to the
-// turn being judged.
+// A group is one (question, turn) pair. The conversation is the first user
+// turn and nothing else; everything a system did in reply is inside its own
+// candidate file.
+//
+// That shape is forced by what the human labels are labels of. On the second
+// turn the annotator read one model's whole two-turn conversation against
+// another's, and the second turns are usually critiques of the first ("Take a
+// moment to evaluate and critique your own response") — so a judge shown only
+// the two user turns is ranking three critiques of three answers it has not
+// seen, and each of the three is critiquing something different. It would be
+// estimating a different quantity from the one the gold label measures, on the
+// half of the corpus that is turn two. So the candidate for a turn-two item is
+// the model's own transcript: its first answer, the shared second question,
+// and its second answer. The task's rubric says so, because a judge told
+// nothing would read the transcript as one answer that repeats itself.
 func mtbCorpus(rows []json.RawMessage) (*pairwise.Corpus, error) {
 	corpus := pairwise.NewCorpus()
 	for i, raw := range rows {
@@ -168,16 +197,13 @@ func mtbCorpus(rows []json.RawMessage) (*pairwise.Corpus, error) {
 			return nil, fmt.Errorf("row %d: turn %d", i, row.Turn)
 		}
 		answer := 2*row.Turn - 1
-		if len(row.Conversion) <= answer || len(row.ConversationB) <= answer {
+		if len(row.ConversationA) <= answer || len(row.ConversationB) <= answer {
 			return nil, fmt.Errorf("row %d: a conversation is too short for turn %d", i, row.Turn)
 		}
-		var shared []pairwise.Message
-		for at := 0; at < answer; at += 2 {
-			shared = append(shared, pairwise.Message{
-				Role:    row.Conversion[at].Role,
-				Content: row.Conversion[at].Content,
-			})
-		}
+		shared := []pairwise.Message{{
+			Role:    row.ConversationA[0].Role,
+			Content: row.ConversationA[0].Content,
+		}}
 		winner := pairwise.WinnerTie
 		switch row.Winner {
 		case mtbWinnerA:
@@ -190,11 +216,60 @@ func mtbCorpus(rows []json.RawMessage) (*pairwise.Corpus, error) {
 		}
 		group := fmt.Sprintf("%03d-t%d", row.QuestionID, row.Turn)
 		if err := corpus.Add(group, shared, vote,
-			row.Conversion[answer].Content, row.ConversationB[answer].Content); err != nil {
+			mtbCandidate(row.ConversationA, row.Turn),
+			mtbCandidate(row.ConversationB, row.Turn)); err != nil {
 			return nil, err
 		}
 	}
 	return corpus, nil
+}
+
+// mtbCandidate renders one system's side of an item.
+//
+// On the first turn that is its answer, verbatim. On the second it is the
+// transcript the annotator read: the first answer, the shared second question,
+// and the second answer, joined by the two markers the rubric names. Nothing
+// inside an answer is touched — the joining happens between them.
+func mtbCandidate(conversation []mtbTurn, turn int) string {
+	if turn < 2 {
+		return conversation[1].Content
+	}
+	var b strings.Builder
+	for at := 1; at < 2*turn; at++ {
+		if at > 1 {
+			b.WriteString("\n\n")
+			if conversation[at].Role == "user" {
+				b.WriteString(mtbUserMarker + "\n")
+			} else {
+				b.WriteString(mtbAssistantMarker + "\n")
+			}
+		}
+		b.WriteString(conversation[at].Content)
+	}
+	return b.String()
+}
+
+// The markers a multi-turn candidate is joined with. They are plain words in
+// square brackets rather than anything resembling the judge's own framing:
+// a candidate block is data, and a marker that looked like a role header in
+// the judge's prompt would be an instruction the corpus smuggled in.
+const (
+	mtbUserMarker      = "[user]"
+	mtbAssistantMarker = "[assistant]"
+)
+
+// mtbRubric is the judge-only note a multi-turn item carries.
+func mtbRubric(item pairwise.Item) string {
+	if _, turn := mtbCoordinates(item); turn > 1 {
+		return "Each candidate is a **two-turn transcript**, not a single answer.\n\n" +
+			"It holds the assistant's answer to the question above, then the marker `" +
+			mtbUserMarker + "` and the follow-up question every candidate was asked, then\n" +
+			"the marker `" + mtbAssistantMarker + "` and the assistant's answer to it.\n\n" +
+			"Judge the transcript as a whole: the follow-up answer usually depends on the\n" +
+			"first one, and the candidates' first answers differ. The markers are\n" +
+			"structure, not content — do not reward or penalise a candidate for them.\n"
+	}
+	return ""
 }
 
 // mtbID names an item's task directory: the corpus, the prompt, and a letter
@@ -215,14 +290,23 @@ func letter(n int) string {
 // mtbGoldExtra writes the source's own coordinates into a gold file, so an
 // item can be traced back to the rows it came from.
 func mtbGoldExtra(item pairwise.Item) []pairwise.Field {
-	question, turn := 0, 0
-	if _, err := fmt.Sscanf(item.Group, "%d-t%d", &question, &turn); err != nil {
+	question, turn := mtbCoordinates(item)
+	if turn == 0 {
 		return []pairwise.Field{{Key: "group", Value: item.Group}}
 	}
 	return []pairwise.Field{
 		{Key: "question_id", Value: question},
 		{Key: "turn", Value: turn},
 	}
+}
+
+// mtbCoordinates reads the prompt and the turn back out of a group name. It
+// answers with a zero turn where the name is not one this adapter wrote.
+func mtbCoordinates(item pairwise.Item) (question, turn int) {
+	if _, err := fmt.Sscanf(item.Group, "%d-t%d", &question, &turn); err != nil {
+		return 0, 0
+	}
+	return question, turn
 }
 
 // mtbAttribution is the whole of ATTRIBUTION.md. It is written out rather than
@@ -250,10 +334,26 @@ func mtbAttribution() string {
 	b.WriteString("the items were sampled. `DERIVATION.md` states exactly how, with the counts.\n")
 	b.WriteString("CC BY 4.0 asks that changes be indicated; that file is the indication.\n\n")
 	b.WriteString("Not changed: every `candidates/*.txt` file holds one model's answer as the\n")
-	b.WriteString("dataset carries it, byte for byte apart from a trailing newline. They are\n")
-	b.WriteString("outputs of the models named in each item's `gold.json`, produced in 2023,\n")
-	b.WriteString("and this repository does not edit them — a corpus whose answers have been\n")
-	b.WriteString("tidied is not the corpus the human labels were collected on.\n")
+	b.WriteString("dataset carries it, byte for byte apart from a trailing newline and, on a\n")
+	b.WriteString("second-turn item, the two markers that join a model's two answers into the\n")
+	b.WriteString("transcript the annotator read. They are outputs of the models named in each\n")
+	b.WriteString("item's `gold.json`, produced in 2023, and this repository does not edit them —\n")
+	b.WriteString("a corpus whose answers have been tidied is not the corpus the human labels\n")
+	b.WriteString("were collected on.\n\n")
+	b.WriteString("## What is committed here, and what is not\n\n")
+	b.WriteString("Committed: `suite.json`, and per item `task.json`, `conversation.json`,\n")
+	b.WriteString("`gold.json` and `rubric.md`. Those are the prompts people wrote and the\n")
+	b.WriteString("judgements people made — the CC BY 4.0 part, redistributed under that licence\n")
+	b.WriteString("with this attribution.\n\n")
+	b.WriteString("**Not committed: `candidates/*.txt`.** Those are responses generated by the\n")
+	b.WriteString("models named in each `gold.json`, and a model's output is subject to its\n")
+	b.WriteString("provider's terms of use whatever licence the surrounding dataset carries.\n")
+	b.WriteString("This repository does not redistribute them. They are fetched from the source\n")
+	b.WriteString("onto the machine that needs them by\n\n")
+	b.WriteString("```sh\nuzushio judge import-mtbench --candidates-only --out <this directory>\n```\n\n")
+	b.WriteString("with the same `--seed` and `--target` the suite was derived at; `DERIVATION.md`\n")
+	b.WriteString("records the command. The fetch refuses to write unless the items it derives\n")
+	b.WriteString("are exactly the ones the manifest lists.\n")
 	return b.String()
 }
 
@@ -264,11 +364,22 @@ func mtbNotes() []string {
 		"A group is one (`question_id`, `turn`) pair. Every model in the source answered\n" +
 			"every question, which is why three-way items can be derived at all: a corpus\n" +
 			"where each prompt was shown to one pair of models has no triples in it.",
-		"On the second turn the conversation a task carries is the two **user** turns and\n" +
-			"nothing else. The assistant turn between them is not shared — each system\n" +
-			"answered the first question its own way — so putting one system's first answer\n" +
-			"in the shared context would show the judge one candidate's work as if it were\n" +
-			"the setting. Each candidate file holds only the answer to the turn being judged.",
+		"The conversation a task carries is the **first user turn** and nothing else.\n" +
+			"On a second-turn item each candidate file holds that model's whole side of the\n" +
+			"exchange: its first answer, the marker `" + mtbUserMarker + "`, the shared follow-up\n" +
+			"question, the marker `" + mtbAssistantMarker + "`, and its second answer. The task's\n" +
+			"`rubric.md` tells the judge that is what it is reading.\n\n" +
+			"This is not a presentation choice. The estimand is the annotators': a person\n" +
+			"comparing two systems on a second turn read each system's *whole* two-turn\n" +
+			"conversation, and the follow-up questions are usually critiques of the first\n" +
+			"answer — \"Take a moment to evaluate and critique your own response\". A judge\n" +
+			"shown only the two user turns would be ranking three critiques of three answers\n" +
+			"it has never seen, each critiquing something different, on half the corpus. It\n" +
+			"would be measuring a different quantity from the one the gold label measures,\n" +
+			"and `human_kappa` and the verdict rest on those being the same quantity.\n\n" +
+			"The assistant turn is inside the candidate rather than in the shared context\n" +
+			"because it is not shared: each system answered the first question its own way,\n" +
+			"so there is no first answer that belongs to the item rather than to a candidate.",
 		"`winner: tie` in the source folds into a drawn pair. The source draws no\n" +
 			"distinction between \"equally good\" and \"equally bad\", and neither does a\n" +
 			"majority.",

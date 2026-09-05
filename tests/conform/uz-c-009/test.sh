@@ -47,7 +47,17 @@ for name in sorted(os.listdir(DIR)):
               file=sys.stderr)
         failed = True
         continue
-    if not os.path.isfile(report):
+    # The clause says the path resolves relative to the vault root, which
+    # means it stays under it. `report: ../secrets.json` names a file that
+    # exists and is not this repository's evidence.
+    root = os.path.abspath(".")
+    resolved = os.path.abspath(os.path.join(root, report))
+    if os.path.isabs(report) or (resolved != root and not resolved.startswith(root + os.sep)):
+        print("%s: report %s resolves to %s, outside the vault" % (path, report, resolved),
+              file=sys.stderr)
+        failed = True
+        continue
+    if not os.path.isfile(resolved):
         print("%s: report %s does not exist" % (path, report), file=sys.stderr)
         failed = True
         continue

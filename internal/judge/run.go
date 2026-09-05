@@ -43,7 +43,20 @@ type Judged struct {
 	LatencyMS      int64 `json:"latency_ms"`
 }
 
-// Category is the run's answer as a kappa category.
+// Measured says the run produced an answer about the candidates.
+//
+// `selected` and `no_candidate` do. `judge_timeout` and `judge_failed` do not:
+// they are the machine failing, not the judge deciding, and folding them into
+// abstention would make a fleet outage look like a judge that abstains
+// consistently — which pushes swap and re-run agreement *up*, exactly the
+// wrong way. An unmeasured run is counted and reported and enters no
+// coefficient.
+func (j Judged) Measured() bool {
+	return j.Outcome == OutcomeSelected || j.Outcome == OutcomeNoCandidate
+}
+
+// Category is the run's answer as a kappa category. It is meaningful only for
+// a measured run; a caller checks Measured first.
 func (j Judged) Category() string {
 	if j.Outcome == OutcomeSelected && j.Candidate != "" {
 		return j.Candidate
@@ -223,6 +236,21 @@ func firstLine(text string) string {
 		}
 	}
 	return ""
+}
+
+// scrub replaces the running user's home directory with a tilde.
+//
+// It is the last line of defence for the one thing that must not reach a
+// public repository: text this package did not write. A harness's error
+// message is copied into the journal, and it names configuration files by
+// absolute path, so a report committed from a developer's machine would
+// otherwise carry that machine's home directory into the corpus.
+func scrub(text string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == "/" {
+		return text
+	}
+	return strings.ReplaceAll(text, home, "~")
 }
 
 // relativeTo expresses a path under base as a relative one, and leaves it

@@ -590,6 +590,15 @@ const (
 	ProjectionValidatedOut Projection = "validated_out"
 	// ProjectionImproved holds where some run showed a strict gain.
 	ProjectionImproved Projection = "improved"
+	// ProjectionNewerCalibration holds where a later calibration, itself still
+	// in force, supersedes this one.
+	//
+	// It is uzushio's rather than the preset's `has_inforce_successor` because
+	// that one asks the successor for `status: accepted`, and a calibration
+	// answers to no status vocabulary — it is a measurement. The condition
+	// that matters here is the same in spirit and different in its test: is
+	// there a newer measurement of this judge that is itself still standing.
+	ProjectionNewerCalibration Projection = "has_newer_calibration"
 )
 
 // String returns the projection name as an attribute condition reads it.
@@ -597,7 +606,10 @@ func (p Projection) String() string { return string(p) }
 
 // AllProjections returns the projections uzushio adds.
 func AllProjections() []Projection {
-	return []Projection{ProjectionValidatedIn, ProjectionValidatedOut, ProjectionImproved}
+	return []Projection{
+		ProjectionValidatedIn, ProjectionValidatedOut, ProjectionImproved,
+		ProjectionNewerCalibration,
+	}
 }
 
 // Rule is the name of a finding uzushio's configuration reports. The name is

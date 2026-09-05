@@ -26,6 +26,26 @@ const (
 	fixtureApprover = "the maintainer"
 	// fixtureTrials is how many attempts a fixture's rates stand for.
 	fixtureTrials = 40
+	// fixtureLaterDay is a day after fixtureDay, for the pair of documents
+	// whose argument is which of them came second.
+	fixtureLaterDay = "2026-01-08"
+	// fixtureLoneDay separates the calibration nothing replaces from the two
+	// that argue about replacement, so the three are one corpus and still
+	// three documents.
+	fixtureLoneDay = "2026-01-15"
+	// fixtureOpenWindow is the day a fixture calibration's measurement window
+	// closes, and it is absurd on purpose.
+	//
+	// A calibration is the one uzushio kind whose period is mandatory: it is
+	// derived from the window, and thirty days after the window closes the
+	// document stops binding. A fixture, though, is linted on whatever day
+	// somebody runs the check, and an argument about "a *newer* calibration,
+	// itself still in force" cannot be made by a document that expired in
+	// February. An edit fixture writes no period at all and is in force for
+	// ever; this is the same trick spelled the only way this kind allows.
+	fixtureOpenWindow = "2999-01-01"
+	// fixtureJudge is the model a fixture calibration measured.
+	fixtureJudge = "judge-model"
 	// fixtureTrace is the CMoA trace run a fixture pattern cites as evidence.
 	// It is CMoA's identifier shape, not uzushio's: a pattern is a reading of
 	// what the harness did, and what it did is in CMoA's traces.
@@ -238,6 +258,7 @@ func corpora() ([]corpus, error) {
 		improved(s),
 		effective(s),
 		hasInforceSuccessor(s),
+		hasNewerCalibration(),
 	}, nil
 }
 
@@ -568,6 +589,63 @@ func hasInforceSuccessor(s exemplars) corpus {
 			anEdit("he-9028", vocab.StatusProposed, s.auto,
 				"An edit nobody has replaced",
 				"Nothing supersedes it, so there is no successor to be in force."),
+		},
+	}
+}
+
+// aCalibration builds one measurement of one judge, with everything that is
+// not the argument held constant.
+func aCalibration(day string, verdict vocab.Calibrated, human float64, title, body string) doc.Calibration {
+	return doc.Calibration{
+		Judge:       fixtureJudge,
+		Day:         day,
+		Title:       title,
+		Date:        day,
+		Pool:        doc.PoolExternal,
+		WindowFrom:  day,
+		WindowTo:    fixtureOpenWindow,
+		NItems:      200,
+		TieHandling: vocab.TieAbstainAsCategory,
+		SwapKappa:   0.82,
+		RerunKappa:  0.91,
+		HumanKappa:  human,
+		NHuman:      200,
+		Verdict:     verdict,
+		Report:      "calibrations/" + fixtureJudge + "@" + day + "/report.json",
+		Body:        body,
+	}
+}
+
+// has_newer_calibration: a judge measured twice, the second time worse.
+//
+// The pair is the argument for the projection existing at all. Without it both
+// documents bind for the whole of their periods, and the vault answers "yes, a
+// binding calibration says this judge is calibrated" for a month after the
+// measurement that says it is not.
+func hasNewerCalibration() corpus {
+	replacement := aCalibration(fixtureLaterDay, vocab.CalibratedNo, 0.31,
+		"The measurement that took the first one's place",
+		"A second window on the same judge, still in force, so the first one has a\n"+
+			"successor rather than merely a declared one.")
+	replacement.Supersedes = []doc.Supersession{{
+		Edit:   "calibration/" + fixtureJudge + "@" + fixtureDay,
+		Reason: "re-measured on the same suite",
+	}}
+
+	return corpus{
+		name: vocab.ProjectionNewerCalibration.String(),
+		fires: []written{
+			aCalibration(fixtureDay, vocab.CalibratedYes, 0.71,
+				"The measurement that was replaced",
+				"A later calibration of the same judge supersedes it and is itself in\n"+
+					"force, so the projection holds here and this document stops binding."),
+			replacement,
+		},
+		silent: []written{
+			aCalibration(fixtureLoneDay, vocab.CalibratedYes, 0.68,
+				"A judge measured once",
+				"Nothing supersedes it, so there is no newer measurement to stand in\n"+
+					"its way."),
 		},
 	}
 }

@@ -187,6 +187,21 @@ func (g *Group) tallies() map[string]*tally {
 // system names, or the empty string for a draw. It reports false where the
 // pair carries no comparison at all, which is the case a triple is discarded
 // for rather than guessed at.
+//
+// A side wins where more people preferred it than preferred the other, and
+// where the people who saw no difference did not outnumber them. `tie` is one
+// of the three verdicts the corpus offers rather than a spoiled ballot:
+// comparing only the two win counts would score a pair five-to-one for "they
+// are of a kind" as a clean defeat, which is the opposite of what those six
+// people said — and the defeat is load-bearing, since it is what stops a
+// system being the unbeaten one.
+//
+// The bar is "not outweighed" rather than "outnumbers every other verdict".
+// A pair one person preferred and one person called equal is thin evidence
+// either way, and this corpus is thin: most pairs carry one or two
+// comparisons. Requiring a strict plurality over the ties as well would leave
+// four items in ten with no unbeaten system, which is a claim about the
+// arithmetic rather than about the people.
 func (g *Group) majority(all map[string]*tally, a, b string) (winner string, votes int, labelers int, ok bool) {
 	id, swapped := key(a, b)
 	t := all[id]
@@ -198,9 +213,9 @@ func (g *Group) majority(all map[string]*tally, a, b string) (winner string, vot
 		low, high = b, a
 	}
 	switch {
-	case t.first > t.second:
+	case t.first > t.second && t.first >= t.ties:
 		winner = low
-	case t.second > t.first:
+	case t.second > t.first && t.second >= t.ties:
 		winner = high
 	}
 	return winner, t.first + t.second + t.ties, len(t.labelers), true

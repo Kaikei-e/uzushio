@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,20 +90,21 @@ func newJudgeStatusCmd() *cobra.Command {
 // newJudgeCalibrateCmd builds the measuring command.
 func newJudgeCalibrateCmd() *cobra.Command {
 	var (
-		suitePath  string
-		cmoa       string
-		config     string
-		reruns     int
-		labelFiles []string
-		out        string
-		vault      string
-		parallel   int
-		alpha      float64
-		minKappa   float64
-		asOf       string
-		windowFrom string
-		pool       string
-		dryRun     bool
+		suitePath     string
+		cmoa          string
+		config        string
+		reruns        int
+		labelFiles    []string
+		out           string
+		vault         string
+		parallel      int
+		alpha         float64
+		minKappa      float64
+		maxUnmeasured float64
+		asOf          string
+		windowFrom    string
+		pool          string
+		dryRun        bool
 	)
 	cmd := &cobra.Command{
 		Use:   "calibrate",
@@ -131,6 +133,9 @@ func newJudgeCalibrateCmd() *cobra.Command {
 					"suite %s is face %q; a judge is calibrated on the %q face",
 					suite.ID, suite.Face, judge.FaceChat)}
 			}
+			if err := suite.CheckCandidates(); err != nil {
+				return &exitError{code: exitUsage, err: err}
+			}
 			if err := hasJudgeCommand(ctx, cmoa); err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
@@ -154,6 +159,10 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			if err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
+			replaced, err := supersededBy(vault, judgeModel, day)
+			if err != nil {
+				return &exitError{code: exitUsage, err: err}
+			}
 			fmt.Fprintf(errOut, "judging %d item(s) at %d seed(s) each with %s\n",
 				len(suite.Tasks), reruns+1, judgeModel)
 			if dryRun {
@@ -162,16 +171,17 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			}
 
 			result, err := judge.Calibrate(ctx, judge.Options{
-				Suite:    suite,
-				Runner:   judge.CMoARunner{Binary: cmoa, Config: config, Log: func(line string) { fmt.Fprintln(errOut, line) }},
-				Reruns:   reruns,
-				Labels:   labels,
-				Judge:    judgeModel,
-				Pool:     pool,
-				Day:      day,
-				Alpha:    alpha,
-				MinKappa: minKappa,
-				Parallel: parallel,
+				Suite:         suite,
+				Runner:        judge.CMoARunner{Binary: cmoa, Config: config, Log: func(line string) { fmt.Fprintln(errOut, line) }},
+				Reruns:        reruns,
+				Labels:        labels,
+				Judge:         judgeModel,
+				Pool:          pool,
+				Day:           day,
+				Alpha:         alpha,
+				MinKappa:      minKappa,
+				Parallel:      parallel,
+				MaxUnmeasured: maxUnmeasured,
 			})
 			if err != nil {
 				return err
@@ -187,6 +197,7 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			document.Supersedes = replaced
 			written, err := writeDocument(vault, document)
 			if err != nil {
 				return err
@@ -196,6 +207,12 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			}
 			fmt.Fprintf(errOut, "wrote: %s\nwrote: %s\n", target, written)
 			fmt.Fprintln(cmd.OutOrStdout(), document.ID())
+			if result.Report.OverUnmeasuredBudget {
+				fmt.Fprintf(errOut,
+					"%d of %d item(s) measured nothing, over the %.0f%% this run stands behind\n",
+					result.Report.Unmeasured, result.Report.Items, 100*result.Report.MaxUnmeasured)
+				return &exitError{code: exitFailure}
+			}
 			return nil
 		},
 	}
@@ -212,6 +229,8 @@ func newJudgeCalibrateCmd() *cobra.Command {
 	cmd.Flags().Float64Var(&alpha, "alpha", judge.DefaultAlpha, "the level every interval is computed at")
 	cmd.Flags().Float64Var(&minKappa, "min-kappa", judge.DefaultMinKappa,
 		"the agreement with people a judge has to reach to be called calibrated")
+	cmd.Flags().Float64Var(&maxUnmeasured, "max-unmeasured", judge.DefaultMaxUnmeasured,
+		"the share of items that may fail before the calibration reaches no verdict and exits non-zero")
 	cmd.Flags().StringVar(&asOf, "as-of", "", "the day the window closes, YYYY-MM-DD (default: today, UTC)")
 	cmd.Flags().StringVar(&windowFrom, "window-from", "",
 		"the day the window opens, YYYY-MM-DD (default: the day it closes)")
@@ -299,12 +318,55 @@ func freeSlot(vault, judgeModel, day, out string) (int, string, error) {
 			continue
 		}
 		target := out
-		if target == "" {
+		switch {
+		case target == "":
 			target = filepath.Join(vault, CalibrationsDir, path.Base(id))
+		case seq > 0:
+			// A second calibration of one judge on one day takes a directory
+			// of its own even where the caller named one. Two append-only
+			// documents pointing at one report is a document whose evidence
+			// is another measurement's numbers, and nothing downstream can
+			// tell.
+			target += "-" + strconv.Itoa(seq)
 		}
 		return seq, target, nil
 	}
 	return 0, "", errors.New("a hundred calibrations of one judge in one day is not a measurement")
+}
+
+// supersededBy returns the calibration a new one replaces: the most recent
+// measurement of the same judge that is still in force on the day.
+//
+// It reads the documents rather than asking DocDag, because the question is
+// narrower than "what binds" — same judge, still in force — and answering it
+// here keeps `calibrate` runnable without the engine on the path. What retires
+// the old document is the edge this declares plus the projection that reads
+// it; the old document itself is never touched, being append-only history.
+func supersededBy(vault, judgeModel, day string) ([]doc.Supersession, error) {
+	all, err := judge.Calibrations(vault)
+	if err != nil {
+		return nil, err
+	}
+	var newest *doc.Calibration
+	for i, calibration := range all {
+		if calibration.Judge != judgeModel {
+			continue
+		}
+		last, err := calibration.LastDay()
+		if err != nil || last < day {
+			continue
+		}
+		if newest == nil || calibration.WindowTo > newest.WindowTo {
+			newest = &all[i]
+		}
+	}
+	if newest == nil {
+		return nil, nil
+	}
+	return []doc.Supersession{{
+		Edit:   newest.ID(),
+		Reason: "re-measured on " + day,
+	}}, nil
 }
 
 // writeDocument puts a calibration in the vault and answers with where it went.
