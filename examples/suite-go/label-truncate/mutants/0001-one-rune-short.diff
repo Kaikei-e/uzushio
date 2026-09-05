@@ -1,0 +1,11 @@
+diff --git a/truncate.go b/truncate.go
+index 90f6676..93eeb1f 100644
+--- a/truncate.go
++++ b/truncate.go
+@@ -11,5 +11,5 @@ func Truncate(s string, n int) string {
+ 	if len(r) <= n {
+ 		return s
+ 	}
+-	return string(r[:n]) + "…"
++	return string(r[:n-1]) + "…"
+ }

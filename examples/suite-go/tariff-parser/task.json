@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "id": "tariff-parser",
+  "repo": "repo",
+  "rev": "HEAD",
+  "files": [
+    "parse.go",
+    "parse_test.go"
+  ],
+  "verify": {
+    "compose_file": "compose.yaml",
+    "service": "verify",
+    "kind": "exit-code",
+    "timeout_seconds": 600
+  },
+  "reference": {
+    "diff": "reference.diff"
+  },
+  "mutants": [
+    {
+      "diff": "mutants/0001-blank-segment-rejected.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "parse.go: an empty segment is a fault, so a trailing semicolon is rejected"
+    },
+    {
+      "diff": "mutants/0002-bad-segment-skipped.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "parse.go: a segment with no separator is skipped instead of reported"
+    },
+    {
+      "diff": "mutants/0003-last-separator.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "parse.go: the pair is split on the last separator, so a value containing one loses its head"
+    }
+  ],
+  "doctor": {
+    "kill_rate_min": 0.8,
+    "reference_runs": 2
+  }
+}

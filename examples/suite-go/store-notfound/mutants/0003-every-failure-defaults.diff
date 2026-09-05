@@ -1,0 +1,13 @@
+diff --git a/store.go b/store.go
+index 3271b28..235b30d 100644
+--- a/store.go
++++ b/store.go
+@@ -32,7 +32,7 @@ func (s Store) Lookup(id string) (string, error) {
+ // such record. Any other failure is passed back to the caller unchanged.
+ func LookupOr(s Store, id, def string) (string, error) {
+ 	v, err := s.Lookup(id)
+-	if errors.Is(err, ErrNotFound) {
++	if err != nil {
+ 		return def, nil
+ 	}
+ 	if err != nil {

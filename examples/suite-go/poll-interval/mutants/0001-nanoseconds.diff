@@ -1,0 +1,11 @@
+diff --git a/interval.go b/interval.go
+index b8d9f99..43cf2a7 100644
+--- a/interval.go
++++ b/interval.go
+@@ -10,5 +10,5 @@ func Interval(pollsPerMinute int) time.Duration {
+ 	if pollsPerMinute <= 0 {
+ 		return 0
+ 	}
+-	return time.Minute / time.Duration(pollsPerMinute)
++	return time.Duration(60 / pollsPerMinute)
+ }

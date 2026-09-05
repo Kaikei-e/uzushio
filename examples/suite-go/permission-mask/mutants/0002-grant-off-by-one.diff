@@ -1,0 +1,11 @@
+diff --git a/mask.go b/mask.go
+index 133a0dd..aebbed6 100644
+--- a/mask.go
++++ b/mask.go
+@@ -11,5 +11,5 @@ func Has(mask uint8, n int) bool {
+ // Grant returns the mask with permission n added. Permissions already in
+ // the mask stay in it.
+ func Grant(mask uint8, n int) uint8 {
+-	return mask | 1<<n
++	return mask | 1<<(n+1)
+ }

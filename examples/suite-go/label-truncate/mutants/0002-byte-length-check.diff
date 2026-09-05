@@ -1,0 +1,13 @@
+diff --git a/truncate.go b/truncate.go
+index 90f6676..5c2e026 100644
+--- a/truncate.go
++++ b/truncate.go
+@@ -8,7 +8,7 @@ package label
+ // fits comes back unchanged, with no ellipsis.
+ func Truncate(s string, n int) string {
+ 	r := []rune(s)
+-	if len(r) <= n {
++	if len(s) <= n {
+ 		return s
+ 	}
+ 	return string(r[:n]) + "…"

@@ -1,0 +1,17 @@
+diff --git a/wait.go b/wait.go
+index 1a28761..870becb 100644
+--- a/wait.go
++++ b/wait.go
+@@ -13,10 +13,6 @@ import "context"
+ // Wait must not outlive the context. A caller that cancels is entitled to
+ // an answer, whether or not the work it was waiting for ever finishes.
+ func Wait(ctx context.Context, done <-chan struct{}) error {
+-	select {
+-	case <-done:
+-		return nil
+-	case <-ctx.Done():
+-		return ctx.Err()
+-	}
++	<-done
++	return nil
+ }

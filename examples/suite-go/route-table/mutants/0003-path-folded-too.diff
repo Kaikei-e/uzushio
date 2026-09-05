@@ -1,0 +1,13 @@
+diff --git a/table.go b/table.go
+index 8c6b77b..ebd6c8e 100644
+--- a/table.go
++++ b/table.go
+@@ -13,7 +13,7 @@ func New() *Table { return &Table{byRoute: map[string]string{}} }
+ 
+ // key builds the map key for a route, folding the method's case.
+ func key(method, path string) string {
+-	return strings.ToUpper(method) + " " + path
++	return strings.ToUpper(method) + " " + strings.ToLower(path)
+ }
+ 
+ // Add registers handler for the given method and path. The method is

@@ -1,0 +1,13 @@
+diff --git a/buffer.go b/buffer.go
+index fa42249..01a6998 100644
+--- a/buffer.go
++++ b/buffer.go
+@@ -12,7 +12,7 @@ type Entry struct {
+ // appends twice to the same list gets two independent lists, and the list it
+ // held is unchanged.
+ func Append(entries []Entry, e Entry) []Entry {
+-	out := make([]Entry, len(entries), len(entries)+1)
++	out := make([]Entry, len(entries)+1, len(entries)+2)
+ 	copy(out, entries)
+ 	return append(out, e)
+ }

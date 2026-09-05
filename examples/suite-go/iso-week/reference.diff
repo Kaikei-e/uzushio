@@ -1,0 +1,12 @@
+diff --git a/label.go b/label.go
+index 16caa79..f6ef2cd 100644
+--- a/label.go
++++ b/label.go
+@@ -8,6 +8,5 @@ import "time"
+ // year: the first days of January can belong to the last week of the year
+ // before, and the last days of December to week 1 of the year after.
+ func Label(t time.Time) (year, week int) {
+-	_, w := t.ISOWeek()
+-	return t.Year(), w
++	return t.ISOWeek()
+ }

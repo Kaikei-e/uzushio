@@ -1,0 +1,35 @@
+diff --git a/table.go b/table.go
+index 42a3e9e..8c6b77b 100644
+--- a/table.go
++++ b/table.go
+@@ -1,6 +1,8 @@
+ // Package routes resolves a request's method and path to a handler name.
+ package routes
+ 
++import "strings"
++
+ // Table holds the registered routes, keyed by method and path.
+ type Table struct {
+ 	byRoute map[string]string
+@@ -9,14 +11,19 @@ type Table struct {
+ // New returns an empty table.
+ func New() *Table { return &Table{byRoute: map[string]string{}} }
+ 
++// key builds the map key for a route, folding the method's case.
++func key(method, path string) string {
++	return strings.ToUpper(method) + " " + path
++}
++
+ // Add registers handler for the given method and path. The method is
+ // matched without regard to case; the path is matched exactly.
+ func (t *Table) Add(method, path, handler string) {
+-	t.byRoute[method+" "+path] = handler
++	t.byRoute[key(method, path)] = handler
+ }
+ 
+ // Lookup returns the handler registered for the method and path.
+ func (t *Table) Lookup(method, path string) (string, bool) {
+-	h, ok := t.byRoute[method+" "+path]
++	h, ok := t.byRoute[key(method, path)]
+ 	return h, ok
+ }

@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "id": "suite-go",
+  "tasks": [
+    {
+      "id": "inventory-reserve",
+      "dir": "inventory-reserve",
+      "split": "held-in"
+    },
+    {
+      "id": "usage-share",
+      "dir": "usage-share",
+      "split": "held-in"
+    },
+    {
+      "id": "csv-import",
+      "dir": "csv-import",
+      "split": "held-out"
+    },
+    {
+      "id": "tag-index",
+      "dir": "tag-index",
+      "split": "held-in"
+    },
+    {
+      "id": "label-truncate",
+      "dir": "label-truncate",
+      "split": "held-in"
+    },
+    {
+      "id": "cursor-pagination",
+      "dir": "cursor-pagination",
+      "split": "held-out"
+    },
+    {
+      "id": "poll-interval",
+      "dir": "poll-interval",
+      "split": "held-in"
+    },
+    {
+      "id": "json-field-tag",
+      "dir": "json-field-tag",
+      "split": "held-in"
+    },
+    {
+      "id": "permission-mask",
+      "dir": "permission-mask",
+      "split": "held-out"
+    },
+    {
+      "id": "route-table",
+      "dir": "route-table",
+      "split": "held-in"
+    },
+    {
+      "id": "session-cache",
+      "dir": "session-cache",
+      "split": "held-in"
+    },
+    {
+      "id": "iso-week",
+      "dir": "iso-week",
+      "split": "held-out"
+    },
+    {
+      "id": "config-loader",
+      "dir": "config-loader",
+      "split": "held-in"
+    },
+    {
+      "id": "store-notfound",
+      "dir": "store-notfound",
+      "split": "held-in"
+    },
+    {
+      "id": "ledger-rounding",
+      "dir": "ledger-rounding",
+      "split": "held-out"
+    },
+    {
+      "id": "object-key",
+      "dir": "object-key",
+      "split": "held-in"
+    },
+    {
+      "id": "name-match",
+      "dir": "name-match",
+      "split": "held-in"
+    },
+    {
+      "id": "worker-fanout",
+      "dir": "worker-fanout",
+      "split": "held-out"
+    },
+    {
+      "id": "leaderboard-rank",
+      "dir": "leaderboard-rank",
+      "split": "held-in"
+    },
+    {
+      "id": "report-builder",
+      "dir": "report-builder",
+      "split": "held-in"
+    },
+    {
+      "id": "shift-scheduler",
+      "dir": "shift-scheduler",
+      "split": "held-out"
+    },
+    {
+      "id": "release-order",
+      "dir": "release-order",
+      "split": "held-in"
+    },
+    {
+      "id": "feed-producer",
+      "dir": "feed-producer",
+      "split": "held-in"
+    },
+    {
+      "id": "metrics-counter",
+      "dir": "metrics-counter",
+      "split": "held-out"
+    },
+    {
+      "id": "request-timeout",
+      "dir": "request-timeout",
+      "split": "held-in"
+    },
+    {
+      "id": "batch-close",
+      "dir": "batch-close",
+      "split": "held-in"
+    },
+    {
+      "id": "export-csv",
+      "dir": "export-csv",
+      "split": "held-out"
+    },
+    {
+      "id": "price-lookup",
+      "dir": "price-lookup",
+      "split": "held-in"
+    },
+    {
+      "id": "callback-url",
+      "dir": "callback-url",
+      "split": "held-in"
+    },
+    {
+      "id": "event-ring",
+      "dir": "event-ring",
+      "split": "held-out"
+    },
+    {
+      "id": "audit-buffer",
+      "dir": "audit-buffer",
+      "split": "held-in"
+    },
+    {
+      "id": "version-compare",
+      "dir": "version-compare",
+      "split": "held-in"
+    },
+    {
+      "id": "ingest-waitgroup",
+      "dir": "ingest-waitgroup",
+      "split": "held-out"
+    },
+    {
+      "id": "retry-backoff",
+      "dir": "retry-backoff",
+      "split": "held-in"
+    },
+    {
+      "id": "session-lru",
+      "dir": "session-lru",
+      "split": "held-in"
+    },
+    {
+      "id": "tariff-parser",
+      "dir": "tariff-parser",
+      "split": "held-out"
+    }
+  ],
+  "constraints": {
+    "max_test_to_product_lines": 3.0,
+    "one_milestone_per_session": true,
+    "dogfooding_off_critical_path": true
+  }
+}

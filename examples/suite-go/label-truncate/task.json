@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "id": "label-truncate",
+  "repo": "repo",
+  "rev": "HEAD",
+  "files": [
+    "truncate.go",
+    "truncate_test.go"
+  ],
+  "verify": {
+    "compose_file": "compose.yaml",
+    "service": "verify",
+    "kind": "exit-code",
+    "timeout_seconds": 600
+  },
+  "reference": {
+    "diff": "reference.diff"
+  },
+  "mutants": [
+    {
+      "diff": "mutants/0001-one-rune-short.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "truncate.go: one rune too few is kept"
+    },
+    {
+      "diff": "mutants/0002-byte-length-check.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "truncate.go: the fit check counts bytes, so a short multibyte label is cut anyway"
+    },
+    {
+      "diff": "mutants/0003-no-ellipsis.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "truncate.go: a shortened label carries no ellipsis"
+    }
+  ],
+  "doctor": {
+    "kill_rate_min": 0.8,
+    "reference_runs": 2
+  }
+}

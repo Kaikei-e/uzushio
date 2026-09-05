@@ -1,0 +1,13 @@
+diff --git a/backoff.go b/backoff.go
+index 7a6beb0..1618bba 100644
+--- a/backoff.go
++++ b/backoff.go
+@@ -12,8 +12,5 @@ func Delay(base, max time.Duration, attempt int) time.Duration {
+ 	for i := 0; i < attempt && d < max; i++ {
+ 		d *= 2
+ 	}
+-	if d > max {
+-		d = max
+-	}
+ 	return d
+ }

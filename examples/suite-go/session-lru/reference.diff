@@ -1,0 +1,14 @@
+diff --git a/lru.go b/lru.go
+index 16b743c..5d058d1 100644
+--- a/lru.go
++++ b/lru.go
+@@ -29,6 +29,9 @@ func (c *Cache) touch(k string) {
+ // it.
+ func (c *Cache) Get(k string) (string, bool) {
+ 	v, ok := c.vals[k]
++	if ok {
++		c.touch(k)
++	}
+ 	return v, ok
+ }
+ 

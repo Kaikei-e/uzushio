@@ -1,0 +1,18 @@
+diff --git a/cache.go b/cache.go
+index 769507c..82b346b 100644
+--- a/cache.go
++++ b/cache.go
+@@ -23,7 +23,13 @@ func (c *Cache) Put(s *Session) { c.byID[s.ID] = s }
+ // A cache that is not there at all, an id that was never stored, and an
+ // entry stored as nil all answer false.
+ func (c *Cache) HasRole(id, role string) bool {
++	if c == nil || c.byID == nil {
++		return false
++	}
+ 	s := c.byID[id]
++	if s == nil {
++		return false
++	}
+ 	for _, r := range s.Roles {
+ 		if r == role {
+ 			return true

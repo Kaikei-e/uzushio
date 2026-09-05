@@ -1,0 +1,16 @@
+diff --git a/sum.go b/sum.go
+index 6165d31..5f3d6dc 100644
+--- a/sum.go
++++ b/sum.go
+@@ -14,10 +14,7 @@ func Sum(items []int, f func(int) int) int {
+ 		wg.Add(1)
+ 		go func() {
+ 			defer wg.Done()
+-			v := f(it)
+-			mu.Lock()
+-			total += v
+-			mu.Unlock()
++			total += f(it)
+ 		}()
+ 	}
+ 	wg.Wait()

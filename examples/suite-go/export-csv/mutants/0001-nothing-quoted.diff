@@ -1,0 +1,18 @@
+diff --git a/row.go b/row.go
+index caac088..667671e 100644
+--- a/row.go
++++ b/row.go
+@@ -9,12 +9,5 @@ import "strings"
+ // double quote inside such a field is written twice. A field that carries
+ // none of those is written as it is, with no quotes around it.
+ func Row(fields []string) string {
+-	out := make([]string, len(fields))
+-	for i, f := range fields {
+-		if strings.ContainsAny(f, ",\"\r\n") {
+-			f = `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
+-		}
+-		out[i] = f
+-	}
+-	return strings.Join(out, ",") + "\r\n"
++	return strings.Join(fields, ",") + "\r\n"
+ }

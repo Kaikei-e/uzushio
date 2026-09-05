@@ -1,0 +1,13 @@
+diff --git a/backoff.go b/backoff.go
+index 7a6beb0..e74c94d 100644
+--- a/backoff.go
++++ b/backoff.go
+@@ -9,7 +9,7 @@ import "time"
+ // however large the caller's attempt number is.
+ func Delay(base, max time.Duration, attempt int) time.Duration {
+ 	d := base
+-	for i := 0; i < attempt && d < max; i++ {
++	for i := 0; i < attempt; i++ {
+ 		d *= 2
+ 	}
+ 	if d > max {

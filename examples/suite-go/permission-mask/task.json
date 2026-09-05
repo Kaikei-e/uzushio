@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "id": "permission-mask",
+  "repo": "repo",
+  "rev": "HEAD",
+  "files": [
+    "mask.go",
+    "mask_test.go"
+  ],
+  "verify": {
+    "compose_file": "compose.yaml",
+    "service": "verify",
+    "kind": "exit-code",
+    "timeout_seconds": 600
+  },
+  "reference": {
+    "diff": "reference.diff"
+  },
+  "mutants": [
+    {
+      "diff": "mutants/0001-has-off-by-one.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "mask.go: Has looks one bit too high"
+    },
+    {
+      "diff": "mutants/0002-grant-off-by-one.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "mask.go: Grant sets one bit too high"
+    },
+    {
+      "diff": "mutants/0003-has-tests-the-whole-mask.diff",
+      "expect": "killed",
+      "origin": "hand",
+      "note": "mask.go: Has answers yes when any higher bit is set"
+    }
+  ],
+  "doctor": {
+    "kill_rate_min": 0.8,
+    "reference_runs": 2
+  }
+}

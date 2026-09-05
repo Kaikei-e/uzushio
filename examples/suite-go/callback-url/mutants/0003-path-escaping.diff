@@ -1,0 +1,14 @@
+diff --git a/callback.go b/callback.go
+index 5c71806..befc499 100644
+--- a/callback.go
++++ b/callback.go
+@@ -10,8 +10,5 @@ import "net/url"
+ // exactly these two parameters, each with the value it was given back
+ // again unchanged. base is a plain address with no query of its own.
+ func URL(base, state, next string) string {
+-	q := url.Values{}
+-	q.Set("state", state)
+-	q.Set("next", next)
+-	return base + "?" + q.Encode()
++	return base + "?state=" + url.PathEscape(state) + "&next=" + url.PathEscape(next)
+ }

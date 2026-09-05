@@ -1,0 +1,11 @@
+diff --git a/buffer.go b/buffer.go
+index fa42249..b5a1362 100644
+--- a/buffer.go
++++ b/buffer.go
+@@ -14,5 +14,5 @@ type Entry struct {
+ func Append(entries []Entry, e Entry) []Entry {
+ 	out := make([]Entry, len(entries), len(entries)+1)
+ 	copy(out, entries)
+-	return append(out, e)
++	return out
+ }

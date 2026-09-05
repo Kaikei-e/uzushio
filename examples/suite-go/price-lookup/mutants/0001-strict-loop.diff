@@ -1,0 +1,13 @@
+diff --git a/tier.go b/tier.go
+index 7c1eadd..a6cc32c 100644
+--- a/tier.go
++++ b/tier.go
+@@ -10,7 +10,7 @@ package pricing
+ func Tier(mins []int, qty int) int {
+ 	lo, hi := 0, len(mins)-1
+ 	best := -1
+-	for lo <= hi {
++	for lo < hi {
+ 		mid := (lo + hi) / 2
+ 		if mins[mid] <= qty {
+ 			best = mid

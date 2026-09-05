@@ -1,0 +1,12 @@
+diff --git a/wait.go b/wait.go
+index 1a28761..b7d8bf9 100644
+--- a/wait.go
++++ b/wait.go
+@@ -17,6 +17,6 @@ func Wait(ctx context.Context, done <-chan struct{}) error {
+ 	case <-done:
+ 		return nil
+ 	case <-ctx.Done():
+-		return ctx.Err()
++		return nil
+ 	}
+ }

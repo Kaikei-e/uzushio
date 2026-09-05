@@ -1,0 +1,13 @@
+diff --git a/order.go b/order.go
+index b82c72a..cfd8ad9 100644
+--- a/order.go
++++ b/order.go
+@@ -14,7 +14,7 @@ type Release struct {
+ func Order(rs []Release) {
+ 	sort.Slice(rs, func(i, j int) bool {
+ 		if rs[i].Day != rs[j].Day {
+-			return rs[i].Day > rs[j].Day
++			return rs[i].Day < rs[j].Day
+ 		}
+ 		return rs[i].Name < rs[j].Name
+ 	})

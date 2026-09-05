@@ -1,0 +1,13 @@
+diff --git a/reserve.go b/reserve.go
+index fd75475..b363591 100644
+--- a/reserve.go
++++ b/reserve.go
+@@ -6,7 +6,7 @@ package inventory
+ // the whole remaining stock is accepted; taking more than there is, or a
+ // count that is not positive, is refused and leaves the level alone.
+ func Reserve(stock, n int) (int, bool) {
+-	if n >= stock {
++	if n <= 0 || n > stock {
+ 		return stock, false
+ 	}
+ 	return stock - n, true

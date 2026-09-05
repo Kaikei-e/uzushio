@@ -1,0 +1,12 @@
+diff --git a/ring.go b/ring.go
+index 7851a3e..a8393ee 100644
+--- a/ring.go
++++ b/ring.go
+@@ -27,6 +27,5 @@ func (r *Ring) Events() []string {
+ 	if !r.full {
+ 		return append([]string(nil), r.buf[:r.next]...)
+ 	}
+-	out := append([]string(nil), r.buf[r.next:]...)
+-	return append(out, r.buf[:r.next]...)
++	return append([]string(nil), r.buf[r.next:]...)
+ }

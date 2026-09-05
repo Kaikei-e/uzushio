@@ -1,0 +1,13 @@
+diff --git a/invoice.go b/invoice.go
+index 78a336a..b57c724 100644
+--- a/invoice.go
++++ b/invoice.go
+@@ -8,7 +8,7 @@ import "encoding/json"
+ type Invoice struct {
+ 	Number      string `json:"number"`
+ 	Customer    string `json:"customer"`
+-	AmountCents int64  `json:"amount_cents"`
++	AmountCents int64  `json:"amount"`
+ 	Paid        bool   `json:"paid"`
+ }
+ 
