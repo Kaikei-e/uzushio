@@ -1,9 +1,0 @@
-Using supervised learning for self-driving cars is theoretically possible but comes with several challenges and limitations compared to reinforcement learning.
-
-In supervised learning, we would need a large labeled dataset containing various driving scenarios, including inputs (e.g., sensor data, road conditions, traffic) and the corresponding correct outputs (e.g., steering angle, acceleration, braking). Collecting and labeling such a dataset would be time-consuming, expensive, and may not cover all possible scenarios a self-driving car might encounter.
-
-Moreover, supervised learning models are limited by the quality and diversity of the training data. If the model encounters a situation that was not present in the training data, it may not perform well. In contrast, reinforcement learning allows the self-driving car to learn from its interactions with the environment and adapt to new situations through trial and error.
-
-Another challenge with supervised learning is that driving decisions often involve a sequence of actions rather than a single action. Supervised learning models typically focus on mapping individual inputs to outputs, whereas reinforcement learning can better handle sequential decision-making through the concept of policies and cumulative rewards.
-
-In summary, while supervised learning could be used to some extent for self-driving cars, reinforcement learning is better suited for this task due to its ability to learn from interactions with the environment, handle sequential decision-making, and adapt to new situations.

@@ -1,7 +1,0 @@
-Here's a solution:
-1. Sort the arrays.
-2. Find the middle element of the first array.
-3. Find the middle element of the second array.
-4. If the middle element of the first array is greater than the middle element of the second array, return the middle element of the first array.
-5. If the middle element of the first array is less than the middle element of the second array, return the middle element of the second array.
-6. If the middle element of the first array is equal to the middle element of the second array, return the middle element of the first array.

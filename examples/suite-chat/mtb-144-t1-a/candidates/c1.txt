@@ -1,5 +1,0 @@
-The central dogma of molecular biology is that DNA makes RNA makes protein.
-DNA is the genetic material that is found in all living organisms. It is made up of four nucleotides: adenine, guanine, cytosine, and thymine.
-RNA is a nucleic acid that is involved in protein synthesis. It is made up of four nucleotides: adenine, guanine, cytosine, and uracil.
-Proteins are the building blocks of all living organisms. They are made up of amino acids.
-The central dogma of molecular biology was named by Francis Crick.

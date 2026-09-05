@@ -1,3 +1,0 @@
-This function is also correct and uses dynamic programming to find the length of the longest common subsequence of two input strings. The time complexity of this function is also O(mn), where m and n are the lengths of the input strings. 
-
-The only issue with this function is that it initializes the dp table with `None` instead of 0. This can cause issues when trying to perform arithmetic operations on the table later on. It would be better to initialize the table with 0 instead of `None`.

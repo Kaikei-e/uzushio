@@ -1,1 +1,0 @@
-The following program finds the common elements in two arrays without using any extra data structures. It has the best time complexity.

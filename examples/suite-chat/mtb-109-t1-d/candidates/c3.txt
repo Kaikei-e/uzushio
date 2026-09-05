@@ -1,7 +1,0 @@
-Sure, I can help you with that!
-
-To determine the direction in which the shadow is pointing, we need to first establish the direction of the sun's rays. Since this is after sunrise, we know that the sun has already risen. Let's assume that the sun is directly east of Suresh.
-
-Next, we need to determine the direction in which the shadow is falling. Since the shadow is falling exactly to Suresh's right, we know that it is parallel to the pole and perpendicular to the direction of the sun's rays. In other words, the shadow is falling to the west of Suresh.
-
-Therefore, the direction in which the shadow is pointing is west.

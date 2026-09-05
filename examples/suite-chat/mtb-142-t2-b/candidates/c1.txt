@@ -1,5 +1,0 @@
-One potential edge case in the solution is if the decrease in speed of the satellite is very small, such that the change in the radius of the orbit and the period of revolution are negligible. In this case, the solution would still hold true, but the change in the orbit would be so small that it may not be noticeable.
-
-Another edge case could be if the decrease in speed is so significant that the satellite falls out of orbit and crashes into the Earth. In this case, the solution would not be applicable as the satellite is no longer in a circular orbit around the Earth.
-
-To handle these edge cases, it is important to consider the magnitude of the change in speed and the resulting change in the orbit of the satellite. If the change is negligible, it may not be necessary to consider it in the solution. If the change is significant enough to cause the satellite to fall out of orbit, a different solution would need to be applied to address the new situation.

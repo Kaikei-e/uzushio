@@ -1,5 +1,0 @@
-Here is the CSV string with the highest and lowest closing prices for each month in 2022:
-
-January,156.25,153.80
-February,163.90,161.80
-March,168.20,166.80

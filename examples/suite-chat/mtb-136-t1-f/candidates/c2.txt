@@ -1,3 +1,0 @@
-Amazon, 1
-River, 2
-You, 1

@@ -1,1 +1,0 @@
-Yes, there is an algorithm with better time complexity. The algorithm is called the merge sort.

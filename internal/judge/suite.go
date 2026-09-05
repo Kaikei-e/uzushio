@@ -193,9 +193,10 @@ func (s Suite) CheckCandidates() error {
 	for _, task := range s.Tasks {
 		for _, name := range s.Candidates(task) {
 			if _, err := os.Stat(name); err != nil {
-				return fmt.Errorf("%w: item %s has no candidate answers (%s). "+
-					"The model responses are not kept in this repository; "+
-					"run `uzushio judge import-mtbench --out %s` to fetch them",
+				return fmt.Errorf("%w: item %s has no candidate answers (%s missing). "+
+					"Model responses are not committed to this repository; fetch them with "+
+					"`uzushio judge import-mtbench --candidates-only --out %s` "+
+					"at the seed and target DERIVATION.md records",
 					ErrJudge, task.ID, filepath.Base(name), s.Dir)
 			}
 		}

@@ -6,10 +6,11 @@
   "turn": 1,
   "models": {
     "c1": "claude-v1",
-    "c2": "alpaca-13b",
-    "c3": "vicuna-13b-v1.2"
+    "c2": "vicuna-13b-v1.2",
+    "c3": "alpaca-13b"
   },
   "gold": "c1",
+  "gold_wins": 2,
   "method": "acyclic-majority",
   "margin_stratum": "wide",
   "bt_top": "c1",

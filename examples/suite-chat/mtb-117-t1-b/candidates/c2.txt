@@ -1,9 +1,0 @@
-To solve the inequality |x + 5| < 10, we need to consider two cases:
-
-Case 1: x + 5 is positive or zero
-In this case, the inequality becomes x + 5 < 10, which simplifies to x < 5.
-
-Case 2: x + 5 is negative
-In this case, the inequality becomes -(x + 5) < 10, which simplifies to -x - 5 < 10. Adding 5 to both sides gives -x < 15, and multiplying by -1 (and flipping the inequality) gives x > -15.
-
-So the solution to the inequality is -15 < x < 5. The integers in this range are -14, -13, -12, ..., 4, for a total of 20 integers. Therefore, there are 20 integers in the solution of the inequality.

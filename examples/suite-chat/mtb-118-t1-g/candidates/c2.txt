@@ -1,1 +1,0 @@
-The remainder when twice the number is divided by 4 is 2.

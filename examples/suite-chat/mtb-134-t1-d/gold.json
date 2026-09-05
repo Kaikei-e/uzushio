@@ -10,6 +10,7 @@
     "c3": "alpaca-13b"
   },
   "gold": "tie",
+  "gold_wins": 0,
   "method": "acyclic-majority",
   "margin_stratum": "narrow",
   "bt_top": "c1",

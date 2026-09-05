@@ -1,5 +1,0 @@
-In the case of autonomous driving, supervised learning can be used to train a model to recognize objects in the environment, such as other vehicles, pedestrians, and traffic signs. However, supervised learning alone may not be sufficient to enable the vehicle to make decisions in real-time based on feedback from its environment.
-
-Reinforcement learning is better suited for this task because it allows the vehicle to learn from its own experiences and adapt to changing conditions. The model can learn to make decisions based on feedback from its sensors and cameras, such as adjusting its speed or changing lanes to avoid obstacles.
-
-In summary, while supervised learning can be used to train a model to recognize objects in the environment, reinforcement learning is better suited for enabling the vehicle to make decisions in real-time based on feedback from its environment.

@@ -10,6 +10,7 @@
     "c3": "gpt-4"
   },
   "gold": "c3",
+  "gold_wins": 2,
   "method": "acyclic-majority",
   "margin_stratum": "mid",
   "bt_top": "c3",

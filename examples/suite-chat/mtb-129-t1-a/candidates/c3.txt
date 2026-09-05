@@ -1,1 +1,0 @@
-The kth smallest element in the union of the two sorted lists can be found in O(log k) time.

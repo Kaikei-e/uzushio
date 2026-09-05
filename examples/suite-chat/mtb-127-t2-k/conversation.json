@@ -1,0 +1,6 @@
+[
+  {
+    "role": "user",
+    "content": "Write a function to find the majority element in a given integer array using the Boyer-Moore Voting Algorithm."
+  }
+]

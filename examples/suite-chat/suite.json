@@ -7,33 +7,21 @@
   "license": "CC-BY-4.0",
   "tasks": [
     {
-      "id": "mtb-081-t1-b",
-      "dir": "mtb-081-t1-b",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
       "id": "mtb-082-t2-a",
       "dir": "mtb-082-t2-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-083-t1-b",
-      "dir": "mtb-083-t1-b",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-083-t1-c",
-      "dir": "mtb-083-t1-c",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-083-t1-g",
-      "dir": "mtb-083-t1-g",
+      "id": "mtb-083-t1-f",
+      "dir": "mtb-083-t1-f",
       "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-083-t2-a",
+      "dir": "mtb-083-t2-a",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -43,21 +31,21 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-085-t2-a",
-      "dir": "mtb-085-t2-a",
+      "id": "mtb-085-t1-f",
+      "dir": "mtb-085-t1-f",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-085-t2-e",
-      "dir": "mtb-085-t2-e",
-      "stratum": "narrow",
+      "id": "mtb-085-t2-b",
+      "dir": "mtb-085-t2-b",
+      "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-086-t1-d",
-      "dir": "mtb-086-t1-d",
-      "stratum": "mid",
+      "id": "mtb-085-t2-c",
+      "dir": "mtb-085-t2-c",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -67,75 +55,51 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-087-t1-d",
-      "dir": "mtb-087-t1-d",
+      "id": "mtb-086-t1-f",
+      "dir": "mtb-086-t1-f",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-088-t2-b",
-      "dir": "mtb-088-t2-b",
+      "id": "mtb-087-t2-a",
+      "dir": "mtb-087-t2-a",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-089-t1-d",
-      "dir": "mtb-089-t1-d",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-089-t1-k",
-      "dir": "mtb-089-t1-k",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-089-t1-o",
-      "dir": "mtb-089-t1-o",
+      "id": "mtb-088-t1-b",
+      "dir": "mtb-088-t1-b",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-089-t2-b",
-      "dir": "mtb-089-t2-b",
+      "id": "mtb-089-t1-b",
+      "dir": "mtb-089-t1-b",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-089-t2-e",
+      "dir": "mtb-089-t2-e",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-090-t1-g",
+      "dir": "mtb-090-t1-g",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-090-t1-n",
+      "dir": "mtb-090-t1-n",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-090-t1-p",
+      "dir": "mtb-090-t1-p",
       "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-089-t2-g",
-      "dir": "mtb-089-t2-g",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-089-t2-k",
-      "dir": "mtb-089-t2-k",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-090-t1-b",
-      "dir": "mtb-090-t1-b",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-090-t1-d",
-      "dir": "mtb-090-t1-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-090-t1-h",
-      "dir": "mtb-090-t1-h",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-090-t1-i",
-      "dir": "mtb-090-t1-i",
-      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -145,15 +109,9 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-090-t2-b",
-      "dir": "mtb-090-t2-b",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-090-t2-e",
-      "dir": "mtb-090-t2-e",
-      "stratum": "mid",
+      "id": "mtb-090-t2-c",
+      "dir": "mtb-090-t2-c",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -163,111 +121,135 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-090-t2-i",
-      "dir": "mtb-090-t2-i",
+      "id": "mtb-090-t2-k",
+      "dir": "mtb-090-t2-k",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-090-t2-o",
+      "dir": "mtb-090-t2-o",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-090-t2-p",
+      "dir": "mtb-090-t2-p",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-090-t2-q",
-      "dir": "mtb-090-t2-q",
+      "id": "mtb-090-t2-r",
+      "dir": "mtb-090-t2-r",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-091-t1-g",
-      "dir": "mtb-091-t1-g",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-091-t2-e",
-      "dir": "mtb-091-t2-e",
+      "id": "mtb-091-t1-f",
+      "dir": "mtb-091-t1-f",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-091-t2-j",
-      "dir": "mtb-091-t2-j",
+      "id": "mtb-091-t1-j",
+      "dir": "mtb-091-t1-j",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-092-t1-c",
-      "dir": "mtb-092-t1-c",
+      "id": "mtb-093-t1-e",
+      "dir": "mtb-093-t1-e",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-092-t2-e",
-      "dir": "mtb-092-t2-e",
+      "id": "mtb-093-t1-g",
+      "dir": "mtb-093-t1-g",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-093-t1-a",
-      "dir": "mtb-093-t1-a",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-094-t2-e",
-      "dir": "mtb-094-t2-e",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-095-t2-j",
-      "dir": "mtb-095-t2-j",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-096-t1-b",
-      "dir": "mtb-096-t1-b",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-096-t1-d",
-      "dir": "mtb-096-t1-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-097-t1-h",
-      "dir": "mtb-097-t1-h",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-097-t1-o",
-      "dir": "mtb-097-t1-o",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-097-t1-q",
-      "dir": "mtb-097-t1-q",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-097-t2-d",
-      "dir": "mtb-097-t2-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-097-t2-i",
-      "dir": "mtb-097-t2-i",
+      "id": "mtb-094-t1-a",
+      "dir": "mtb-094-t1-a",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-097-t2-m",
-      "dir": "mtb-097-t2-m",
+      "id": "mtb-094-t1-g",
+      "dir": "mtb-094-t1-g",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-094-t2-c",
+      "dir": "mtb-094-t2-c",
       "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-094-t2-d",
+      "dir": "mtb-094-t2-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-094-t2-g",
+      "dir": "mtb-094-t2-g",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-095-t1-j",
+      "dir": "mtb-095-t1-j",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-095-t2-g",
+      "dir": "mtb-095-t2-g",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-097-t1-e",
+      "dir": "mtb-097-t1-e",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-097-t1-f",
+      "dir": "mtb-097-t1-f",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-097-t1-p",
+      "dir": "mtb-097-t1-p",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-097-t2-k",
+      "dir": "mtb-097-t2-k",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-098-t1-a",
+      "dir": "mtb-098-t1-a",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-098-t2-c",
+      "dir": "mtb-098-t2-c",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-099-t1-a",
+      "dir": "mtb-099-t1-a",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -277,123 +259,117 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-099-t1-h",
-      "dir": "mtb-099-t1-h",
+      "id": "mtb-099-t2-g",
+      "dir": "mtb-099-t2-g",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-099-t2-k",
+      "dir": "mtb-099-t2-k",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-100-t1-e",
-      "dir": "mtb-100-t1-e",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-100-t1-h",
-      "dir": "mtb-100-t1-h",
+      "id": "mtb-099-t2-m",
+      "dir": "mtb-099-t2-m",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-100-t1-l",
-      "dir": "mtb-100-t1-l",
+      "id": "mtb-100-t1-a",
+      "dir": "mtb-100-t1-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-100-t2-d",
-      "dir": "mtb-100-t2-d",
+      "id": "mtb-100-t2-c",
+      "dir": "mtb-100-t2-c",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-100-t2-i",
-      "dir": "mtb-100-t2-i",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-100-t2-l",
-      "dir": "mtb-100-t2-l",
+      "id": "mtb-100-t2-e",
+      "dir": "mtb-100-t2-e",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-101-t1-c",
-      "dir": "mtb-101-t1-c",
+      "id": "mtb-101-t1-a",
+      "dir": "mtb-101-t1-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-101-t2-e",
-      "dir": "mtb-101-t2-e",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-102-t1-c",
-      "dir": "mtb-102-t1-c",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-102-t1-g",
-      "dir": "mtb-102-t1-g",
+      "id": "mtb-102-t1-a",
+      "dir": "mtb-102-t1-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-103-t1-b",
-      "dir": "mtb-103-t1-b",
+      "id": "mtb-102-t2-d",
+      "dir": "mtb-102-t2-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-102-t2-f",
+      "dir": "mtb-102-t2-f",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-103-t1-n",
-      "dir": "mtb-103-t1-n",
+      "id": "mtb-103-t1-d",
+      "dir": "mtb-103-t1-d",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-103-t2-a",
-      "dir": "mtb-103-t2-a",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-104-t1-d",
-      "dir": "mtb-104-t1-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-104-t1-f",
-      "dir": "mtb-104-t1-f",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-105-t2-a",
-      "dir": "mtb-105-t2-a",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-106-t1-h",
-      "dir": "mtb-106-t1-h",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-106-t2-b",
-      "dir": "mtb-106-t2-b",
+      "id": "mtb-103-t1-e",
+      "dir": "mtb-103-t1-e",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-106-t2-c",
-      "dir": "mtb-106-t2-c",
+      "id": "mtb-103-t1-g",
+      "dir": "mtb-103-t1-g",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-103-t1-h",
+      "dir": "mtb-103-t1-h",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-103-t2-i",
+      "dir": "mtb-103-t2-i",
       "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-105-t1-e",
+      "dir": "mtb-105-t1-e",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-106-t1-l",
+      "dir": "mtb-106-t1-l",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-106-t2-e",
+      "dir": "mtb-106-t2-e",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-107-t1-e",
+      "dir": "mtb-107-t1-e",
+      "stratum": "mid",
       "gold": "gold.json"
     },
     {
@@ -403,9 +379,9 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-108-t2-f",
-      "dir": "mtb-108-t2-f",
-      "stratum": "mid",
+      "id": "mtb-108-t2-e",
+      "dir": "mtb-108-t2-e",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -415,21 +391,21 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-110-t1-a",
-      "dir": "mtb-110-t1-a",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-110-t2-a",
-      "dir": "mtb-110-t2-a",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-110-t2-e",
-      "dir": "mtb-110-t2-e",
+      "id": "mtb-110-t1-b",
+      "dir": "mtb-110-t1-b",
       "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-110-t1-e",
+      "dir": "mtb-110-t1-e",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-110-t2-d",
+      "dir": "mtb-110-t2-d",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -445,32 +421,50 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-111-t1-d",
-      "dir": "mtb-111-t1-d",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-111-t1-f",
-      "dir": "mtb-111-t1-f",
+      "id": "mtb-111-t1-h",
+      "dir": "mtb-111-t1-h",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-111-t2-f",
-      "dir": "mtb-111-t2-f",
-      "stratum": "narrow",
+      "id": "mtb-112-t1-b",
+      "dir": "mtb-112-t1-b",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-113-t1-d",
-      "dir": "mtb-113-t1-d",
-      "stratum": "narrow",
+      "id": "mtb-112-t2-d",
+      "dir": "mtb-112-t2-d",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-115-t1-g",
-      "dir": "mtb-115-t1-g",
+      "id": "mtb-113-t2-b",
+      "dir": "mtb-113-t2-b",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-113-t2-h",
+      "dir": "mtb-113-t2-h",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-114-t1-d",
+      "dir": "mtb-114-t1-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-114-t2-b",
+      "dir": "mtb-114-t2-b",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-115-t1-d",
+      "dir": "mtb-115-t1-d",
       "stratum": "mid",
       "gold": "gold.json"
     },
@@ -481,8 +475,8 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-115-t2-g",
-      "dir": "mtb-115-t2-g",
+      "id": "mtb-115-t2-c",
+      "dir": "mtb-115-t2-c",
       "stratum": "narrow",
       "gold": "gold.json"
     },
@@ -493,8 +487,32 @@
       "gold": "gold.json"
     },
     {
+      "id": "mtb-115-t2-j",
+      "dir": "mtb-115-t2-j",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-116-t1-c",
+      "dir": "mtb-116-t1-c",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-116-t1-d",
+      "dir": "mtb-116-t1-d",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
       "id": "mtb-117-t1-b",
       "dir": "mtb-117-t1-b",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-117-t1-e",
+      "dir": "mtb-117-t1-e",
       "stratum": "wide",
       "gold": "gold.json"
     },
@@ -505,56 +523,104 @@
       "gold": "gold.json"
     },
     {
+      "id": "mtb-118-t1-d",
+      "dir": "mtb-118-t1-d",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
       "id": "mtb-118-t1-g",
       "dir": "mtb-118-t1-g",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-120-t2-c",
-      "dir": "mtb-120-t2-c",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-120-t2-d",
-      "dir": "mtb-120-t2-d",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-121-t2-a",
-      "dir": "mtb-121-t2-a",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-121-t2-e",
-      "dir": "mtb-121-t2-e",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-122-t1-e",
-      "dir": "mtb-122-t1-e",
+      "id": "mtb-118-t1-h",
+      "dir": "mtb-118-t1-h",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-122-t2-a",
-      "dir": "mtb-122-t2-a",
+      "id": "mtb-118-t2-a",
+      "dir": "mtb-118-t2-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-122-t2-c",
-      "dir": "mtb-122-t2-c",
+      "id": "mtb-118-t2-b",
+      "dir": "mtb-118-t2-b",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-118-t2-d",
+      "dir": "mtb-118-t2-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-118-t2-e",
+      "dir": "mtb-118-t2-e",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-119-t1-c",
+      "dir": "mtb-119-t1-c",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-123-t1-o",
-      "dir": "mtb-123-t1-o",
+      "id": "mtb-119-t1-d",
+      "dir": "mtb-119-t1-d",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-120-t1-f",
+      "dir": "mtb-120-t1-f",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-120-t2-a",
+      "dir": "mtb-120-t2-a",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-121-t2-f",
+      "dir": "mtb-121-t2-f",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-122-t1-c",
+      "dir": "mtb-122-t1-c",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-122-t2-f",
+      "dir": "mtb-122-t2-f",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-123-t1-d",
+      "dir": "mtb-123-t1-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-123-t1-n",
+      "dir": "mtb-123-t1-n",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-123-t2-b",
+      "dir": "mtb-123-t2-b",
       "stratum": "narrow",
       "gold": "gold.json"
     },
@@ -565,15 +631,15 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-124-t1-c",
-      "dir": "mtb-124-t1-c",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
       "id": "mtb-124-t1-d",
       "dir": "mtb-124-t1-d",
       "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-124-t1-e",
+      "dir": "mtb-124-t1-e",
+      "stratum": "mid",
       "gold": "gold.json"
     },
     {
@@ -583,93 +649,69 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-124-t2-c",
-      "dir": "mtb-124-t2-c",
+      "id": "mtb-124-t1-g",
+      "dir": "mtb-124-t1-g",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-124-t2-f",
+      "dir": "mtb-124-t2-f",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-124-t2-g",
-      "dir": "mtb-124-t2-g",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-125-t2-c",
-      "dir": "mtb-125-t2-c",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-126-t1-d",
-      "dir": "mtb-126-t1-d",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-127-t1-l",
-      "dir": "mtb-127-t1-l",
+      "id": "mtb-125-t2-a",
+      "dir": "mtb-125-t2-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-127-t2-c",
-      "dir": "mtb-127-t2-c",
+      "id": "mtb-126-t1-e",
+      "dir": "mtb-126-t1-e",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-128-t2-c",
-      "dir": "mtb-128-t2-c",
+      "id": "mtb-126-t1-f",
+      "dir": "mtb-126-t1-f",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-128-t2-d",
-      "dir": "mtb-128-t2-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-129-t1-a",
-      "dir": "mtb-129-t1-a",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-129-t2-c",
-      "dir": "mtb-129-t2-c",
+      "id": "mtb-127-t2-i",
+      "dir": "mtb-127-t2-i",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-130-t2-c",
-      "dir": "mtb-130-t2-c",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-130-t2-d",
-      "dir": "mtb-130-t2-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-131-t2-b",
-      "dir": "mtb-131-t2-b",
+      "id": "mtb-127-t2-k",
+      "dir": "mtb-127-t2-k",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-131-t2-c",
-      "dir": "mtb-131-t2-c",
+      "id": "mtb-129-t2-a",
+      "dir": "mtb-129-t2-a",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-130-t1-e",
+      "dir": "mtb-130-t1-e",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-131-t2-e",
-      "dir": "mtb-131-t2-e",
-      "stratum": "wide",
+      "id": "mtb-131-t2-f",
+      "dir": "mtb-131-t2-f",
+      "stratum": "narrow",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-132-t1-d",
+      "dir": "mtb-132-t1-d",
+      "stratum": "mid",
       "gold": "gold.json"
     },
     {
@@ -679,26 +721,14 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-132-t2-a",
-      "dir": "mtb-132-t2-a",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
       "id": "mtb-132-t2-b",
       "dir": "mtb-132-t2-b",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-133-t2-h",
-      "dir": "mtb-133-t2-h",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-134-t1-b",
-      "dir": "mtb-134-t1-b",
+      "id": "mtb-133-t2-m",
+      "dir": "mtb-133-t2-m",
       "stratum": "wide",
       "gold": "gold.json"
     },
@@ -709,27 +739,21 @@
       "gold": "gold.json"
     },
     {
+      "id": "mtb-134-t1-l",
+      "dir": "mtb-134-t1-l",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
       "id": "mtb-134-t2-a",
       "dir": "mtb-134-t2-a",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-134-t2-l",
-      "dir": "mtb-134-t2-l",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-135-t1-c",
-      "dir": "mtb-135-t1-c",
+      "id": "mtb-135-t1-a",
+      "dir": "mtb-135-t1-a",
       "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-135-t1-d",
-      "dir": "mtb-135-t1-d",
-      "stratum": "mid",
       "gold": "gold.json"
     },
     {
@@ -739,21 +763,45 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-136-t1-f",
-      "dir": "mtb-136-t1-f",
+      "id": "mtb-135-t2-b",
+      "dir": "mtb-135-t2-b",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-136-t1-h",
+      "dir": "mtb-136-t1-h",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-137-t2-a",
+      "dir": "mtb-137-t2-a",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-137-t2-b",
+      "dir": "mtb-137-t2-b",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-138-t1-a",
+      "dir": "mtb-138-t1-a",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-138-t1-d",
+      "dir": "mtb-138-t1-d",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-136-t2-d",
-      "dir": "mtb-136-t2-d",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-137-t2-d",
-      "dir": "mtb-137-t2-d",
-      "stratum": "mid",
+      "id": "mtb-139-t2-a",
+      "dir": "mtb-139-t2-a",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -763,39 +811,51 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-140-t1-c",
-      "dir": "mtb-140-t1-c",
+      "id": "mtb-139-t2-e",
+      "dir": "mtb-139-t2-e",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-140-t1-d",
+      "dir": "mtb-140-t1-d",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-140-t1-e",
-      "dir": "mtb-140-t1-e",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-140-t1-f",
-      "dir": "mtb-140-t1-f",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-140-t1-h",
-      "dir": "mtb-140-t1-h",
+      "id": "mtb-140-t1-i",
+      "dir": "mtb-140-t1-i",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-140-t2-g",
-      "dir": "mtb-140-t2-g",
-      "stratum": "narrow",
+      "id": "mtb-140-t1-k",
+      "dir": "mtb-140-t1-k",
+      "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-141-t1-d",
-      "dir": "mtb-141-t1-d",
+      "id": "mtb-141-t1-e",
+      "dir": "mtb-141-t1-e",
       "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-141-t2-c",
+      "dir": "mtb-141-t2-c",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-141-t2-f",
+      "dir": "mtb-141-t2-f",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-142-t1-a",
+      "dir": "mtb-142-t1-a",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -805,26 +865,8 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-142-t1-f",
-      "dir": "mtb-142-t1-f",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-142-t1-m",
-      "dir": "mtb-142-t1-m",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-142-t1-n",
-      "dir": "mtb-142-t1-n",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-142-t2-b",
-      "dir": "mtb-142-t2-b",
+      "id": "mtb-142-t1-j",
+      "dir": "mtb-142-t1-j",
       "stratum": "wide",
       "gold": "gold.json"
     },
@@ -841,21 +883,9 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-142-t2-f",
-      "dir": "mtb-142-t2-f",
+      "id": "mtb-143-t1-a",
+      "dir": "mtb-143-t1-a",
       "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-142-t2-k",
-      "dir": "mtb-142-t2-k",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-142-t2-l",
-      "dir": "mtb-142-t2-l",
-      "stratum": "mid",
       "gold": "gold.json"
     },
     {
@@ -865,74 +895,32 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-144-t1-a",
-      "dir": "mtb-144-t1-a",
-      "stratum": "wide",
+      "id": "mtb-146-t1-f",
+      "dir": "mtb-146-t1-f",
+      "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-144-t2-b",
-      "dir": "mtb-144-t2-b",
+      "id": "mtb-146-t1-g",
+      "dir": "mtb-146-t1-g",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-145-t1-b",
-      "dir": "mtb-145-t1-b",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-145-t1-d",
-      "dir": "mtb-145-t1-d",
+      "id": "mtb-146-t2-d",
+      "dir": "mtb-146-t2-d",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-145-t1-f",
-      "dir": "mtb-145-t1-f",
-      "stratum": "wide",
+      "id": "mtb-146-t2-i",
+      "dir": "mtb-146-t2-i",
+      "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-145-t1-i",
-      "dir": "mtb-145-t1-i",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-145-t2-b",
-      "dir": "mtb-145-t2-b",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-145-t2-e",
-      "dir": "mtb-145-t2-e",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-146-t2-c",
-      "dir": "mtb-146-t2-c",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-146-t2-g",
-      "dir": "mtb-146-t2-g",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-146-t2-j",
-      "dir": "mtb-146-t2-j",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-146-t2-k",
-      "dir": "mtb-146-t2-k",
+      "id": "mtb-146-t2-l",
+      "dir": "mtb-146-t2-l",
       "stratum": "mid",
       "gold": "gold.json"
     },
@@ -943,27 +931,33 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-147-t1-f",
-      "dir": "mtb-147-t1-f",
+      "id": "mtb-147-t1-d",
+      "dir": "mtb-147-t1-d",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-147-t1-l",
-      "dir": "mtb-147-t1-l",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-147-t2-l",
-      "dir": "mtb-147-t2-l",
+      "id": "mtb-147-t2-i",
+      "dir": "mtb-147-t2-i",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-148-t1-c",
-      "dir": "mtb-148-t1-c",
-      "stratum": "narrow",
+      "id": "mtb-148-t1-d",
+      "dir": "mtb-148-t1-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-148-t2-a",
+      "dir": "mtb-148-t2-a",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-148-t2-d",
+      "dir": "mtb-148-t2-d",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -979,32 +973,20 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-149-t2-a",
-      "dir": "mtb-149-t2-a",
+      "id": "mtb-149-t1-k",
+      "dir": "mtb-149-t1-k",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-149-t2-c",
-      "dir": "mtb-149-t2-c",
+      "id": "mtb-149-t1-l",
+      "dir": "mtb-149-t1-l",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-149-t2-e",
-      "dir": "mtb-149-t2-e",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-149-t2-g",
-      "dir": "mtb-149-t2-g",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-149-t2-h",
-      "dir": "mtb-149-t2-h",
+      "id": "mtb-149-t2-f",
+      "dir": "mtb-149-t2-f",
       "stratum": "wide",
       "gold": "gold.json"
     },
@@ -1015,44 +997,92 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-150-t2-c",
-      "dir": "mtb-150-t2-c",
+      "id": "mtb-149-t2-l",
+      "dir": "mtb-149-t2-l",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-150-t1-b",
+      "dir": "mtb-150-t1-b",
+      "stratum": "wide",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-150-t1-e",
+      "dir": "mtb-150-t1-e",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-150-t2-e",
-      "dir": "mtb-150-t2-e",
+      "id": "mtb-150-t1-f",
+      "dir": "mtb-150-t1-f",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-151-t1-a",
-      "dir": "mtb-151-t1-a",
+      "id": "mtb-150-t1-i",
+      "dir": "mtb-150-t1-i",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-152-t1-a",
-      "dir": "mtb-152-t1-a",
+      "id": "mtb-150-t2-a",
+      "dir": "mtb-150-t2-a",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-152-t1-h",
-      "dir": "mtb-152-t1-h",
+      "id": "mtb-150-t2-f",
+      "dir": "mtb-150-t2-f",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-152-t1-l",
-      "dir": "mtb-152-t1-l",
+      "id": "mtb-150-t2-h",
+      "dir": "mtb-150-t2-h",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-150-t2-k",
+      "dir": "mtb-150-t2-k",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-152-t2-k",
-      "dir": "mtb-152-t2-k",
+      "id": "mtb-151-t1-b",
+      "dir": "mtb-151-t1-b",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-152-t1-g",
+      "dir": "mtb-152-t1-g",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-152-t2-a",
+      "dir": "mtb-152-t2-a",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-152-t2-c",
+      "dir": "mtb-152-t2-c",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-152-t2-g",
+      "dir": "mtb-152-t2-g",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-153-t1-a",
+      "dir": "mtb-153-t1-a",
       "stratum": "wide",
       "gold": "gold.json"
     },
@@ -1063,8 +1093,8 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-153-t1-k",
-      "dir": "mtb-153-t1-k",
+      "id": "mtb-153-t1-j",
+      "dir": "mtb-153-t1-j",
       "stratum": "wide",
       "gold": "gold.json"
     },
@@ -1075,39 +1105,27 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-154-t1-b",
-      "dir": "mtb-154-t1-b",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-154-t2-b",
-      "dir": "mtb-154-t2-b",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-154-t2-c",
-      "dir": "mtb-154-t2-c",
+      "id": "mtb-153-t2-c",
+      "dir": "mtb-153-t2-c",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-155-t1-a",
-      "dir": "mtb-155-t1-a",
+      "id": "mtb-155-t1-g",
+      "dir": "mtb-155-t1-g",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-155-t2-d",
-      "dir": "mtb-155-t2-d",
+      "id": "mtb-155-t2-a",
+      "dir": "mtb-155-t2-a",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-156-t1-f",
-      "dir": "mtb-156-t1-f",
-      "stratum": "wide",
+      "id": "mtb-156-t1-e",
+      "dir": "mtb-156-t1-e",
+      "stratum": "mid",
       "gold": "gold.json"
     },
     {
@@ -1117,27 +1135,39 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-156-t1-h",
-      "dir": "mtb-156-t1-h",
+      "id": "mtb-156-t2-d",
+      "dir": "mtb-156-t2-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-157-t1-a",
+      "dir": "mtb-157-t1-a",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-157-t1-d",
+      "dir": "mtb-157-t1-d",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-157-t1-g",
+      "dir": "mtb-157-t1-g",
+      "stratum": "mid",
+      "gold": "gold.json"
+    },
+    {
+      "id": "mtb-157-t2-d",
+      "dir": "mtb-157-t2-d",
       "stratum": "wide",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-156-t2-c",
-      "dir": "mtb-156-t2-c",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-157-t1-i",
-      "dir": "mtb-157-t1-i",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-157-t2-f",
-      "dir": "mtb-157-t2-f",
-      "stratum": "mid",
+      "id": "mtb-158-t1-a",
+      "dir": "mtb-158-t1-a",
+      "stratum": "wide",
       "gold": "gold.json"
     },
     {
@@ -1147,62 +1177,32 @@
       "gold": "gold.json"
     },
     {
-      "id": "mtb-158-t2-c",
-      "dir": "mtb-158-t2-c",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-159-t1-g",
-      "dir": "mtb-159-t1-g",
+      "id": "mtb-159-t1-i",
+      "dir": "mtb-159-t1-i",
       "stratum": "narrow",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-159-t2-h",
-      "dir": "mtb-159-t2-h",
+      "id": "mtb-159-t2-f",
+      "dir": "mtb-159-t2-f",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-159-t2-j",
-      "dir": "mtb-159-t2-j",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-159-t2-l",
-      "dir": "mtb-159-t2-l",
+      "id": "mtb-160-t1-f",
+      "dir": "mtb-160-t1-f",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-160-t1-d",
-      "dir": "mtb-160-t1-d",
-      "stratum": "narrow",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-160-t2-a",
-      "dir": "mtb-160-t2-a",
-      "stratum": "wide",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-160-t2-g",
-      "dir": "mtb-160-t2-g",
+      "id": "mtb-160-t1-h",
+      "dir": "mtb-160-t1-h",
       "stratum": "mid",
       "gold": "gold.json"
     },
     {
-      "id": "mtb-160-t2-i",
-      "dir": "mtb-160-t2-i",
-      "stratum": "mid",
-      "gold": "gold.json"
-    },
-    {
-      "id": "mtb-160-t2-j",
-      "dir": "mtb-160-t2-j",
+      "id": "mtb-160-t2-k",
+      "dir": "mtb-160-t2-k",
       "stratum": "mid",
       "gold": "gold.json"
     }

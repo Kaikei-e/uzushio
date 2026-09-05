@@ -5,11 +5,12 @@
   "question_id": 149,
   "turn": 2,
   "models": {
-    "c1": "gpt-4",
+    "c1": "llama-13b",
     "c2": "claude-v1",
-    "c3": "llama-13b"
+    "c3": "gpt-4"
   },
   "gold": "c2",
+  "gold_wins": 2,
   "method": "acyclic-majority",
   "margin_stratum": "mid",
   "bt_top": "c2",

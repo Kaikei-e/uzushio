@@ -1,3 +1,0 @@
-1) a = (3/4)b^3 - c^(2b) + sin(d*b) - sqrt(7)
-2) 2b - c/(3+d) * sum(N=1 to 5; ln(N)^2) = 5e*integral(a=0 to d; cos(comb(N=1 to 10; N*a)))
-3) f = g(h^2) + i*(j/k)/(-(l/2) + sqrt(m^2 + (l/2)^2))

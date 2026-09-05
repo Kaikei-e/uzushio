@@ -10,6 +10,7 @@
     "c3": "vicuna-13b-v1.2"
   },
   "gold": "tie",
+  "gold_wins": 0,
   "method": "acyclic-majority",
   "margin_stratum": "narrow",
   "bt_top": "c3",

@@ -1,8 +1,0 @@
-```
-def kthSmallest(m, n, k):
-    # Sort the two lists
-    m.sort()
-    n.sort()
-    # Find the kth element in the union of the two sorted lists
-    return m[k-1] if k < n else n[k-1]
-```

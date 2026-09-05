@@ -1,7 +1,0 @@
-Machine learning is a type of artificial intelligence that enables computers to learn from data and improve performance over time. It involves algorithms that can identify patterns in data and make predictions or decisions based on those patterns. There are three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning. 
-
-Supervised learning involves using labeled data to train the algorithm to make predictions. Examples of supervised learning include facial recognition, credit card fraud detection, and speech recognition. 
-
-Unsupervised learning involves using unlabeled data to detect patterns and group similar items together. Examples of unsupervised learning include clustering, anomaly detection, and natural language processing. 
-
-Reinforcement learning involves using rewards and punishments to teach the algorithm how to make decisions. Examples of reinforcement learning include robotics, playing games, and autonomous driving.

@@ -5,14 +5,15 @@
   "question_id": 142,
   "turn": 2,
   "models": {
-    "c1": "alpaca-13b",
-    "c2": "vicuna-13b-v1.2",
-    "c3": "gpt-4"
+    "c1": "gpt-4",
+    "c2": "alpaca-13b",
+    "c3": "vicuna-13b-v1.2"
   },
-  "gold": "c3",
+  "gold": "c1",
+  "gold_wins": 2,
   "method": "acyclic-majority",
   "margin_stratum": "wide",
-  "bt_top": "c3",
+  "bt_top": "c1",
   "hard": false,
   "judgments_used": 7,
   "human_annotators": 3

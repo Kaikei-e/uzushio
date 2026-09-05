@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "source": "lmsys/mt_bench_human_judgments",
+  "license": "CC-BY-4.0",
+  "question_id": 112,
+  "turn": 1,
+  "models": {
+    "c1": "claude-v1",
+    "c2": "llama-13b",
+    "c3": "alpaca-13b"
+  },
+  "gold": "c1",
+  "gold_wins": 2,
+  "method": "acyclic-majority",
+  "margin_stratum": "wide",
+  "bt_top": "c1",
+  "hard": false,
+  "judgments_used": 3,
+  "human_annotators": 1
+}

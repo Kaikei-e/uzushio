@@ -5,11 +5,12 @@
   "question_id": 139,
   "turn": 2,
   "models": {
-    "c1": "vicuna-13b-v1.2",
-    "c2": "claude-v1",
+    "c1": "claude-v1",
+    "c2": "vicuna-13b-v1.2",
     "c3": "gpt-4"
   },
   "gold": "c3",
+  "gold_wins": 2,
   "method": "acyclic-majority",
   "margin_stratum": "wide",
   "bt_top": "c3",

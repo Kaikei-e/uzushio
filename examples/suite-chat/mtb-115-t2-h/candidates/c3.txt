@@ -1,7 +1,0 @@
-If 38 people got on the bus at the terminal, then the total number of people who rode the bus is:
-
-38 (from the terminal) + 4 (who got on at the first stop) + 8 (who got on at the second stop) = 50
-
-So the total money earned by the bus is:
-
-50 people x $2 per person = $100

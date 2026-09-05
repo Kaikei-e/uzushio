@@ -1,5 +1,0 @@
-[
-  {"rating": 5, "release_date": "Nov. 18, 2019"},
-  {"rating": 1, "release_date": "2022"},
-  {"rating": 3, "release_date": "Feb 2018"}
-]

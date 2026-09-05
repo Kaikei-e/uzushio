@@ -1,3 +1,0 @@
-If the third statement is true, then bananas cost more than apples and oranges. 
-
-If bananas cost more than oranges and oranges cost more than apples (statement 1), then it is true that bananas cost more than apples. Therefore, the first statement is true.

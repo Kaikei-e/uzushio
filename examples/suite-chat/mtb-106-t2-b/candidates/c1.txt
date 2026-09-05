@@ -1,1 +1,0 @@
-If the third statement is true, then the first statement is false. This is because the third statement implies that oranges cost less than apples, which contradicts the first statement.

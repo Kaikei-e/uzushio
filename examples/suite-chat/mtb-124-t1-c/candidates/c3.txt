@@ -1,1 +1,0 @@
-The function seems correct and there is no bug in it. It uses dynamic programming to find the length of the longest common subsequence of two input strings. The time complexity of this function is O(mn), where m and n are the lengths of the input strings.

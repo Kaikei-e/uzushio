@@ -6,13 +6,14 @@
   "turn": 2,
   "models": {
     "c1": "llama-13b",
-    "c2": "alpaca-13b",
-    "c3": "gpt-4"
+    "c2": "gpt-4",
+    "c3": "alpaca-13b"
   },
-  "gold": "c3",
+  "gold": "c2",
+  "gold_wins": 2,
   "method": "acyclic-majority",
   "margin_stratum": "wide",
-  "bt_top": "c3",
+  "bt_top": "c2",
   "hard": false,
   "judgments_used": 3,
   "human_annotators": 1

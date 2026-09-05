@@ -1,1 +1,0 @@
-A ternary tree is full if all of its vertices have either zero, one, or three children. Let T_n denote the number of full ternary trees with n vertices. Implement a function to find T_n.

@@ -17,14 +17,16 @@ contradict each other, labelled with the system that beat both others.
 | candidate triples considered | 3200 |
 | discarded: a pair nobody compared | 1822 |
 | discarded: too few comparisons | 0 |
-| discarded: the three majorities cycle | 36 |
-| eligible | 1342 |
+| discarded: the three majorities cycle | 32 |
+| eligible | 1346 |
 | sampled into this suite | 200 |
-| prompts contributing an item | 111 |
-| sampled items the people left undecided (`gold: tie`) | 64 |
-| sampled items the majorities and the fit disagree about | 6 |
+| prompts contributing an item | 112 |
+| sampled items with no unbeaten system (`gold: tie`) | 65 |
+| labelled items whose system beat both others | 123 |
+| labelled items whose system was unbeaten but drew a pair | 12 |
+| sampled items the majorities and the fit disagree about | 13 |
 
-Cycle rate among complete triples: **2.6%** (36 of 1378).
+Cycle rate among complete triples: **2.3%** (32 of 1378).
 
 That rate is a measurement of the human labels rather than of any judge.
 The items behind it have no true answer — the people who produced them
@@ -51,19 +53,43 @@ A group is one (`question_id`, `turn`) pair. Every model in the source answered
 every question, which is why three-way items can be derived at all: a corpus
 where each prompt was shown to one pair of models has no triples in it.
 
-On the second turn the conversation a task carries is the two **user** turns and
-nothing else. The assistant turn between them is not shared — each system
-answered the first question its own way — so putting one system's first answer
-in the shared context would show the judge one candidate's work as if it were
-the setting. Each candidate file holds only the answer to the turn being judged.
+The conversation a task carries is the **first user turn** and nothing else.
+On a second-turn item each candidate file holds that model's whole side of the
+exchange: its first answer, the marker `[user]`, the shared follow-up
+question, the marker `[assistant]`, and its second answer. The task's
+`rubric.md` tells the judge that is what it is reading.
+
+This is not a presentation choice. The estimand is the annotators': a person
+comparing two systems on a second turn read each system's *whole* two-turn
+conversation, and the follow-up questions are usually critiques of the first
+answer — "Take a moment to evaluate and critique your own response". A judge
+shown only the two user turns would be ranking three critiques of three answers
+it has never seen, each critiquing something different, on half the corpus. It
+would be measuring a different quantity from the one the gold label measures,
+and `human_kappa` and the verdict rest on those being the same quantity.
+
+The assistant turn is inside the candidate rather than in the shared context
+because it is not shared: each system answered the first question its own way,
+so there is no first answer that belongs to the item rather than to a candidate.
 
 `winner: tie` in the source folds into a drawn pair. The source draws no
 distinction between "equally good" and "equally bad", and neither does a
 majority.
 
-## What a gold label is not
+## What a gold label is
 
-`gold` is the answer the human majorities point at. It is not a statement
-that the answer is good, and `gold: tie` is not a statement that the three
-are equal — it says the majorities left no single winner. A calibration
-reports every number under a named tie handling for exactly this reason.
+`gold` is the **source of the acyclic tournament**: the one system no
+majority beat. That is weaker than beating both others, and deliberately
+so — an item where A beat B, B beat C and A drew with C has an unbeaten
+system, and calling it undecided would put a label the annotators never
+gave into the human side of every agreement table. `gold_wins` says which
+of the two an item is.
+
+A pair is won where more people preferred one side than the other and the
+people who saw no difference did not outnumber them, so five saying "of a
+kind" and one preferring A is a drawn pair rather than a defeat for B.
+
+`gold` is not a statement that the answer is good, and `gold: tie` is not a
+statement that the three are equal — it says no single system was left
+unbeaten. A calibration reports every number under a named tie handling for
+exactly this reason.

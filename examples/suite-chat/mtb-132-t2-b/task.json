@@ -3,6 +3,7 @@
   "id": "mtb-132-t2-b",
   "face": "chat",
   "conversation": "conversation.json",
+  "rubric": "rubric.md",
   "judge": {
     "allow_tie": true
   }

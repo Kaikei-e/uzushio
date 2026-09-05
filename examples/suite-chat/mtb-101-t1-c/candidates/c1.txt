@@ -1,1 +1,0 @@
-If you have just overtaken the second person, then your current position is second place. The person you just overtook is now in third place.

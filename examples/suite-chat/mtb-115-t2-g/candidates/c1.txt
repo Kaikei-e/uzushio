@@ -1,7 +1,0 @@
-The total money earned by the bus is the sum of the ticket prices for all the people who got on the bus.
-
-Since there were 15 people who got on the bus at the terminal, and each person paid $2, the total money earned by the bus is:
-
-15 x $2 = $<<15\*2=30>>30
-
-Therefore, the total money earned by the bus is $30.
