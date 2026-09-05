@@ -63,9 +63,12 @@ kill rate ではない。審判に注入できる欠陥は無く、測れるの�
 スラグ）、`pool`（候補を作った提案者プール、または `external`）、`window_from` / `window_to`、`n_items`、
 `tie_handling`（one_of：`abstain-as-category` / `decided-only`）、`swap_kappa`、`rerun_kappa`、
 `human_kappa`（`unmeasured` を許す）、`n_human`、`verdict`（one_of：`calibrated` / `uncalibrated` /
-`unmeasured`）、`report`（レポートのパス）。`period.in_force_until` は `window_to` + 30 日を書き手が導く
-——測定より長生きする較正文書は作れない。期限が来た較正は `effective` 射影から外れ、
-`uzushio judge status` が「妥当性が N 日測られていない」と警告する（終了コード非 0）。
+`unmeasured`）、`report`（レポートのパス）。`period.in_force_until` は `window_to` + 31 日（DocDag の `until` は排他なので、30 日目まで binding）を
+書き手が導く——測定より長生きする較正文書は作れない。同じ審判の新しい較正は直前の binding な較正を
+`supersedes` し、`effective` 射影は `has_inforce_successor: false` を条件に持つ——後の `uncalibrated` が前の
+`calibrated` を退かせる。期限が来た較正は `effective` 射影から外れ、
+`uzushio judge status` が「妥当性が N 日測られていない」、または binding な較正が `uncalibrated` /
+`unmeasured` だと警告する（終了コード非 0）。
 
 `judge_unmeasured_accepted`（チャット面の edit を、妥当性の測られた較正が無いのに受理したら error）は
 **書かない**。edit は面を名指しできず、「vault 全体に binding な較正が 1 つも無い」は文書単位で評価される
@@ -83,7 +86,8 @@ DocDag のルールでは表せない。鳴れないルールを置くと「強�
   `tie_handling` は主が `abstain-as-category`（`NoCandidate` も gold の `tie` も 1 カテゴリ）、副が
   `decided-only`（両者が決めた項目だけ）。同じ項目に 2 人以上のラベルがあれば human–human κ を天井として
   併記。ラベルの `all_bad` は `tie` に畳み、件数は別に数える。
-- 区間は項目単位の jackknife。κ が未定義（周辺が退化）なら `null` で書き、1 にはしない。重み付き κ は
+- 区間は**項目を単位にした** jackknife（スワップと再実行の行は項目を共有するので、行単位では 3 倍ほど
+  狭くなる——レビューで判明）。κ が未定義（周辺が退化）なら区間も `null` で書き、1 や [0, 0] にはしない。重み付き κ は
   置かない（3 値に順序が無い）。閾値は既定 0.667（Krippendorff）で `--min-kappa`。
 - `no_candidate` の率をサブ理由別に、不正出力の再送率、遅延の中央値も報告する。
 - レポートは `<vault>/calibrations/<judge>@<day>[-n]/report.json` と `items.jsonl`（項目ごとの結末・gold・
@@ -98,16 +102,22 @@ uzushio judge status --vault .
 ```
 
 `calibrate` は項目ごとに `cmoa judge --task <dir> --candidate c1.txt --candidate c2.txt --candidate c3.txt
---seed <k>` を呼び、`judge.json`（CMoA ADR 0011 D4 の記録）を読む。`--seed` は提示順だけを動かす。
-verifier の動かない試行（`judge_timeout` / `judge_failed`）は棄権に数えず、未測定として除き、件数を報告する。
+--seed <k>` を呼び、`judge.json`（CMoA ADR 0011 D4 の記録）を読む。`--seed` は提示の nonce だけを動かす（CMoA ADR 0011 D4）。
+審判の動かない試行（`judge_timeout` / `judge_failed`）は棄権に数えず、未測定として除き、件数を報告する。
+`abstain` はプロトコルの `NoCandidate`（cycle / no_majority / all_draws / invalid_output）だけ。1 件の失敗で
+数時間の run を捨てない：未測定のまま続け、未測定率が `--max-unmeasured`（既定 0.1）を超えたときだけ
+非 0 で終わる。同じ日の 2 回目は `-n` 付きの別ディレクトリと文書になる。
 測れないことが事前に分かる条件（suite が `face: chat` でない、`cmoa` に `judge` が無い、設定に `judge` が
 無い）は何も使わずに exit 2。`--dry-run` は計画だけ出す。
 
 `import-mtbench` はデータセット名を持つ唯一のファイル。`internal/pairwise` は「pairwise の人間判定」と
 「rows エンドポイント」しか知らない。非巡回多数決の三つ組、Bradley–Terry（MM 反復）の強度差で
 wide 40 / mid 40 / narrow 20 % に層化、`--seed` で決定的。巡回三つ組は破棄し、破棄率を DERIVATION.md に
-書く。2 ターン目の項目の conversation は共有された user 発話 2 つだけ（間の assistant 発話はシステムごとに
-違い、共有されていない）。候補ファイルは原文のまま。
+書く。gold は**多数決トーナメントで誰にも負けていない唯一の候補**（1–1 のペアは未決で、敗北ではない）、
+それが無いときだけ `tie`。2 ターン目の項目は、人間が判定したもの——各モデルの 1 ターン目の答え、共有の
+2 ターン目の発話、2 ターン目の答え——を 1 つの候補（転写の続き）として渡す。当初の「共有 user 発話
+2 つだけ」は、審判に見えない 3 つの別々の 1 ターン目への批評を並べることになり、推定量が人間のものと
+違っていた（レビューで判明）。候補の本文は原文のまま。
 
 ### D4. 実例：`examples/suite-chat` と日本語のスモーク
 
