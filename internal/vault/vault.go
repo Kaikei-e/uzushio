@@ -11,6 +11,7 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/Kaikei-e/DocDag/config"
@@ -41,6 +42,7 @@ func referencePattern() string {
 		vocab.PatternIDBody,
 		vocab.RunIDBody,
 		vocab.VerifierIDBody,
+		vocab.CalibrationIDBody,
 	}
 	pattern := "^("
 	for i, alternative := range alternatives {
@@ -135,9 +137,9 @@ func Config() (config.Config, error) {
 	return cfg, nil
 }
 
-// addKinds declares the four uzushio kinds.
+// addKinds declares the five uzushio kinds.
 //
-// All four are append_only. The history check reads only kinds that opt in,
+// All five are append_only. The history check reads only kinds that opt in,
 // and it exempts the status field, so marking an edit append_only does not
 // stand in the way of its status moving from proposed to accepted; what it
 // forbids is rewriting a decision after the fact. It protects less than it
@@ -261,6 +263,84 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 		// point at yet: the task it is about is CMoA's, not a document in this
 		// vault, and the clause that will require one is Step 4's work.
 	}
+
+	cfg.Kinds[vocab.KindCalibration.String()] = config.KindSpec{
+		Dir: vocab.DirCalibrations,
+		ID:  vocab.CalibrationIDPattern,
+		// Like a run and a verifier check, a calibration answers to no status
+		// vocabulary: it is a measurement, and what it concluded is the
+		// verdict.
+		Closed:     true,
+		AppendOnly: true,
+		Fields: map[string]config.FieldSpec{
+			// The judge and the candidates it judged. Without the pair, a
+			// coefficient is a number about nothing: the same judge scores
+			// differently against three strong proposers and against three
+			// weak ones, because kappa is sensitive to how often the answer
+			// is obvious.
+			vocab.FieldJudge.String():      {Required: true},
+			vocab.FieldPool.String():       {Required: true},
+			vocab.FieldWindowFrom.String(): {},
+			vocab.FieldWindowTo.String():   {},
+			vocab.FieldNItems.String():     {},
+			// The handling is required and closed because it is not a
+			// preprocessing detail: the two handlings estimate different
+			// quantities, and a coefficient whose handling is unstated cannot
+			// be compared with anything.
+			vocab.FieldTieHandling.String(): {
+				OneOf:    vocab.Strings(vocab.AllTieHandlings()),
+				Required: true,
+			},
+			// The three coefficients are strings, like the verifier's rate:
+			// a scalar field is compared as text, and `unmeasured` has to be
+			// spellable in the same key as a number.
+			vocab.FieldSwapKappa.String():  {},
+			vocab.FieldRerunKappa.String(): {},
+			vocab.FieldHumanKappa.String(): {},
+			vocab.FieldNHuman.String():     {},
+			vocab.FieldVerdict.String(): {
+				OneOf:    vocab.Strings(vocab.AllCalibrateds()),
+				Required: true,
+			},
+			// UZ-C-009 makes the report a MUST, and the writer refuses a
+			// calibration without one. Declaring it required here is what
+			// makes a hand-written document answer to the same rule.
+			vocab.FieldReport.String():       {Required: true},
+			vocab.FieldInForceUntil.String(): {},
+		},
+		// No edge and no rule, for two reasons that are worth keeping apart.
+		//
+		// The first is the verifier's: a calibration points at nothing in this
+		// vault. The suite it measured is a directory of tasks, not a
+		// document, and an edge needs a far end.
+		//
+		// The second is a rule this step wanted and could not write. "A
+		// chat-face edit was accepted while no calibration with a measured
+		// human_kappa is binding" is the obligation the kind exists to carry,
+		// and the current vocabulary cannot express it twice over: an edit
+		// names a harness surface and has no way to say which face it is
+		// about, and — the harder half — the condition is about the vault as a
+		// whole rather than about the document being judged. A DocDag rule is
+		// evaluated on one document and its neighbours across an edge, so
+		// "nothing anywhere is binding" has nowhere to be asked. Writing the
+		// rule against the edit's own keys would produce a rule that fires on
+		// nothing for the rest of the repository's life, which is worse than
+		// its absence: it would read as an enforced obligation. The check
+		// belongs in the command that accepts an edit, or in a future
+		// vocabulary where an edit names its face and points at the
+		// calibration it rests on.
+		//
+		// A calibration carries force from the day it was written until
+		// thirty days after its window closed, and then stops on its own.
+		// That is the whole mechanism behind the warning `uzushio judge
+		// status` prints: a judge whose validity nobody has re-measured
+		// silently leaves `binding` rather than staying there because nobody
+		// remembered to retire it.
+		Period: &config.PeriodSpec{
+			From:  config.KeyDate,
+			Until: vocab.FieldInForceUntil.String(),
+		},
+	}
 }
 
 // extendEdges adds uzushio's two edges and widens the four preset edges an
@@ -274,7 +354,9 @@ func extendEdges(cfg *config.Config) error {
 	}{
 		// An edit replaces an edit, the way a clause replaces a clause. The
 		// reason attribute the preset already requires applies unchanged.
-		{config.EdgeSupersedes, []string{vocab.KindEdit.String()}, []string{vocab.KindEdit.String()}},
+		{config.EdgeSupersedes,
+			[]string{vocab.KindEdit.String(), vocab.KindCalibration.String()},
+			[]string{vocab.KindEdit.String(), vocab.KindCalibration.String()}},
 		// An edit rests on premises, names the post-mortem that motivated it,
 		// and states its subject — the last of which the preset already
 		// requires of every document the about edge starts at.
@@ -293,6 +375,14 @@ func extendEdges(cfg *config.Config) error {
 		spec.From = appendKinds(spec.From, w.from)
 		spec.To = appendKinds(spec.To, w.to)
 		cfg.Edges[index] = spec
+	}
+	// One word added to the reason a supersession gives. The preset's four are
+	// about why a clause was rewritten; a measurement is not rewritten for a
+	// reason, it is replaced because somebody measured again, and `conflict`
+	// would be a lie on the ordinary case where the second measurement agrees
+	// with the first.
+	if err := widenSupersedesReason(cfg); err != nil {
+		return err
 	}
 
 	cfg.Edges = append(cfg.Edges,
@@ -356,6 +446,28 @@ func extendEdges(cfg *config.Config) error {
 	return nil
 }
 
+// widenSupersedesReason adds uzushio's word to the preset's vocabulary.
+func widenSupersedesReason(cfg *config.Config) error {
+	index := slices.IndexFunc(cfg.Edges, func(spec config.EdgeSpec) bool {
+		return spec.Name == config.EdgeSupersedes.String()
+	})
+	if index < 0 {
+		return fmt.Errorf("%w: the spec preset declares no supersedes edge", ErrConfig)
+	}
+	spec := cfg.Edges[index]
+	reason, ok := spec.Attrs[config.AttrReason]
+	if !ok {
+		return fmt.Errorf("%w: the supersedes edge declares no reason attribute", ErrConfig)
+	}
+	if !slices.Contains(reason.OneOf, vocab.ReasonRemeasured) {
+		reason.OneOf = append(slices.Clone(reason.OneOf), vocab.ReasonRemeasured)
+	}
+	spec.Attrs = maps.Clone(spec.Attrs)
+	spec.Attrs[config.AttrReason] = reason
+	cfg.Edges[index] = spec
+	return nil
+}
+
 // appendKinds adds kinds to an endpoint list, skipping the ones already there
 // so widening an edge twice is the same as widening it once.
 func appendKinds(have, add []string) []string {
@@ -415,6 +527,21 @@ func extendProjections(cfg *config.Config) error {
 		},
 	)
 
+	// What binding means for a calibration: it has not expired and nothing
+	// newer has replaced it. There is nothing to accept — a measurement is not
+	// a decision — so the day does most of the work, and the day is what makes
+	// the projection useful: thirty days after the window closes the
+	// calibration drops out of `binding` without anyone editing anything, and
+	// `uzushio judge status` reports a judge running on no measurement at all.
+	//
+	// The successor clause is the other half, and it is not decoration. Two
+	// calibrations of one judge a fortnight apart, the first `calibrated` and
+	// the second `uncalibrated`, would otherwise both bind for a month, and
+	// "does a binding calibration say this judge is calibrated" would answer
+	// yes for thirty days after the measurement that says otherwise. The old
+	// document is never edited — it is append-only history — so what retires
+	// it is the edge the new one declares and this clause reading it.
+	//
 	// What binding means for an edit: accepted, in force today, not already
 	// replaced, and carrying the three things a run can show. Alternatives are
 	// OR-ed and this one is scoped to a kind the preset's alternatives never
@@ -427,6 +554,30 @@ func extendProjections(cfg *config.Config) error {
 	}
 	effective := cfg.Projections[index]
 	effective.AnyOf = append(effective.AnyOf, config.ProjectionAlt{When: config.Condition{
+		Attr: map[string]config.AttrCondition{
+			config.KeyKind:     eq(vocab.KindCalibration.String()),
+			config.AttrInForce: isTrue(),
+		},
+		// "and nothing newer has replaced it", written inline rather than as a
+		// projection of its own.
+		//
+		// The preset's has_inforce_successor cannot be reused: it asks the
+		// superseding document for `status: accepted`, and a calibration has
+		// no status at all — it is a measurement, and a measurement is not
+		// accepted. A named projection of uzushio's own would work, and did,
+		// but DocDag reports a projection that holds nowhere in the corpus as
+		// a warning with no way to say "it has a fixture and the corpus simply
+		// has not needed it yet" — which is the state a vault is in until its
+		// second calibration of one judge. The condition is one clause; it
+		// lives where it is read.
+		Not: &config.Condition{ViaInbound: &config.ViaCondition{
+			Edge: config.EdgeSupersedes.String(),
+			Attr: map[string]config.AttrCondition{
+				config.KeyKind:     eq(vocab.KindCalibration.String()),
+				config.AttrInForce: isTrue(),
+			},
+		}},
+	}}, config.ProjectionAlt{When: config.Condition{
 		Attr: map[string]config.AttrCondition{
 			config.KeyKind:                        eq(vocab.KindEdit.String()),
 			config.DefaultStatusField:             eq(vocab.StatusAccepted.String()),

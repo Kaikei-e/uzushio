@@ -1,0 +1,6 @@
+[
+  {
+    "role": "user",
+    "content": "x+y = 4z, x*y = 4z^2, express x-y in z"
+  }
+]

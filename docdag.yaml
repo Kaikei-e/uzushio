@@ -3,6 +3,40 @@
 preset: spec
 preset_version: 2
 kinds:
+  calibration:
+    dir: spec/calibrations
+    id: "^calibration/[a-z0-9.]+(-[a-z0-9.]+)*@\\d{4}-\\d{2}-\\d{2}(-\\d+)?$"
+    closed: true
+    append_only: true
+    fields:
+      human_kappa: {}
+      in_force_until: {}
+      judge:
+        required: true
+      n_human: {}
+      n_items: {}
+      pool:
+        required: true
+      report:
+        required: true
+      rerun_kappa: {}
+      swap_kappa: {}
+      tie_handling:
+        one_of:
+        - abstain-as-category
+        - decided-only
+        required: true
+      verdict:
+        one_of:
+        - calibrated
+        - uncalibrated
+        - unmeasured
+        required: true
+      window_from: {}
+      window_to: {}
+    period:
+      from: date
+      until: in_force_until
   clause:
     dir: spec/clauses
     id: "^UZ-[A-Z]-\\d{3}$"
@@ -196,10 +230,12 @@ edges:
   - clause
   - premise
   - edit
+  - calibration
   to:
   - clause
   - premise
   - edit
+  - calibration
   attrs:
     reason:
       required: true
@@ -208,6 +244,7 @@ edges:
       - premise-collapse
       - conflict
       - vocabulary
+      - remeasured
 - name: enforces
   key: enforces
   acyclic: false
@@ -710,6 +747,20 @@ projections:
             eq: "true"
   - when:
       attr:
+        in_force:
+          eq: "true"
+        kind:
+          eq: calibration
+      not:
+        via_inbound:
+          edge: supersedes
+          attr:
+            in_force:
+              eq: "true"
+            kind:
+              eq: calibration
+  - when:
+      attr:
         improved:
           eq: "true"
         in_force:
@@ -772,7 +823,7 @@ projections:
 binding: effective
 references:
   dangling: error
-  pattern: "^(UZ-[A-Z]-\\d{3}|conform/[a-z0-9-]+|dev-\\d{4}|interp/.+|premise/.+|principle/.+|pm-\\d{4}|topic/.+|he-\\d{4}|fp/[a-z0-9-]+|run/he-\\d{4}@\\d{4}-\\d{2}-\\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\\d+)?|verifier/[a-z0-9][a-z0-9-]{0,63}@\\d{4}-\\d{2}-\\d{2}(-\\d+)?)$"
+  pattern: "^(UZ-[A-Z]-\\d{3}|conform/[a-z0-9-]+|dev-\\d{4}|interp/.+|premise/.+|principle/.+|pm-\\d{4}|topic/.+|he-\\d{4}|fp/[a-z0-9-]+|run/he-\\d{4}@\\d{4}-\\d{2}-\\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\\d+)?|verifier/[a-z0-9][a-z0-9-]{0,63}@\\d{4}-\\d{2}-\\d{2}(-\\d+)?|calibration/[a-z0-9.]+(-[a-z0-9.]+)*@\\d{4}-\\d{2}-\\d{2}(-\\d+)?)$"
   scan:
   - body
   - frontmatter

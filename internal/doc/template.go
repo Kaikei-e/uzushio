@@ -30,6 +30,8 @@ func Template(kind vocab.Kind) (string, error) {
 		document = templateRun()
 	case vocab.KindVerifier:
 		document = templateVerifier()
+	case vocab.KindCalibration:
+		document = templateCalibration()
 	default:
 		return "", fmt.Errorf("%w: no template for kind %q", ErrDocument, kind)
 	}
@@ -106,5 +108,29 @@ func templateVerifier() Verifier {
 		Report:        "doctor/20000101T000000Z-0000beef/report.json",
 		Body: "Which mutants survived, and what that says about what the verifier\n" +
 			"is not testing. The numbers are in the report the report: key names.",
+	}
+}
+
+func templateCalibration() Calibration {
+	return Calibration{
+		Judge:       "judge-model",
+		Day:         TemplateDay,
+		Title:       "What this calibration found out about the judge",
+		Date:        TemplateDay,
+		Pool:        PoolExternal,
+		WindowFrom:  TemplateDay,
+		WindowTo:    TemplateDay,
+		NItems:      1,
+		TieHandling: vocab.TieAbstainAsCategory,
+		SwapKappa:   KappaUnmeasured,
+		RerunKappa:  KappaUnmeasured,
+		HumanKappa:  KappaUnmeasured,
+		NHuman:      0,
+		Verdict:     vocab.CalibratedUnmeasured,
+		Report:      "runs/20000101T000000Z-0000beef/report.json",
+		Body: "What the judge was measured on, and what the three coefficients say\n" +
+			"about it. Every number was computed under the tie handling the\n" +
+			"tie_handling: key names; the report the report: key names holds the\n" +
+			"marginals and the intervals.",
 	}
 }

@@ -28,6 +28,11 @@ const (
 	// where the same task was checked twice in a day. The task part is CMoA's
 	// task id shape, because that is what the identifier names.
 	VerifierIDPattern = `^verifier/[a-z0-9][a-z0-9-]{0,63}@\d{4}-\d{2}-\d{2}(-\d+)?$`
+	// CalibrationIDPattern is one calibration of one judge: the judge's model
+	// slug, the day the window closed, and a sequence number where one judge
+	// was calibrated twice in a day. The slug is spelled the way a run
+	// identifier spells a model, because it names the same sort of thing.
+	CalibrationIDPattern = `^calibration/[a-z0-9.]+(-[a-z0-9.]+)*@\d{4}-\d{2}-\d{2}(-\d+)?$`
 )
 
 // The same three shapes without their anchors, for composing the single
@@ -36,10 +41,11 @@ const (
 // and the kinds' identifiers have to stay in step; the test that rebuilds each
 // anchored pattern from its body is what keeps them there.
 const (
-	EditIDBody     = `he-\d{4}`
-	PatternIDBody  = `fp/[a-z0-9-]+`
-	RunIDBody      = `run/he-\d{4}@\d{4}-\d{2}-\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\d+)?`
-	VerifierIDBody = `verifier/[a-z0-9][a-z0-9-]{0,63}@\d{4}-\d{2}-\d{2}(-\d+)?`
+	EditIDBody        = `he-\d{4}`
+	PatternIDBody     = `fp/[a-z0-9-]+`
+	RunIDBody         = `run/he-\d{4}@\d{4}-\d{2}-\d{2}-[a-z0-9.]+(-[a-z0-9.]+)*-(in|out)(-\d+)?`
+	VerifierIDBody    = `verifier/[a-z0-9][a-z0-9-]{0,63}@\d{4}-\d{2}-\d{2}(-\d+)?`
+	CalibrationIDBody = `calibration/[a-z0-9.]+(-[a-z0-9.]+)*@\d{4}-\d{2}-\d{2}(-\d+)?`
 )
 
 // TaskIDPattern is the shape CMoA holds a task identifier to, and which a
@@ -72,11 +78,17 @@ var ErrID = errors.New("vocab: invalid identifier")
 // The compiled matchers. Compilation failure is a programmer error in the
 // table above and there is nothing to recover from, so it panics at init.
 var (
-	editID     = regexp.MustCompile(EditIDPattern)
-	patternID  = regexp.MustCompile(PatternIDPattern)
-	runID      = regexp.MustCompile(RunIDPattern)
-	verifierID = regexp.MustCompile(VerifierIDPattern)
-	taskID     = regexp.MustCompile(TaskIDPattern)
+	editID        = regexp.MustCompile(EditIDPattern)
+	patternID     = regexp.MustCompile(PatternIDPattern)
+	runID         = regexp.MustCompile(RunIDPattern)
+	verifierID    = regexp.MustCompile(VerifierIDPattern)
+	calibrationID = regexp.MustCompile(CalibrationIDPattern)
+	taskID        = regexp.MustCompile(TaskIDPattern)
+	// calibrationShape is CalibrationIDPattern with the parts named, held to
+	// the same accept/reject decisions by the same kind of test that holds
+	// runShape and verifierShape to theirs.
+	calibrationShape = regexp.MustCompile(
+		`^calibration/([a-z0-9.]+(?:-[a-z0-9.]+)*)@(\d{4}-\d{2}-\d{2})(?:-(\d+))?$`)
 	// verifierShape is VerifierIDPattern with the parts named, the way
 	// runShape is RunIDPattern with the parts named, and held to the same
 	// accept/reject decisions by the same kind of test.
@@ -109,6 +121,10 @@ func ValidRunID(id string) bool { return runID.MatchString(id) }
 
 // ValidVerifierID reports whether id is a well-formed verifier identifier.
 func ValidVerifierID(id string) bool { return verifierID.MatchString(id) }
+
+// ValidCalibrationID reports whether id is a well-formed calibration
+// identifier.
+func ValidCalibrationID(id string) bool { return calibrationID.MatchString(id) }
 
 // ValidTaskID reports whether s names a task the way CMoA spells one.
 func ValidTaskID(s string) bool { return taskID.MatchString(s) }
@@ -306,6 +322,61 @@ func ParseVerifierID(id string) (VerifierRef, error) {
 // ID rebuilds the identifier a verifier reference came from.
 func (v VerifierRef) ID() (string, error) { return VerifierID(v.Task, v.Day, v.Seq) }
 
+// CalibrationRef is a calibration identifier taken apart: the judge that was
+// calibrated, the day its measurement window closed, and the sequence number
+// that separates two calibrations of one judge on one day.
+type CalibrationRef struct {
+	Judge string
+	Day   string
+	Seq   int
+}
+
+// CalibrationID returns the identifier of one judge calibration. seq is
+// written only when it is positive, for the reason a run's and a verifier's
+// are: the first of a day needs no sequence number, and a zero would make two
+// spellings of one document.
+func CalibrationID(judge, day string, seq int) (string, error) {
+	if !ValidModelSlug(judge) {
+		return "", fmt.Errorf("%w: judge slug %q is not lowercase letters, digits and dots in hyphenated segments", ErrID, judge)
+	}
+	if _, err := time.Parse(DayLayout, day); err != nil {
+		return "", fmt.Errorf("%w: calibration day %q is not a %s day", ErrID, day, DayLayout)
+	}
+	if seq < 0 {
+		return "", fmt.Errorf("%w: calibration sequence %d is negative", ErrID, seq)
+	}
+	id := fmt.Sprintf("calibration/%s@%s", judge, day)
+	if seq > 0 {
+		id += "-" + strconv.Itoa(seq)
+	}
+	if !ValidCalibrationID(id) {
+		return "", fmt.Errorf("%w: %q is not a calibration identifier (want %s)", ErrID, id, CalibrationIDPattern)
+	}
+	return id, nil
+}
+
+// ParseCalibrationID takes a calibration identifier apart. Like the other two
+// parsers it accepts exactly what the pattern accepts, which is a shape rather
+// than a calendar.
+func ParseCalibrationID(id string) (CalibrationRef, error) {
+	match := calibrationShape.FindStringSubmatch(id)
+	if match == nil {
+		return CalibrationRef{}, fmt.Errorf("%w: %q is not a calibration identifier (want %s)", ErrID, id, CalibrationIDPattern)
+	}
+	ref := CalibrationRef{Judge: match[1], Day: match[2]}
+	if match[3] != "" {
+		seq, err := strconv.Atoi(match[3])
+		if err != nil {
+			return CalibrationRef{}, fmt.Errorf("%w: %q: %w", ErrID, id, err)
+		}
+		ref.Seq = seq
+	}
+	return ref, nil
+}
+
+// ID rebuilds the identifier a calibration reference came from.
+func (c CalibrationRef) ID() (string, error) { return CalibrationID(c.Judge, c.Day, c.Seq) }
+
 // Filename returns the file one document is written to, without its directory.
 // DocDag derives a kind's file name from the last segment of the identifier
 // and ignores the filename template wherever the kind declares an `id:`
@@ -321,10 +392,11 @@ func Path(k Kind, id string) (string, error) {
 		return "", fmt.Errorf("%w: unknown kind %q", ErrID, k)
 	}
 	valid := map[Kind]func(string) bool{
-		KindEdit:     ValidEditID,
-		KindPattern:  ValidPatternID,
-		KindRun:      ValidRunID,
-		KindVerifier: ValidVerifierID,
+		KindEdit:        ValidEditID,
+		KindPattern:     ValidPatternID,
+		KindRun:         ValidRunID,
+		KindVerifier:    ValidVerifierID,
+		KindCalibration: ValidCalibrationID,
 	}[k]
 	if !valid(id) {
 		return "", fmt.Errorf("%w: %q is not a %s identifier", ErrID, id, k)

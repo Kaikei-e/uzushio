@@ -26,6 +26,26 @@ const (
 	fixtureApprover = "the maintainer"
 	// fixtureTrials is how many attempts a fixture's rates stand for.
 	fixtureTrials = 40
+	// fixtureLaterDay is a day after fixtureDay, for the pair of documents
+	// whose argument is which of them came second.
+	fixtureLaterDay = "2026-01-08"
+	// fixtureLoneDay separates the calibration nothing replaces from the two
+	// that argue about replacement, so the three are one corpus and still
+	// three documents.
+	fixtureLoneDay = "2026-01-15"
+	// fixtureOpenWindow is the day a fixture calibration's measurement window
+	// closes, and it is absurd on purpose.
+	//
+	// A calibration is the one uzushio kind whose period is mandatory: it is
+	// derived from the window, and thirty days after the window closes the
+	// document stops binding. A fixture, though, is linted on whatever day
+	// somebody runs the check, and an argument about "a *newer* calibration,
+	// itself still in force" cannot be made by a document that expired in
+	// February. An edit fixture writes no period at all and is in force for
+	// ever; this is the same trick spelled the only way this kind allows.
+	fixtureOpenWindow = "2999-01-01"
+	// fixtureJudge is the model a fixture calibration measured.
+	fixtureJudge = "judge-model"
 	// fixtureTrace is the CMoA trace run a fixture pattern cites as evidence.
 	// It is CMoA's identifier shape, not uzushio's: a pattern is a reading of
 	// what the harness did, and what it did is in CMoA's traces.
@@ -527,9 +547,26 @@ func improved(s exemplars) corpus {
 	}
 }
 
-// effective: what binds. uzushio adds one kind-scoped alternative to the preset
-// projection, and this is the pair that shows it.
+// effective: what binds. uzushio adds two kind-scoped alternatives to the
+// preset projection, and this is the corpus that shows them.
+//
+// The second alternative is the calibration's, and it is the reason there are
+// three calibrations here rather than one. A measurement binds while it is in
+// force and nothing newer has replaced it, so the argument needs a pair — the
+// replaced one and its replacement — and a lone one that nothing replaced. All
+// three are in the firing corpus because a projection's `ruleid` side asks
+// that it hold *somewhere*, and the replaced one is exactly the document it
+// must not hold for.
 func effective(s exemplars) corpus {
+	replacement := aCalibration(fixtureLaterDay, vocab.CalibratedNo, 0.31,
+		"The measurement that took the first one's place",
+		"A second window on the same judge, still in force. It binds, and the one\n"+
+			"it supersedes stops binding without being edited.")
+	replacement.Supersedes = []doc.Supersession{{
+		Edit:   "calibration/" + fixtureJudge + "@" + fixtureDay,
+		Reason: vocab.ReasonRemeasured,
+	}}
+
 	return corpus{
 		name: config.ProjectionEffective,
 		fires: append([]written{
@@ -537,6 +574,15 @@ func effective(s exemplars) corpus {
 				"Accepted, measured, in force and unreplaced",
 				"All of what uzushio's alternative asks: accepted, in force today, no\n"+
 					"successor, and the three projections a run can make hold."),
+			replacement,
+			aCalibration(fixtureLoneDay, vocab.CalibratedYes, 0.68,
+				"A judge measured once",
+				"In force and unreplaced, which is the whole of what a measurement has\n"+
+					"to be to bind."),
+			aCalibration(fixtureDay, vocab.CalibratedYes, 0.71,
+				"The measurement that was replaced",
+				"A later calibration of the same judge is in force, so this one no longer\n"+
+					"binds — and nothing about this document says so, which is the point."),
 		}, validating("he-9024")...),
 		silent: []written{
 			anEdit("he-9025", vocab.StatusProposed, s.auto,
@@ -569,5 +615,28 @@ func hasInforceSuccessor(s exemplars) corpus {
 				"An edit nobody has replaced",
 				"Nothing supersedes it, so there is no successor to be in force."),
 		},
+	}
+}
+
+// aCalibration builds one measurement of one judge, with everything that is
+// not the argument held constant.
+func aCalibration(day string, verdict vocab.Calibrated, human float64, title, body string) doc.Calibration {
+	return doc.Calibration{
+		Judge:       fixtureJudge,
+		Day:         day,
+		Title:       title,
+		Date:        day,
+		Pool:        doc.PoolExternal,
+		WindowFrom:  day,
+		WindowTo:    fixtureOpenWindow,
+		NItems:      200,
+		TieHandling: vocab.TieAbstainAsCategory,
+		SwapKappa:   0.82,
+		RerunKappa:  0.91,
+		HumanKappa:  human,
+		NHuman:      200,
+		Verdict:     verdict,
+		Report:      "calibrations/" + fixtureJudge + "@" + day + "/report.json",
+		Body:        body,
 	}
 }

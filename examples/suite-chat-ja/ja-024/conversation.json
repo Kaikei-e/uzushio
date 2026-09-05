@@ -1,0 +1,14 @@
+[
+  {
+    "role": "user",
+    "content": "JavaScriptで、数値の配列を受け取って平均を返す関数を書いてください。"
+  },
+  {
+    "role": "assistant",
+    "content": "const average = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;\n\nreduce で合計を出して、要素数で割っています。"
+  },
+  {
+    "role": "user",
+    "content": "空配列を渡すとNaNが返ってきます。呼び出し側でいちいちifを書かなくて済むようにしたいのですが、どう直すのがいいですか。選択肢と、それぞれの向き不向きを教えてください。"
+  }
+]

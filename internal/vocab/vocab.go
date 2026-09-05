@@ -12,10 +12,11 @@ package vocab
 
 import "slices"
 
-// Kind is a uzushio document kind. The four kinds are the harness's own
+// Kind is a uzushio document kind. The five kinds are the harness's own
 // records: the edit a proposer wants to make, the failure pattern an edit
-// answers, the evaluation run that settles whether it worked, and the verifier
-// health check that says whether the run's answer was worth anything.
+// answers, the evaluation run that settles whether it worked, the verifier
+// health check that says whether the run's answer was worth anything, and the
+// calibration that says the same thing about a judge.
 type Kind string
 
 // The kinds uzushio adds to the spec preset.
@@ -32,6 +33,12 @@ const (
 	// a reference solution it should accept, and to the mutants it should
 	// reject. It is written by `uzushio task doctor` and never by a person.
 	KindVerifier Kind = "verifier"
+	// KindCalibration is one measurement of one judge: how consistent it is
+	// with itself when the two candidates change places, how consistent it is
+	// across re-runs, and how far it agrees with the human labels that are the
+	// only thing validity can be read off. It is written by `uzushio judge
+	// calibrate` and never by a person.
+	KindCalibration Kind = "calibration"
 )
 
 // String returns the kind's name as the configuration writes it.
@@ -39,15 +46,18 @@ func (k Kind) String() string { return string(k) }
 
 // AllKinds returns the uzushio kinds, sorted by name so a generated
 // configuration and a generated listing agree on order.
-func AllKinds() []Kind { return []Kind{KindEdit, KindPattern, KindRun, KindVerifier} }
+func AllKinds() []Kind {
+	return []Kind{KindCalibration, KindEdit, KindPattern, KindRun, KindVerifier}
+}
 
 // Kind directories, relative to the vault root. They stay relative: DocDag's
 // fixture layer reroots relative kind directories and mis-reads absolute ones.
 const (
-	DirEdits     = "spec/edits"
-	DirPatterns  = "spec/patterns"
-	DirRuns      = "spec/runs"
-	DirVerifiers = "spec/verifiers"
+	DirCalibrations = "spec/calibrations"
+	DirEdits        = "spec/edits"
+	DirPatterns     = "spec/patterns"
+	DirRuns         = "spec/runs"
+	DirVerifiers    = "spec/verifiers"
 )
 
 // Dir returns the directory a kind's documents live in.
@@ -61,6 +71,8 @@ func Dir(k Kind) (string, bool) {
 		return DirRuns, true
 	case KindVerifier:
 		return DirVerifiers, true
+	case KindCalibration:
+		return DirCalibrations, true
 	}
 	return "", false
 }
@@ -103,14 +115,14 @@ func PatternStatuses() []Status {
 // nothing about a measurement to accept or withdraw. KindStatuses says so by
 // returning nothing for it, which is what "this kind has no status" has to be
 // written as for DocDag to leave it unchecked.
-// The same is true of a verifier health check.
+// The same is true of a verifier health check and of a judge calibration.
 func KindStatuses(k Kind) []Status {
 	switch k {
 	case KindEdit:
 		return EditStatuses()
 	case KindPattern:
 		return PatternStatuses()
-	case KindRun, KindVerifier:
+	case KindRun, KindVerifier, KindCalibration:
 		return nil
 	}
 	return nil
@@ -191,6 +203,77 @@ func AllHealths() []Health {
 	return []Health{HealthHealthy, HealthUnhealthy, HealthInconclusive}
 }
 
+// TieHandling names what a calibration did with the answers that are not a
+// choice: the judge's `no_candidate`, and a human label of `tie` or `all_bad`.
+//
+// It is a vocabulary rather than a preprocessing detail because the two
+// handlings estimate different quantities. Rao & Callison-Burch
+// (arXiv:2606.00093) report a pair of protocols moving accuracy from 0.551 to
+// 0.899 on one set of judgements, with kappa crossing zero, without a single
+// verdict changing — so every number a calibration writes carries the name of
+// the handling it was computed under, and a calibration document names one.
+type TieHandling string
+
+// The two handlings.
+const (
+	// TieAbstainAsCategory keeps every item and folds abstention into a
+	// category of its own, so a judge that answers "no candidate" is scored on
+	// having said so. It is the primary handling: it uses the whole sample and
+	// cannot be made to look good by discarding the hard items.
+	TieAbstainAsCategory TieHandling = "abstain-as-category"
+	// TieDecidedOnly drops every item where either side abstained and scores
+	// the rest. It is the secondary handling, reported beside the primary one:
+	// it answers "when the judge does decide, is it right", which is a
+	// different question and a smaller sample.
+	TieDecidedOnly TieHandling = "decided-only"
+)
+
+// String returns the handling as frontmatter and a report both write it.
+func (t TieHandling) String() string { return string(t) }
+
+// AllTieHandlings returns the two handlings, primary first.
+func AllTieHandlings() []TieHandling {
+	return []TieHandling{TieAbstainAsCategory, TieDecidedOnly}
+}
+
+// Calibrated is what a calibration concludes about a judge. Like a verifier's
+// health it is spelled into the same `verdict` key, and like it, it is a
+// vocabulary of its own: a judge is never `healthy` and a verifier is never
+// `unmeasured`.
+type Calibrated string
+
+// The calibration words.
+const (
+	// CalibratedYes is a judge whose agreement with the human labels cleared
+	// the threshold the calibration was run at.
+	CalibratedYes Calibrated = "calibrated"
+	// CalibratedNo is a judge whose agreement was measured and did not clear
+	// it.
+	CalibratedNo Calibrated = "uncalibrated"
+	// CalibratedUnmeasured is a judge whose reliability was measured and whose
+	// validity was not. It is a third word rather than `uncalibrated` because
+	// "we looked and it disagrees with people" and "nobody has looked" call
+	// for different things, and a reader who cannot tell them apart cannot
+	// tell whether the judge has been checked at all.
+	CalibratedUnmeasured Calibrated = "unmeasured"
+)
+
+// String returns the calibration word as frontmatter writes it.
+func (c Calibrated) String() string { return string(c) }
+
+// AllCalibrateds returns the three calibration words, best first.
+func AllCalibrateds() []Calibrated {
+	return []Calibrated{CalibratedYes, CalibratedNo, CalibratedUnmeasured}
+}
+
+// KappaUnmeasured is what a kappa field writes where the quantity was not
+// measured. The kappas are strings for the reason the verifier's rate is one —
+// a scalar field is compared as text and a float that reads back as
+// 0.4300000000000001 matches nothing — and a coefficient that was never
+// computed has to be distinguishable from one that came out at zero, which is
+// a real and meaningful value.
+const KappaUnmeasured = "unmeasured"
+
 // Split names the half of the task suite a run was measured on. An edit is
 // accepted only where both halves agree, which is the whole point of keeping
 // them apart.
@@ -242,6 +325,16 @@ func (o Outcome) String() string { return string(o) }
 
 // AllOutcomes returns the outcomes of a prediction.
 func AllOutcomes() []Outcome { return []Outcome{OutcomeConfirmed, OutcomeRefuted} }
+
+// ReasonRemeasured is the supersedes reason a calibration gives, and it is a
+// word uzushio adds to the preset's four.
+//
+// The preset's vocabulary — recurrence, premise-collapse, conflict,
+// vocabulary — is about why a *clause* was rewritten, and a measurement is not
+// rewritten for a reason. It is replaced because somebody measured again. None
+// of the four says that, and `conflict` would be a lie on the ordinary case
+// where the second measurement agrees with the first.
+const ReasonRemeasured = "remeasured"
 
 // Approval says whether a person stood behind an edit's acceptance. It is a
 // closed scalar vocabulary rather than a free-text name because DocDag can
@@ -351,6 +444,42 @@ const (
 	FieldReport Field = "report"
 )
 
+// Fields of the calibration kind. Like the verifier's counts, every number is
+// written as a string: DocDag compares a scalar field as text, and the numbers
+// a machine reads are in the report the `report` key names.
+const (
+	// FieldJudge is the slug of the model that judged.
+	FieldJudge Field = "judge"
+	// FieldPool names the proposers whose answers were judged, or `external`
+	// where the candidates came from a file rather than from a fleet.
+	FieldPool Field = "pool"
+	// FieldWindowFrom and FieldWindowTo are the first and last day of the
+	// measurement window. They are the calibration's own days rather than the
+	// period's: the period runs to FieldInForceUntil, which is later.
+	FieldWindowFrom Field = "window_from"
+	FieldWindowTo   Field = "window_to"
+	// FieldNItems is how many items the reliability numbers were measured
+	// over, as a decimal string.
+	FieldNItems Field = "n_items"
+	// FieldTieHandling names what was done with abstentions. Every number in
+	// the document was computed under it.
+	FieldTieHandling Field = "tie_handling"
+	// FieldSwapKappa is the judge's agreement with itself when the two
+	// candidates change places. It is a consistency statistic and not a
+	// two-rater reliability: the two readings are the same model under the
+	// same prompt, so they are not independent.
+	FieldSwapKappa Field = "swap_kappa"
+	// FieldRerunKappa is its agreement with itself across seeds.
+	FieldRerunKappa Field = "rerun_kappa"
+	// FieldHumanKappa is its agreement with the human labels, which is the
+	// only one of the three that is validity. `unmeasured` where there were
+	// none.
+	FieldHumanKappa Field = "human_kappa"
+	// FieldNHuman is how many items carried a human label, as a decimal
+	// string.
+	FieldNHuman Field = "n_human"
+)
+
 // String returns the field as frontmatter writes it.
 func (f Field) String() string { return string(f) }
 
@@ -381,6 +510,16 @@ func VerifierFields() []Field {
 	})
 }
 
+// CalibrationFields returns the frontmatter keys a judge calibration declares,
+// sorted.
+func CalibrationFields() []Field {
+	return sortedFields([]Field{
+		FieldJudge, FieldPool, FieldWindowFrom, FieldWindowTo, FieldNItems,
+		FieldTieHandling, FieldSwapKappa, FieldRerunKappa, FieldHumanKappa,
+		FieldNHuman, FieldVerdict, FieldReport, FieldInForceUntil,
+	})
+}
+
 // KindFields returns the frontmatter keys one kind declares.
 func KindFields(k Kind) []Field {
 	switch k {
@@ -392,6 +531,8 @@ func KindFields(k Kind) []Field {
 		return RunFields()
 	case KindVerifier:
 		return VerifierFields()
+	case KindCalibration:
+		return CalibrationFields()
 	}
 	return nil
 }

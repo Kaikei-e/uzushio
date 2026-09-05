@@ -1,0 +1,14 @@
+{
+  "version": 3,
+  "id": "ja-013",
+  "face": "chat",
+  "conversation": "conversation.json",
+  "rubric": "rubric.md",
+  "judge": {
+    "allow_tie": true
+  },
+  "max_context_bytes": 65536,
+  "reference": {
+    "answer": "reference.md"
+  }
+}

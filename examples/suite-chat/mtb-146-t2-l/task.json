@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "id": "mtb-146-t2-l",
+  "face": "chat",
+  "conversation": "conversation.json",
+  "rubric": "rubric.md",
+  "judge": {
+    "allow_tie": true
+  }
+}

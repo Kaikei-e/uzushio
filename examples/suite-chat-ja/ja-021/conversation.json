@@ -1,0 +1,6 @@
+[
+  {
+    "role": "user",
+    "content": "次のPythonの関数が意図通りに動きません。2回目の呼び出しで前の値が残ってしまいます。原因を説明して、修正版を示してください。\n\ndef add_item(item, items=[]):\n    items.append(item)\n    return items\n\nprint(add_item(\"a\"))\nprint(add_item(\"b\"))"
+  }
+]

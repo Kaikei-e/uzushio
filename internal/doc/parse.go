@@ -3,6 +3,7 @@ package doc
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -150,4 +151,100 @@ func (e Edit) Content() ([]byte, error) {
 			ErrDocument, e.EditID)
 	}
 	return bodyBytes(e.Body), nil
+}
+
+// ParseCalibration reads one calibration document. Unlike an edit, a
+// calibration carries its identifier in the frontmatter — the identifier holds
+// a slash, which a file name's stem cannot — so the identifier is read from the
+// bytes and taken apart into the parts the writer holds.
+//
+// The three coefficients come back as the numbers they are, with the word
+// `unmeasured` reading back as KappaUnmeasured. A key that is neither a number
+// nor that word is an error: a coefficient nobody can parse is worse than one
+// nobody wrote.
+func ParseCalibration(raw []byte) (Calibration, error) {
+	front, title, body, err := split(raw)
+	if err != nil {
+		return Calibration{}, fmt.Errorf("%w: calibration: %w", ErrDocument, err)
+	}
+	var parsed CalibrationFrontmatter
+	if err := yaml.Unmarshal(front, &parsed); err != nil {
+		return Calibration{}, fmt.Errorf("%w: calibration frontmatter: %w", ErrDocument, err)
+	}
+	if parsed.Kind != vocab.KindCalibration.String() {
+		return Calibration{}, fmt.Errorf("%w: %s is kind %q, not a calibration", ErrDocument, parsed.ID, parsed.Kind)
+	}
+	ref, err := vocab.ParseCalibrationID(parsed.ID)
+	if err != nil {
+		return Calibration{}, fmt.Errorf("%w: %w", ErrDocument, err)
+	}
+	if title != "" && title != parsed.Title {
+		return Calibration{}, fmt.Errorf("%w: calibration %s heading %q does not match its title %q",
+			ErrDocument, parsed.ID, title, parsed.Title)
+	}
+	calibration := Calibration{
+		Judge:       ref.Judge,
+		Day:         ref.Day,
+		Seq:         ref.Seq,
+		Title:       parsed.Title,
+		Date:        parsed.Date,
+		Pool:        parsed.Pool,
+		WindowFrom:  parsed.WindowFrom,
+		WindowTo:    parsed.WindowTo,
+		TieHandling: vocab.TieHandling(parsed.TieHandling),
+		Verdict:     vocab.Calibrated(parsed.Verdict),
+		Report:      parsed.Report,
+		Body:        body,
+	}
+	for _, entry := range parsed.Supersedes {
+		calibration.Supersedes = append(calibration.Supersedes,
+			Supersession{Edit: entry.Ref, Reason: entry.Reason})
+	}
+	for _, count := range []struct {
+		what string
+		text string
+		into *int
+	}{
+		{"n_items", parsed.NItems, &calibration.NItems},
+		{"n_human", parsed.NHuman, &calibration.NHuman},
+	} {
+		value, err := strconv.Atoi(count.text)
+		if err != nil {
+			return Calibration{}, fmt.Errorf("%w: calibration %s %s %q is not a whole number",
+				ErrDocument, parsed.ID, count.what, count.text)
+		}
+		*count.into = value
+	}
+	for _, kappa := range []struct {
+		what string
+		text string
+		into *float64
+	}{
+		{"swap_kappa", parsed.SwapKappa, &calibration.SwapKappa},
+		{"rerun_kappa", parsed.RerunKappa, &calibration.RerunKappa},
+		{"human_kappa", parsed.HumanKappa, &calibration.HumanKappa},
+	} {
+		value, err := ParseKappa(kappa.text)
+		if err != nil {
+			return Calibration{}, fmt.Errorf("%w: calibration %s %s: %w", ErrDocument, parsed.ID, kappa.what, err)
+		}
+		*kappa.into = value
+	}
+	if err := calibration.Validate(); err != nil {
+		return Calibration{}, err
+	}
+	return calibration, nil
+}
+
+// ParseKappa reads a coefficient back, with the word for the one that was
+// never computed.
+func ParseKappa(text string) (float64, error) {
+	if text == vocab.KappaUnmeasured {
+		return KappaUnmeasured, nil
+	}
+	value, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %q is neither a number nor %q", ErrDocument, text, vocab.KappaUnmeasured)
+	}
+	return value, nil
 }

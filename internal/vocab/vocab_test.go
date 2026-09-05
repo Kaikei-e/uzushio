@@ -18,6 +18,9 @@ func TestVocabulariesAreDistinct(t *testing.T) {
 		{"pattern statuses", Strings(PatternStatuses())},
 		{"categories", Strings(AllCategories())},
 		{"verdicts", Strings(AllVerdicts())},
+		{"healths", Strings(AllHealths())},
+		{"calibrateds", Strings(AllCalibrateds())},
+		{"tie handlings", Strings(AllTieHandlings())},
 		{"splits", Strings(AllSplits())},
 		{"expects", Strings(AllExpects())},
 		{"outcomes", Strings(AllOutcomes())},
@@ -28,6 +31,8 @@ func TestVocabulariesAreDistinct(t *testing.T) {
 		{"edit fields", Strings(EditFields())},
 		{"pattern fields", Strings(PatternFields())},
 		{"run fields", Strings(RunFields())},
+		{"verifier fields", Strings(VerifierFields())},
+		{"calibration fields", Strings(CalibrationFields())},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
