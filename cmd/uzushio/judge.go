@@ -106,6 +106,7 @@ func newJudgeCalibrateCmd() *cobra.Command {
 		pool          string
 		dryRun        bool
 		replayDir     string
+		rescoreDir    string
 	)
 	cmd := &cobra.Command{
 		Use:   "calibrate",
@@ -162,6 +163,29 @@ func newJudgeCalibrateCmd() *cobra.Command {
 				return &exitError{code: exitUsage, err: err}
 			}
 
+			var rescore *judge.Rescore
+			var before *judge.Rescored
+			if rescoreDir != "" {
+				if rescore, err = judge.OpenRescore(rescoreDir, vault); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				// The seeds are the source's. A seed it never ran has no
+				// recorded calls, and running that one live would make half
+				// the report a measurement of today's fleet.
+				if cmd.Flags().Changed("rerun") && reruns != rescore.Reruns() {
+					return &exitError{code: exitUsage, err: fmt.Errorf(
+						"--rescore-from %s recorded %d seed(s) per item; --rerun %d asks for %d",
+						rescoreDir, rescore.Reruns()+1, reruns, reruns+1)}
+				}
+				reruns = rescore.Reruns()
+				if err := rescore.Check(suite, seedsOf(reruns)); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+				if before, err = rescore.Before(); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
+			}
+
 			day := asOf
 			if day == "" {
 				day = time.Now().UTC().Format(vocab.DayLayout)
@@ -177,24 +201,41 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			if err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
-			fmt.Fprintf(errOut, "judging %d item(s) at %d seed(s) each with %s\n",
+			what := fmt.Sprintf("judging %d item(s) at %d seed(s) each with %s",
 				len(suite.Tasks), reruns+1, judgeModel)
+			if rescore != nil {
+				what = fmt.Sprintf("re-aggregating %d item(s) at %d seed(s) each from %s, "+
+					"asking %s nothing", len(suite.Tasks), reruns+1, rescore.Dir, judgeModel)
+			}
+			fmt.Fprintln(errOut, what)
 			if dryRun {
 				fmt.Fprintf(errOut, "dry run: nothing spent (would write %s and the vault document)\n", target)
 				return nil
 			}
 
+			runner := judge.CMoARunner{
+				Binary: cmoa, Config: config,
+				Log: func(line string) { fmt.Fprintln(errOut, line) },
+			}
+			if rescore != nil {
+				runner.Replay = func(task judge.Task, seed int) string {
+					return rescore.RunDir(task.ID, seed)
+				}
+			}
 			result, err := judge.Calibrate(ctx, judge.Options{
-				Suite:    suite,
-				Runner:   judge.CMoARunner{Binary: cmoa, Config: config, Log: func(line string) { fmt.Fprintln(errOut, line) }},
-				Reruns:   reruns,
-				Labels:   labels,
-				Judge:    judgeModel,
-				Pool:     pool,
-				Day:      day,
-				Alpha:    alpha,
-				MinKappa: minKappa,
-				Parallel: parallel,
+				Suite:        suite,
+				Runner:       runner,
+				Reruns:       reruns,
+				Labels:       labels,
+				Judge:        judgeModel,
+				Pool:         pool,
+				Day:          day,
+				Alpha:        alpha,
+				MinKappa:     minKappa,
+				Parallel:     parallel,
+				RescoredFrom: rescoredFrom(rescore),
+				Rescored:     before,
+				Recorded:     recordedBy(rescore),
 				// The vault is what a recorded trace path is relative to. It
 				// was missing here, so a journal recorded its run directories
 				// against the suite instead and `--replay --vault` could not
@@ -261,6 +302,9 @@ func newJudgeCalibrateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "check everything and run no judge")
 	cmd.Flags().StringVar(&replayDir, "replay", "",
 		"rebuild this report directory from the run directories it names, judging nothing")
+	cmd.Flags().StringVar(&rescoreDir, "rescore-from", "",
+		"re-aggregate this calibration's recorded judge calls under the harness's current "+
+			"selection rule, asking the judge nothing")
 	// --suite and --config are required of a measurement and meaningless to a
 	// replay, so the requirement is checked in the command rather than marked
 	// on the flags: cobra validates a marked flag before RunE can tell which
@@ -291,7 +335,8 @@ func requireFlags(cmd *cobra.Command, names ...string) error {
 func replayCalibration(cmd *cobra.Command, dir, vault string) error {
 	if err := refuseWithReplay(cmd, "rebuilds a report and judges nothing",
 		"suite", "cmoa", "config", "rerun", "labels", "out", "parallel", "alpha",
-		"min-kappa", "max-unmeasured", "as-of", "window-from", "pool", "dry-run"); err != nil {
+		"min-kappa", "max-unmeasured", "as-of", "window-from", "pool", "dry-run",
+		"rescore-from"); err != nil {
 		return &exitError{code: exitUsage, err: err}
 	}
 	result, err := judge.Replay(judge.ReplayOptions{Dir: dir, Vault: vault})
@@ -454,4 +499,31 @@ func writeDocument(vault string, document doc.Calibration) (string, error) {
 		return "", err
 	}
 	return target, nil
+}
+
+// seedsOf is the seeds a calibration runs, which Calibrate derives the same
+// way. It is spelled here so a rescoring can check its source holds them all
+// before anything is spent.
+func seedsOf(reruns int) []int {
+	seeds := make([]int, 0, reruns+1)
+	for i := range reruns + 1 {
+		seeds = append(seeds, judge.DefaultSeed+i)
+	}
+	return seeds
+}
+
+// rescoredFrom is the source directory a rescoring records, or empty.
+func rescoredFrom(r *judge.Rescore) string {
+	if r == nil {
+		return ""
+	}
+	return r.Dir
+}
+
+// recordedBy is the source's own conclusions, where there is a source.
+func recordedBy(r *judge.Rescore) func(string, int) (string, string) {
+	if r == nil {
+		return nil
+	}
+	return r.Recorded
 }

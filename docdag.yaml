@@ -20,6 +20,7 @@ kinds:
       report:
         required: true
       rerun_kappa: {}
+      rescored_from: {}
       swap_kappa: {}
       tie_handling:
         one_of:

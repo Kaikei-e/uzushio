@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Kaikei-e/uzushio/internal/doc"
 	"github.com/Kaikei-e/uzushio/internal/stats"
@@ -163,6 +165,80 @@ type Outcomes struct {
 	Calls            int              `json:"calls"`
 	InvalidRetries   int              `json:"invalid_output_retries"`
 	InvalidRetryRate float64          `json:"invalid_output_retry_rate"`
+	// ByRule is how many runs each stage of the harness's selection rule
+	// settled, and ByTieBreak and ByConsensus split the two stages that
+	// have a vocabulary of their own. Judgeless counts the runs that made
+	// no judge call at all, which is the cost the consensus stage saves and
+	// also the set of runs no judge answered for.
+	ByRule      map[string]int `json:"by_rule"`
+	ByTieBreak  map[string]int `json:"by_tie_break_key,omitempty"`
+	ByConsensus map[string]int `json:"by_consensus_agreement,omitempty"`
+	Judgeless   int            `json:"judgeless_runs"`
+}
+
+// The stages of the harness's chat selection rule, as a calibration counts
+// them. The words are CMoA's (ADR 0013): the candidates are compared with
+// each other first, the judge's pairwise verdicts are settled with a
+// Copeland score, and candidates the score cannot part go to a recorded
+// chain of tie-break keys.
+const (
+	// RuleConsensus: a strict majority of the candidates said the same
+	// thing and the judge was never asked.
+	RuleConsensus = "consensus"
+	// RuleCondorcet: one candidate won every pair under both orders.
+	RuleCondorcet = "condorcet"
+	// RuleCopeland: no candidate swept, and one held the highest score
+	// alone.
+	RuleCopeland = "copeland"
+	// RuleTieBreak: the score left more than one candidate at the top and a
+	// key parted them. ByTieBreak says which.
+	RuleTieBreak = "copeland-tie-break"
+	// RuleUnstated: the harness selected and gave a reason this build does
+	// not recognise. It is a bucket rather than a guess, so a vocabulary
+	// that grows is visible instead of silently folded into a neighbour.
+	RuleUnstated = "unstated"
+)
+
+// RuleRows is the order the stages are reported in: the one that costs
+// nothing, then the two the judge decided, then the chain, then the word for
+// a sentence this build has not learned.
+var RuleRows = []string{RuleConsensus, RuleCondorcet, RuleCopeland, RuleTieBreak, RuleUnstated}
+
+// Rescored is what the calibration whose recorded calls were re-aggregated
+// concluded, kept beside this one's numbers so the document can put the two
+// side by side without a reader opening a second report.
+//
+// It is a copy of a handful of the source's fields and not a reference to
+// it, for the reason the coefficients are copied into the document: the
+// comparison is the claim this report makes, and a claim that has to be
+// reassembled from another file to be read is a claim nobody checks.
+type Rescored struct {
+	Dir      string         `json:"dir"`
+	Day      string         `json:"day"`
+	Items    int            `json:"items"`
+	Seeds    int            `json:"seeds"`
+	ByKind   map[string]int `json:"outcomes_by_kind"`
+	ByReason map[string]int `json:"no_candidate_by_reason"`
+	ByRule   map[string]int `json:"by_rule"`
+	Calls    int            `json:"calls"`
+	// TotalMS is the sum of the source's run latencies: the judge time the
+	// re-aggregation did not have to spend again.
+	TotalMS int64 `json:"judge_time_ms"`
+	// The three coefficients and the decided-only reading of the third, so
+	// the table can show what the rule change moved.
+	SwapKappa         float64 `json:"swap_kappa"`
+	RerunKappa        float64 `json:"rerun_kappa"`
+	HumanKappa        float64 `json:"human_kappa"`
+	HumanDecided      float64 `json:"human_kappa_decided_only"`
+	HumanDecidedItems int     `json:"n_human_decided_only"`
+	// SweptAgree and SweptDiffer are the integrity check a rescoring can
+	// run on itself: where the new rule found a Condorcet winner and the
+	// candidates had not agreed, the old rule required exactly that winner
+	// too, so the two must name the same candidate. Every difference is a
+	// call that came back differently, and there should be none — the calls
+	// were not made again.
+	SweptAgree  int `json:"condorcet_reproduced"`
+	SweptDiffer int `json:"condorcet_differed"`
 }
 
 // The two rows of the abstention table a run's outcome is not already a word
@@ -241,8 +317,15 @@ type Report struct {
 	Judge         string `json:"judge"`
 	Pool          string `json:"pool"`
 	Day           string `json:"day"`
-	Items         int    `json:"items"`
-	Seeds         int    `json:"seeds"`
+	// RescoredFrom names the calibration directory whose recorded judge
+	// calls were re-aggregated, empty where the judge was asked. Every other
+	// number in this report reads the same either way, which is why the
+	// distinction is a field rather than a remark. Rescored is what that
+	// calibration concluded.
+	RescoredFrom string    `json:"rescored_from,omitempty"`
+	Rescored     *Rescored `json:"rescored,omitempty"`
+	Items        int       `json:"items"`
+	Seeds        int       `json:"seeds"`
 	// Unmeasured is how many items produced no usable judgement at all, and
 	// UnmeasuredRate the share of the suite they are. Over MaxUnmeasured the
 	// calibration reaches no verdict: the items a failing fleet drops are not
@@ -322,23 +405,24 @@ func (r Report) Document(windowFrom, reportPath string, seq int) (doc.Calibratio
 	}
 	human := r.Validity[ReferenceHuman]
 	calibration := doc.Calibration{
-		Judge:       r.Judge,
-		Day:         r.Day,
-		Seq:         seq,
-		Title:       fmt.Sprintf("%s judged by %s: %s", r.Suite, r.Judge, r.Verdict),
-		Date:        r.Day,
-		Pool:        r.Pool,
-		WindowFrom:  windowFrom,
-		WindowTo:    r.Day,
-		NItems:      r.Items,
-		TieHandling: vocab.TieAbstainAsCategory,
-		SwapKappa:   kappa(r.Swap.Agreement.Kappa),
-		RerunKappa:  kappa(r.Rerun.Agreement.Kappa),
-		HumanKappa:  kappa(human.Primary.Kappa),
-		NHuman:      human.Primary.N,
-		Verdict:     r.Verdict,
-		Report:      reportPath,
-		Body:        r.Summary(),
+		Judge:        r.Judge,
+		Day:          r.Day,
+		Seq:          seq,
+		Title:        fmt.Sprintf("%s judged by %s: %s", r.Suite, r.Judge, r.Verdict),
+		Date:         r.Day,
+		Pool:         r.Pool,
+		WindowFrom:   windowFrom,
+		WindowTo:     r.Day,
+		NItems:       r.Items,
+		TieHandling:  vocab.TieAbstainAsCategory,
+		SwapKappa:    kappa(r.Swap.Agreement.Kappa),
+		RerunKappa:   kappa(r.Rerun.Agreement.Kappa),
+		HumanKappa:   kappa(human.Primary.Kappa),
+		NHuman:       human.Primary.N,
+		Verdict:      r.Verdict,
+		Report:       reportPath,
+		RescoredFrom: r.RescoredFrom,
+		Body:         r.Summary(),
 	}
 	if err := calibration.Validate(); err != nil {
 		return doc.Calibration{}, err
@@ -354,6 +438,13 @@ func (r Report) Summary() string {
 		r.Judge, r.Suite, r.Items, r.Seeds)
 	if r.Source != "" {
 		fmt.Fprintf(&b, "Candidates: %s, from %s (%s).\n", r.Pool, r.Source, r.License)
+	}
+	if r.RescoredFrom != "" {
+		fmt.Fprintf(&b, "\n**The judge was not asked anything.** Every call below was read back "+
+			"out of the runs `%s` recorded and re-aggregated under the harness's current "+
+			"selection rule. The answers are the ones that judge gave in that window; what is "+
+			"measured here is the rule over them, and a coefficient in this document is "+
+			"comparable with the source's only in that light.\n", r.RescoredFrom)
 	}
 	b.WriteString("\n## Consistency, which is not validity\n\n")
 	fmt.Fprintf(&b, "- swap: %d pair(s) judged both ways, %d decided both times, %d flipped — "+
@@ -396,6 +487,7 @@ func (r Report) Summary() string {
 			interval(v.Primary.CI, v.Primary.Level, v.Primary.CIMethod),
 			coefficient(v.Secondary.Kappa), v.Secondary.TieHandling, v.Secondary.N)
 	}
+	r.judgeDecided(&b)
 	if r.HumanHuman != nil {
 		fmt.Fprintf(&b, "- ceiling: %s agree at kappa %s under `%s` over %d shared item(s). "+
 			"A judge is read against this, not against 1.0.\n",
@@ -422,6 +514,7 @@ func (r Report) Summary() string {
 		r.Outcomes.NoCandidateRate.Value,
 		interval(r.Outcomes.NoCandidateRate.CI, r.Outcomes.NoCandidateRate.Level,
 			r.Outcomes.NoCandidateRate.Method))
+	r.rules(&b)
 	fmt.Fprintf(&b, "- %d judge call(s), %d retried for an unreadable answer (%.3f).\n",
 		r.Outcomes.Calls, r.Outcomes.InvalidRetries, r.Outcomes.InvalidRetryRate)
 	fmt.Fprintf(&b, "- %d run(s) and %d item(s) measured nothing — a timeout, a failed judge or a "+
@@ -437,6 +530,8 @@ func (r Report) Summary() string {
 		fmt.Fprintf(&b, "- margin strata: %s. Kappa is sensitive to the mix, so it is recorded.\n",
 			strings.Join(bands, ", "))
 	}
+
+	r.comparison(&b)
 
 	fmt.Fprintf(&b, "\n## Verdict: %s\n\n", r.Verdict)
 	switch {
@@ -557,4 +652,205 @@ func keysOf(m map[string]int) func(func(string) bool) {
 			}
 		}
 	}
+}
+
+// judgeDecided is the validity line for the items the judge was asked about,
+// which is a different set from the items the selector answered.
+//
+// It is printed apart from the three references above because it is not a
+// fourth set of labels: it is the same comparison with the runs no judge
+// answered for left out, and the number worth reading beside it is how many
+// items that removed.
+func (r Report) judgeDecided(b *strings.Builder) {
+	v, ok := r.Validity[ReferenceHumanJudged]
+	if !ok || v.Primary.N == 0 {
+		return
+	}
+	human, ok := r.Validity[ReferenceHuman]
+	if !ok {
+		return
+	}
+	dropped := human.Primary.N - v.Primary.N
+	if dropped == 0 {
+		return
+	}
+	fmt.Fprintf(b, "- against `human`, over the %d item(s) the judge was actually asked about "+
+		"(%d dropped, settled by the candidates agreeing with each other): kappa %s under `%s` "+
+		"(p_o %.3f, p_e %.3f, PABAK %s, %s); kappa %s under `%s` over %d item(s). "+
+		"This is the judge's own validity, and it is the reading that stays comparable with a "+
+		"calibration made before the harness settled anything without asking.\n",
+		v.Primary.N, dropped, coefficient(v.Primary.Kappa), v.Primary.TieHandling,
+		v.Primary.PO, v.Primary.PE, coefficient(v.Primary.PABAK),
+		interval(v.Primary.CI, v.Primary.Level, v.Primary.CIMethod),
+		coefficient(v.Secondary.Kappa), v.Secondary.TieHandling, v.Secondary.N)
+}
+
+// rules is which stage of the selection rule settled how many runs.
+//
+// The distribution is the rule, read off the runs. A run the candidates
+// agreed on cost no judge call; a Condorcet sweep and a score that had to be
+// broken are different findings about the same six answers, and folding
+// them into one `selected` count is what made the earlier report unable to
+// say which.
+func (r Report) rules(b *strings.Builder) {
+	if len(r.Outcomes.ByRule) == 0 {
+		return
+	}
+	for _, rule := range RuleRows {
+		n, ok := r.Outcomes.ByRule[rule]
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(b, "  - selected by `%s`: %d\n", rule, n)
+		switch rule {
+		case RuleConsensus:
+			for _, kind := range slices.Sorted(keysOf(r.Outcomes.ByConsensus)) {
+				fmt.Fprintf(b, "    - agreement `%s`: %d\n", kind, r.Outcomes.ByConsensus[kind])
+			}
+		case RuleTieBreak:
+			for _, key := range slices.Sorted(keysOf(r.Outcomes.ByTieBreak)) {
+				fmt.Fprintf(b, "    - key `%s`: %d\n", key, r.Outcomes.ByTieBreak[key])
+			}
+		}
+	}
+	if r.Outcomes.Judgeless > 0 {
+		fmt.Fprintf(b, "  - %d run(s) asked the judge nothing at all.\n", r.Outcomes.Judgeless)
+	}
+}
+
+// comparison puts a rescoring beside the calibration it re-read.
+//
+// Both columns are over the same four hundred recorded calls, so every
+// difference in it is the rule and nothing else: not the fleet, not the day,
+// not the seed. That is the one thing a rescoring can say that a fresh
+// measurement cannot, and it is why the table is here rather than in a
+// commit message.
+func (r Report) comparison(b *strings.Builder) {
+	before := r.Rescored
+	if before == nil {
+		return
+	}
+	fmt.Fprintf(b, "\n## Against %s, over the same calls\n\n", before.Day)
+	fmt.Fprintf(b, "Both columns read the same %d recorded call(s) of the same %d run(s). "+
+		"Every difference below is the selection rule and nothing else — not the fleet, "+
+		"not the day, not the seed.\n\n", before.Calls, before.Items*before.Seeds)
+	fmt.Fprintf(b, "| | %s | %s |\n|---|---|---|\n", before.Day, r.Day)
+	row := func(what, was, now string) { fmt.Fprintf(b, "| %s | %s | %s |\n", what, was, now) }
+
+	for _, kind := range slices.Sorted(keysOf(union(before.ByKind, r.Outcomes.ByKind))) {
+		row("`"+kind+"`", count(before.ByKind[kind]), count(r.Outcomes.ByKind[kind]))
+	}
+	for _, reason := range slices.Sorted(keysOf(union(before.ByReason, r.Outcomes.NoCandidateByReason))) {
+		row("no candidate, `"+reason+"`",
+			count(before.ByReason[reason]), count(r.Outcomes.NoCandidateByReason[reason]))
+	}
+	for _, rule := range RuleRows {
+		if before.ByRule[rule] == 0 && r.Outcomes.ByRule[rule] == 0 {
+			continue
+		}
+		row("selected by `"+rule+"`", count(before.ByRule[rule]), count(r.Outcomes.ByRule[rule]))
+	}
+	for _, key := range slices.Sorted(keysOf(r.Outcomes.ByTieBreak)) {
+		row("tie-break key `"+key+"`", count(0), count(r.Outcomes.ByTieBreak[key]))
+	}
+	for _, kind := range slices.Sorted(keysOf(r.Outcomes.ByConsensus)) {
+		row("consensus `"+kind+"`", count(0), count(r.Outcomes.ByConsensus[kind]))
+	}
+	row("judge calls", count(before.Calls), count(r.Outcomes.Calls))
+	row("swap kappa", doc.Kappa(before.SwapKappa), coefficient(r.Swap.Agreement.Kappa))
+	row("re-run kappa", doc.Kappa(before.RerunKappa), coefficient(r.Rerun.Agreement.Kappa))
+	row("human kappa, `"+string(vocab.TieAbstainAsCategory)+"`",
+		doc.Kappa(before.HumanKappa), coefficient(r.HumanKappa))
+	row("human kappa, `"+string(vocab.TieDecidedOnly)+"`",
+		fmt.Sprintf("%s over %d", doc.Kappa(before.HumanDecided), before.HumanDecidedItems),
+		decidedOnly(r.Validity[ReferenceHuman]))
+	if v, ok := r.Validity[ReferenceHumanJudged]; ok && v.Primary.N > 0 {
+		row("human kappa, judge-decided items only", "the same "+doc.Kappa(before.HumanKappa),
+			fmt.Sprintf("%s over %d", coefficient(v.Primary.Kappa), v.Primary.N))
+	}
+	row("run time, summed", duration(before.TotalMS), duration(r.Latency.TotalMS))
+	if n := before.SweptAgree + before.SweptDiffer; n > 0 {
+		fmt.Fprintf(b, "\nThe replay checks itself where the two rules must agree. On the %d "+
+			"run(s) the new rule settled with a Condorcet winner and no consensus, the old "+
+			"rule required the same sweep of the same six answers and had to name the same "+
+			"candidate: %d did and %d did not. A difference there would be a call that came "+
+			"back differently, and no call was made again.\n",
+			n, before.SweptAgree, before.SweptDiffer)
+	}
+	r.whatMoved(b, before)
+}
+
+// whatMoved says which of the numbers above is still about the judge.
+//
+// It is the paragraph the table cannot be read without. The three
+// coefficients are computed the same way they always were, and they have
+// stopped meaning the same thing: the harness now answers where it used to
+// abstain, so `human` is the agreement of the whole selector with the
+// people, over a different set of decisions taken on the same items from
+// the same calls. Reading the fall in `decided-only` as a judge that got
+// worse is the mistake this paragraph exists to prevent.
+func (r Report) whatMoved(b *strings.Builder, before *Rescored) {
+	selected := r.Outcomes.ByKind[OutcomeSelected]
+	fmt.Fprintf(b, "\nThe judge answered the same %d call(s) in both columns, so nothing here "+
+		"is the judge changing its mind. What changed is what the harness does with those "+
+		"answers: it now returns a candidate on %d of %d run(s) where it returned one on %d, "+
+		"and %d run(s) it settled without asking at all. So `human kappa` above is the "+
+		"agreement of the **whole selector** with the people rather than of the judge, and "+
+		"it is computed over a different set of decisions on the same items.\n",
+		before.Calls, selected, r.Outcomes.Total, before.ByKind[OutcomeSelected],
+		r.Outcomes.Judgeless)
+	human, ok := r.Validity[ReferenceHuman]
+	if !ok {
+		return
+	}
+	fmt.Fprintf(b, "\nThe `decided-only` row is where that shows most sharply: the "+
+		"denominator went from %d item(s) to %d, because the items it used to drop are the "+
+		"ones the judge could not part and the rule now parts for it. A coefficient over "+
+		"the hard items included is not comparable with one over the easy items alone, and "+
+		"the movement from %s to %s is the price of deciding them rather than a judge that "+
+		"got worse.\n",
+		before.HumanDecidedItems, human.Secondary.N,
+		doc.Kappa(before.HumanDecided), coefficient(human.Secondary.Kappa))
+	judged, ok := r.Validity[ReferenceHumanJudged]
+	if !ok || judged.Primary.N == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\nThe row that is still the judge alone is the judge-decided one: %s "+
+		"over the %d item(s) it was asked about, against %s over %d. The calls are the same "+
+		"calls, so the judge's own validity had little room to move, and what it moved by is "+
+		"the %d item(s) the candidates settled between themselves. That is the number to "+
+		"compare with %s when the question is the judge and not the harness.\n",
+		coefficient(judged.Primary.Kappa), judged.Primary.N,
+		doc.Kappa(before.HumanKappa), before.Items,
+		human.Primary.N-judged.Primary.N, before.Day)
+}
+
+// union is the key set of two count maps.
+func union(a, b map[string]int) map[string]int {
+	out := map[string]int{}
+	for k := range a {
+		out[k] = 0
+	}
+	for k := range b {
+		out[k] = 0
+	}
+	return out
+}
+
+// count writes a count the way a table column does.
+func count(n int) string { return strconv.Itoa(n) }
+
+// decidedOnly is a validity's secondary reading, with the sample size that
+// makes it readable: the coefficient alone moves when the denominator does.
+func decidedOnly(v Validity) string {
+	return fmt.Sprintf("%s over %d", coefficient(v.Secondary.Kappa), v.Secondary.N)
+}
+
+// duration writes a span of judge time in the units a person compares.
+func duration(ms int64) string {
+	d := time.Duration(ms) * time.Millisecond
+	if d < time.Minute {
+		return fmt.Sprintf("%.1f s", d.Seconds())
+	}
+	return fmt.Sprintf("%d h %d min", int(d.Hours()), int(d.Minutes())%60)
 }
