@@ -1,0 +1,563 @@
+{
+  "schema_version": 1,
+  "suite": "suite-chat",
+  "source": "lmsys/mt_bench_human_judgments",
+  "license": "CC-BY-4.0",
+  "judge": "gpt-oss-20b",
+  "pool": "external",
+  "day": "2026-09-06",
+  "rescored_from": "calibrations/gpt-oss-20b@2026-09-05",
+  "rescored": {
+    "dir": "calibrations/gpt-oss-20b@2026-09-05",
+    "day": "2026-09-05",
+    "items": 200,
+    "seeds": 2,
+    "outcomes_by_kind": {
+      "no_candidate": 217,
+      "selected": 183
+    },
+    "no_candidate_by_reason": {
+      "all_draws": 30,
+      "cycle": 1,
+      "invalid_output": 11,
+      "no_majority": 175
+    },
+    "by_rule": {
+      "condorcet": 183
+    },
+    "calls": 2400,
+    "judge_time_ms": 15443671,
+    "swap_kappa": 0.588526776587563,
+    "rerun_kappa": 0.8196361355081556,
+    "human_kappa": 0.281370923161968,
+    "human_kappa_decided_only": 0.7631498000615196,
+    "n_human_decided_only": 70,
+    "condorcet_reproduced": 179,
+    "condorcet_differed": 0
+  },
+  "items": 200,
+  "seeds": 2,
+  "unmeasured_items": 0,
+  "unmeasured_rate": 0,
+  "max_unmeasured": 0.1,
+  "over_unmeasured_budget": false,
+  "all_bad_labels": 0,
+  "alpha": 0.05,
+  "level": 0.95,
+  "min_kappa": 0.667,
+  "strata": {
+    "mid": 80,
+    "narrow": 40,
+    "wide": 80
+  },
+  "swap": {
+    "pairs": 1170,
+    "decided": 867,
+    "flips": 123,
+    "flip_rate": {
+      "value": 0.14186851211072665,
+      "successes": 123,
+      "trials": 867,
+      "clusters": 188,
+      "ci": {
+        "lo": 0.11230119798181082,
+        "hi": 0.17143582623964249
+      },
+      "level": 0.95,
+      "method": "cluster-jackknife"
+    },
+    "agreement": {
+      "tie_handling": "abstain-as-category",
+      "ci_method": "cluster-jackknife",
+      "level": 0.95,
+      "n": 1170,
+      "clusters": 195,
+      "categories": [
+        "pair0",
+        "pair1",
+        "abstain"
+      ],
+      "first_marginal": [
+        0.47692307692307695,
+        0.33760683760683763,
+        0.18547008547008548
+      ],
+      "second_marginal": [
+        0.3478632478632479,
+        0.4837606837606837,
+        0.1683760683760684
+      ],
+      "p_o": 0.7307692307692307,
+      "p_e": 0.3604536489151874,
+      "kappa": 0.5790285273708558,
+      "pabak": 0.596153846153846,
+      "ci": {
+        "lo": 0.5275533216814643,
+        "hi": 0.6305037330602472
+      },
+      "alpha": 0.05
+    },
+    "position": {
+      "decided_calls": 1926,
+      "first_chosen": 1124,
+      "p_first": 0.5835929387331257,
+      "bias": 0.08359293873312568,
+      "clusters": 193,
+      "ci": {
+        "lo": 0.5667976844410926,
+        "hi": 0.6003881930251588
+      },
+      "level": 0.95,
+      "ci_method": "cluster-jackknife"
+    },
+    "disagree_breakdown": {
+      "pairs": 123,
+      "both_first": 113,
+      "both_second": 10,
+      "other": 0
+    }
+  },
+  "rerun": {
+    "seeds": 2,
+    "comparisons": 200,
+    "agreement": {
+      "tie_handling": "abstain-as-category",
+      "ci_method": "cluster-jackknife",
+      "level": 0.95,
+      "n": 200,
+      "clusters": 200,
+      "categories": [
+        "c1",
+        "c2",
+        "c3",
+        "abstain"
+      ],
+      "first_marginal": [
+        0.33,
+        0.29500000000000004,
+        0.33999999999999997,
+        0.035
+      ],
+      "second_marginal": [
+        0.32,
+        0.32500000000000007,
+        0.33499999999999996,
+        0.02
+      ],
+      "p_o": 0.86,
+      "p_e": 0.316075,
+      "kappa": 0.7952991921628834,
+      "pabak": 0.8133333333333334,
+      "ci": {
+        "lo": 0.7252963532833492,
+        "hi": 0.8653020310424175
+      },
+      "alpha": 0.05
+    }
+  },
+  "validity": {
+    "gold": {
+      "reference": "gold",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 200,
+        "clusters": 200,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0.32999999999999996,
+          0.29500000000000004,
+          0.34,
+          0.035
+        ],
+        "second_marginal": [
+          0.23500000000000001,
+          0.20500000000000002,
+          0.23500000000000001,
+          0.325
+        ],
+        "p_o": 0.43500000000000005,
+        "p_e": 0.22930000000000003,
+        "kappa": 0.2669002205786947,
+        "pabak": 0.24666666666666673,
+        "ci": {
+          "lo": 0.1856045446838861,
+          "hi": 0.34819589647350335
+        },
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 130,
+        "clusters": 130,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0.3615384615384616,
+          0.3076923076923077,
+          0.3307692307692308
+        ],
+        "second_marginal": [
+          0.34615384615384615,
+          0.3076923076923077,
+          0.34615384615384615
+        ],
+        "p_o": 0.6538461538461539,
+        "p_e": 0.334319526627219,
+        "kappa": 0.48,
+        "pabak": 0.48076923076923084,
+        "ci": {
+          "lo": 0.3560155268563355,
+          "hi": 0.6039844731436645
+        },
+        "alpha": 0.05
+      },
+      "from_gold": 200,
+      "from_labels": 0
+    },
+    "human": {
+      "reference": "human",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 200,
+        "clusters": 200,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0.32999999999999996,
+          0.29500000000000004,
+          0.34,
+          0.035
+        ],
+        "second_marginal": [
+          0.23500000000000001,
+          0.20500000000000002,
+          0.23500000000000001,
+          0.325
+        ],
+        "p_o": 0.43500000000000005,
+        "p_e": 0.22930000000000003,
+        "kappa": 0.2669002205786947,
+        "pabak": 0.24666666666666673,
+        "ci": {
+          "lo": 0.1856045446838861,
+          "hi": 0.34819589647350335
+        },
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 130,
+        "clusters": 130,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0.3615384615384616,
+          0.3076923076923077,
+          0.3307692307692308
+        ],
+        "second_marginal": [
+          0.34615384615384615,
+          0.3076923076923077,
+          0.34615384615384615
+        ],
+        "p_o": 0.6538461538461539,
+        "p_e": 0.334319526627219,
+        "kappa": 0.48,
+        "pabak": 0.48076923076923084,
+        "ci": {
+          "lo": 0.3560155268563355,
+          "hi": 0.6039844731436645
+        },
+        "alpha": 0.05
+      },
+      "from_gold": 200,
+      "from_labels": 0
+    },
+    "human_judge_decided": {
+      "reference": "human_judge_decided",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 195,
+        "clusters": 195,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0.3282051282051282,
+          0.29743589743589743,
+          0.3384615384615385,
+          0.035897435897435895
+        ],
+        "second_marginal": [
+          0.23589743589743586,
+          0.21025641025641026,
+          0.241025641025641,
+          0.3128205128205129
+        ],
+        "p_o": 0.4461538461538462,
+        "p_e": 0.2327679158448389,
+        "kappa": 0.27812435730444923,
+        "pabak": 0.26153846153846155,
+        "ci": {
+          "lo": 0.19491417153905674,
+          "hi": 0.3613345430698417
+        },
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 129,
+        "clusters": 129,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0.3643410852713178,
+          0.31007751937984496,
+          0.32558139534883723
+        ],
+        "second_marginal": [
+          0.34108527131782945,
+          0.31007751937984496,
+          0.3488372093023256
+        ],
+        "p_o": 0.6589147286821706,
+        "p_e": 0.3339943513010035,
+        "kappa": 0.4878642966705767,
+        "pabak": 0.4883720930232559,
+        "ci": {
+          "lo": 0.3640091302904408,
+          "hi": 0.6117194630507126
+        },
+        "alpha": 0.05
+      },
+      "from_gold": 0,
+      "from_labels": 0
+    },
+    "labels": {
+      "reference": "labels",
+      "primary": {
+        "tie_handling": "abstain-as-category",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 0,
+        "clusters": 0,
+        "categories": [
+          "c1",
+          "c2",
+          "c3",
+          "abstain"
+        ],
+        "first_marginal": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "second_marginal": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "p_o": 0,
+        "p_e": 0,
+        "kappa": null,
+        "pabak": null,
+        "ci": null,
+        "alpha": 0.05
+      },
+      "secondary": {
+        "tie_handling": "decided-only",
+        "ci_method": "cluster-jackknife",
+        "level": 0.95,
+        "n": 0,
+        "clusters": 0,
+        "categories": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "first_marginal": [
+          0,
+          0,
+          0
+        ],
+        "second_marginal": [
+          0,
+          0,
+          0
+        ],
+        "p_o": 0,
+        "p_e": 0,
+        "kappa": null,
+        "pabak": null,
+        "ci": null,
+        "alpha": 0.05
+      },
+      "from_gold": 0,
+      "from_labels": 0
+    }
+  },
+  "abstention_by_gold": {
+    "pooled": {
+      "runs": 400,
+      "runs_without_gold": 0,
+      "gold_decided": 270,
+      "gold_tie": 130,
+      "abstained_on_gold_decided": 6,
+      "rows": [
+        {
+          "outcome": "selected_agrees",
+          "gold_decided": 169,
+          "gold_tie": 0
+        },
+        {
+          "outcome": "selected_differs",
+          "gold_decided": 95,
+          "gold_tie": 125
+        },
+        {
+          "outcome": "invalid_output",
+          "gold_decided": 6,
+          "gold_tie": 5
+        }
+      ]
+    },
+    "by_seed": [
+      {
+        "seed": 1,
+        "runs": 200,
+        "runs_without_gold": 0,
+        "gold_decided": 135,
+        "gold_tie": 65,
+        "abstained_on_gold_decided": 5,
+        "rows": [
+          {
+            "outcome": "selected_agrees",
+            "gold_decided": 85,
+            "gold_tie": 0
+          },
+          {
+            "outcome": "selected_differs",
+            "gold_decided": 45,
+            "gold_tie": 63
+          },
+          {
+            "outcome": "invalid_output",
+            "gold_decided": 5,
+            "gold_tie": 2
+          }
+        ]
+      },
+      {
+        "seed": 2,
+        "runs": 200,
+        "runs_without_gold": 0,
+        "gold_decided": 135,
+        "gold_tie": 65,
+        "abstained_on_gold_decided": 1,
+        "rows": [
+          {
+            "outcome": "selected_agrees",
+            "gold_decided": 84,
+            "gold_tie": 0
+          },
+          {
+            "outcome": "selected_differs",
+            "gold_decided": 50,
+            "gold_tie": 62
+          },
+          {
+            "outcome": "invalid_output",
+            "gold_decided": 1,
+            "gold_tie": 3
+          }
+        ]
+      }
+    ]
+  },
+  "outcomes": {
+    "total": 400,
+    "by_kind": {
+      "no_candidate": 11,
+      "selected": 389
+    },
+    "unmeasured_runs": 0,
+    "no_candidate_by_reason": {
+      "invalid_output": 11
+    },
+    "no_candidate_rate": {
+      "value": 0.035,
+      "successes": 7,
+      "trials": 200,
+      "clusters": 200,
+      "ci": {
+        "lo": 0.017055542008567192,
+        "hi": 0.0704706115222907
+      },
+      "level": 0.95,
+      "method": "wilson"
+    },
+    "calls": 2340,
+    "invalid_output_retries": 41,
+    "invalid_output_retry_rate": 0.01752136752136752,
+    "by_rule": {
+      "condorcet": 179,
+      "consensus": 10,
+      "copeland": 66,
+      "copeland-tie-break": 134
+    },
+    "by_tie_break_key": {
+      "hash": 91,
+      "identical": 6,
+      "length": 47
+    },
+    "by_consensus_agreement": {
+      "exact": 6,
+      "numeric": 4
+    },
+    "judgeless_runs": 10
+  },
+  "latency": {
+    "median_ms": 9,
+    "min_ms": 0,
+    "max_ms": 22,
+    "total_ms": 3449
+  },
+  "human_kappa": 0.2669002205786947,
+  "n_human": 200,
+  "verdict": "uncalibrated"
+}
