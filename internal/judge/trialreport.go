@@ -43,11 +43,23 @@ const (
 // at all and is counted on its own line.
 const TrialQualityHandling = "human-position-only, failure-as-zero"
 
+// What a trial.json holds: the plan, written before the first call, or the
+// result, which overwrites it.
+const (
+	RecordedPlan   = "plan"
+	RecordedResult = "result"
+)
+
 // TrialReport is the comparison.
 type TrialReport struct {
-	SchemaVersion int       `json:"schema_version"`
-	Card          TrialCard `json:"card"`
-	At            string    `json:"at"`
+	SchemaVersion int `json:"schema_version"`
+	// Recorded says whether this file is the plan or the result.
+	Recorded string    `json:"recorded"`
+	Card     TrialCard `json:"card"`
+	At       string    `json:"at"`
+	// Plan is the fixed execution order and the composition it comes out at,
+	// written to disk before the first call and repeated here afterwards.
+	Plan TrialPlanRecord `json:"plan"`
 	// What was planned and what happened to it.
 	Planned     int `json:"planned_items"`
 	Completed   int `json:"completed_items"`
@@ -57,8 +69,9 @@ type TrialReport struct {
 	StopReason      string `json:"stop_reason"`
 	StopReasonLabel string `json:"stop_reason_label"`
 	// The wall clock, split the way the memo asks for it.
-	Phases       TrialPhases `json:"phases"`
-	TEvalSeconds float64     `json:"t_eval_seconds"`
+	Phases       TrialPhases         `json:"phases"`
+	TEvalSeconds float64             `json:"t_eval_seconds"`
+	Switches     []TrialSwitchRecord `json:"switches,omitempty"`
 	// What was reused and what was newly inferred.
 	Reuse     TrialReuseStats `json:"reuse"`
 	Inference TrialInference  `json:"inference"`
@@ -75,10 +88,57 @@ type TrialReport struct {
 	Notes     []string        `json:"notes,omitempty"`
 }
 
+// TrialPlanRecord is what was fixed before the first call: which items, in
+// which order, and what the prefix is made of.
+//
+// It is in the file for one reason. A stage runs a prefix of a set, and a
+// prefix whose order was decided after somebody saw a result is a prefix
+// chosen for its answer. The order here is the manifests' own; the
+// composition is counted from it, so a prefix that is four items of one
+// category says so in the same file as the numbers.
+type TrialPlanRecord struct {
+	// Take is how many items of each set the card asked for, and Items the
+	// order that produced.
+	Take  map[string]int     `json:"take,omitempty"`
+	Items []TrialPlannedItem `json:"items"`
+	// Sets, Categories and LengthBins are the composition of the prefix.
+	Sets       map[string]int `json:"sets"`
+	Categories map[string]int `json:"categories,omitempty"`
+	LengthBins map[string]int `json:"length_bins,omitempty"`
+	// Estimate is the card's own pre-run arithmetic, a 見積り throughout.
+	Estimate TrialEstimate `json:"estimate"`
+}
+
+// TrialPlannedItem is one item of the fixed execution order.
+type TrialPlannedItem struct {
+	Position  int    `json:"position"`
+	Item      string `json:"item"`
+	Set       string `json:"set"`
+	Category  string `json:"category,omitempty"`
+	LengthBin string `json:"length_bin,omitempty"`
+}
+
+// TrialSwitchRecord is one condition switch: what it cost and whether it
+// worked.
+type TrialSwitchRecord struct {
+	Condition   string  `json:"condition"`
+	ConditionID string  `json:"condition_id"`
+	Seconds     float64 `json:"seconds"`
+	At          string  `json:"at"`
+	Error       string  `json:"error,omitempty"`
+}
+
 // TrialPhases is where the wall clock went.
 type TrialPhases struct {
 	// LoadSeconds is reading the card, the suite and the reuse index.
 	LoadSeconds float64 `json:"load_seconds"`
+	// SwitchSeconds is the restarts and ready waits that put the fleet into
+	// each condition. It is inside T_eval because the memo's T_eval is load,
+	// wait, measure and aggregate: an experiment whose inference fits the box
+	// only when the two restarts around it are left out has not fitted the
+	// box. First-time preparation — a download, a compile, a second binary —
+	// is not here and is not in T_eval; it is a preparation cost of its own.
+	SwitchSeconds float64 `json:"switch_seconds"`
 	// MeasureSeconds is the sum of the harness calls.
 	MeasureSeconds float64 `json:"measure_seconds"`
 	// WaitSeconds is what is left over inside the run: process start-up,
@@ -128,6 +188,30 @@ type TrialConditionStats struct {
 	// RecordedLatencyMS is the mean latency the traces carry, reused ones
 	// included. It is a diagnostic and not a term in any speed comparison.
 	RecordedLatencyMS float64 `json:"recorded_latency_ms_mean"`
+	// Consensus is the steps the candidates settled between themselves, and
+	// TieBreaks the steps a key had to part, by stage and key.
+	Consensus int `json:"consensus_steps"`
+	// TieBreaks counts (stage, key) pairs from judge.json's own fields —
+	// `consensus` and `tie_break.key` — and never from `outcome.reason`. The
+	// two are not the same count: a consensus group parted by a hash carries
+	// the key in the structured field and the word `consensus` in the
+	// sentence, so counting sentences finds 87 where counting fields finds
+	// 91, and the 2026-09-06 review had to resolve that difference by hand.
+	TieBreaks []TrialTieBreakRow `json:"tie_breaks,omitempty"`
+}
+
+// The stage a tie-break happened in: before the judge was asked, or at the top
+// of the score after it was.
+const (
+	TieBreakStageConsensus = "consensus"
+	TieBreakStageCopeland  = "copeland"
+)
+
+// TrialTieBreakRow is one (stage, key) count.
+type TrialTieBreakRow struct {
+	Stage string `json:"stage"`
+	Key   string `json:"key"`
+	Steps int    `json:"steps"`
 }
 
 // TrialQuality is the quality half of the comparison.
@@ -257,14 +341,18 @@ func (r *trialRun) assemble(plan []TrialStep, started, measured time.Time) Trial
 	card := r.opts.Card
 	report := TrialReport{
 		SchemaVersion: TrialSchemaVersion,
+		Recorded:      RecordedResult,
 		Card:          r.redactedCard(),
 		At:            r.now().UTC().Format(time.RFC3339),
 		SkippedStep:   r.skipped,
 		Phases: TrialPhases{
 			LoadSeconds:    round3(r.loadSeconds),
+			SwitchSeconds:  round3(r.switchSeconds),
 			MeasureSeconds: round3(r.measureSeconds),
-			WaitSeconds:    round3(measured.Sub(started).Seconds() - r.loadSeconds - r.measureSeconds),
+			WaitSeconds: round3(measured.Sub(started).Seconds() -
+				r.loadSeconds - r.measureSeconds - r.switchSeconds),
 		},
+		Switches:          r.switches,
 		Conditions:        map[string]TrialConditionStats{},
 		ChangedSelections: []TrialChange{},
 		Items:             []TrialItem{},
@@ -332,6 +420,36 @@ func (r *trialRun) redactedCard() TrialCard {
 	return card
 }
 
+// planRecord is the fixed order and its composition.
+func (r *trialRun) planRecord(plan []TrialStep) TrialPlanRecord {
+	strata := map[string]map[string]string{}
+	for _, manifest := range Taken(r.opts.Card, r.opts.Manifests) {
+		for _, item := range manifest.Items {
+			strata[item.ID] = item.Strata
+		}
+	}
+	out := TrialPlanRecord{
+		Take: r.opts.Card.Take, Items: []TrialPlannedItem{},
+		Sets: map[string]int{}, Categories: map[string]int{}, LengthBins: map[string]int{},
+		Estimate: Estimate(r.opts.Card, r.opts.Manifests),
+	}
+	for _, step := range plannedItems(plan) {
+		entry := TrialPlannedItem{
+			Position: len(out.Items) + 1, Item: step.Item, Set: step.Set,
+			Category: strata[step.Item]["category"], LengthBin: strata[step.Item]["length_bin"],
+		}
+		out.Items = append(out.Items, entry)
+		out.Sets[entry.Set]++
+		if entry.Category != "" {
+			out.Categories[entry.Category]++
+		}
+		if entry.LengthBin != "" {
+			out.LengthBins[entry.LengthBin]++
+		}
+	}
+	return out
+}
+
 func plannedItems(plan []TrialStep) []TrialStep {
 	var out []TrialStep
 	seen := map[string]bool{}
@@ -349,6 +467,7 @@ func (r *trialRun) conditionStats(condition string) TrialConditionStats {
 	stats := TrialConditionStats{ID: r.conditionID(condition), Config: r.configName(condition)}
 	var wall []float64
 	var latency float64
+	keys := map[[2]string]int{}
 	for _, record := range r.records {
 		if record.Condition != condition {
 			continue
@@ -365,11 +484,22 @@ func (r *trialRun) conditionStats(condition string) TrialConditionStats {
 		default:
 			stats.Unmeasured++
 		}
+		if record.Consensus != "" {
+			stats.Consensus++
+		}
+		if record.TieBreakKey != "" {
+			stage := TieBreakStageCopeland
+			if record.Consensus != "" {
+				stage = TieBreakStageConsensus
+			}
+			keys[[2]string{stage, record.TieBreakKey}]++
+		}
 		if record.WallSeconds != nil {
 			wall = append(wall, *record.WallSeconds)
 		}
 		latency += float64(record.LatencyMS)
 	}
+	stats.TieBreaks = tieBreakRows(keys)
 	if stats.Steps > 0 {
 		stats.Coverage = round3(float64(stats.Selected) / float64(stats.Steps))
 		stats.RecordedLatencyMS = round3(latency / float64(stats.Steps))
@@ -386,6 +516,26 @@ func (r *trialRun) conditionStats(condition string) TrialConditionStats {
 // and a committed report has no business naming that place.
 func (r *trialRun) configName(condition string) string {
 	return filepath.Base(r.config(condition))
+}
+
+// tieBreakRows orders the (stage, key) counts: consensus before copeland,
+// then the key alphabetically, so two reports of the same run print the same
+// table.
+func tieBreakRows(counts map[[2]string]int) []TrialTieBreakRow {
+	if len(counts) == 0 {
+		return nil
+	}
+	out := make([]TrialTieBreakRow, 0, len(counts))
+	for pair, n := range counts {
+		out = append(out, TrialTieBreakRow{Stage: pair[0], Key: pair[1], Steps: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Stage != out[j].Stage {
+			return out[i].Stage < out[j].Stage
+		}
+		return out[i].Key < out[j].Key
+	})
+	return out
 }
 
 func (r *trialRun) reuseStats() TrialReuseStats {
@@ -549,6 +699,23 @@ func (r *trialRun) quality(items []TrialItem) TrialQuality {
 			"preferences the quantity is a pair-judge agreement, which is a different " +
 			"claim and does not stand in for selection top-1. This run measured " +
 			"behaviour and time, and did not measure quality."
+		return q
+	}
+	// The floor. A ΔQ over three items moves 33 points when one label moves,
+	// which is past every threshold a card can name, so the report counts the
+	// items and declines to divide by them. What the run still says is what
+	// changed selection, what it cost, and which items moved — and the stage A
+	// heuristic still reads the two counts, because ordering work by them is
+	// what that rule is for.
+	if q.Evaluable < r.opts.Card.MinEvaluableItems {
+		q.Note = fmt.Sprintf(
+			"未評価 / not evaluated: %d evaluable item(s) against the card's floor of %d. "+
+				"On %d item(s) a single human label is %.1f points of ΔQ, which is more "+
+				"than any threshold in the card, so no quality difference is printed. "+
+				"%d item(s) carried no human position and %d lost a side to the machine. "+
+				"This run measured behaviour and time; it did not measure quality.",
+			q.Evaluable, r.opts.Card.MinEvaluableItems, q.Evaluable,
+			100/float64(q.Evaluable), q.NoReference, q.Unmeasured)
 		return q
 	}
 	q.Measured = true
@@ -741,15 +908,10 @@ func suggest(card TrialCard, report TrialReport) TrialSuggestion {
 			"set, and a run stopped by its own clock decides nothing about the change")
 		return out
 	}
-	if !report.Quality.Measured {
-		out.Value = DecisionInconclusive
-		out.Why = append(out.Why, "quality was not measured on these items: "+report.Quality.Note)
-		if report.Speed.Comparable && report.Speed.GJudge != nil {
-			out.Why = append(out.Why, fmt.Sprintf(
-				"time was measured: G_judge %.3f over %d item(s)", *report.Speed.GJudge, report.Speed.Items))
-		}
-		return out
-	}
+	// The early cut is read before the quality gate, not after it. It counts
+	// items that moved rather than dividing by them, it is the memo's rule for
+	// the stage whose sets are too small to divide by, and a floor that
+	// switched it off would switch off the one rule stage A has.
 	if card.Stage == StageA && report.Quality.NewlyWrong-report.Quality.NewlyRight >= 2 {
 		out.Value = DecisionDrop
 		out.Heuristic = "早い見切り / early cut: at stage A a change that newly loses two more " +
@@ -758,6 +920,15 @@ func suggest(card TrialCard, report TrialReport) TrialSuggestion {
 			"worse, and a good change may be missed by it."
 		out.Why = append(out.Why, fmt.Sprintf("%d newly wrong against %d newly right",
 			report.Quality.NewlyWrong, report.Quality.NewlyRight))
+		return out
+	}
+	if !report.Quality.Measured {
+		out.Value = DecisionInconclusive
+		out.Why = append(out.Why, "quality was not measured on these items: "+report.Quality.Note)
+		if report.Speed.Comparable && report.Speed.GJudge != nil {
+			out.Why = append(out.Why, fmt.Sprintf(
+				"time was measured: G_judge %.3f over %d item(s)", *report.Speed.GJudge, report.Speed.Items))
+		}
 		return out
 	}
 	qualityOK := report.Quality.DeltaPoints >= minDeltaQ
@@ -813,10 +984,30 @@ func (t TrialReport) Summary() string {
 	fmt.Fprintf(&b, "%d item(s) planned, %d completed, %d interrupted; stopped as `%s` (%s).\n\n",
 		t.Planned, t.Completed, t.Interrupted, t.StopReason, t.StopReasonLabel)
 
+	b.WriteString("## The order, fixed before the first call\n\n")
+	fmt.Fprintf(&b, "- %d item(s): %s.\n", len(t.Plan.Items), countWords(t.Plan.Sets))
+	if len(t.Plan.Categories) > 0 {
+		fmt.Fprintf(&b, "- categories: %s.\n", countWords(t.Plan.Categories))
+	}
+	if len(t.Plan.LengthBins) > 0 {
+		fmt.Fprintf(&b, "- length bins: %s.\n", countWords(t.Plan.LengthBins))
+	}
+	if t.Plan.Estimate.ItemSeconds > 0 {
+		fmt.Fprintf(&b, "- %s: %.0f s against a %d s budget; the cap is %d item(s) and "+
+			"the budget affords %d.\n", t.Plan.Estimate.Label, t.Plan.Estimate.Seconds,
+			t.Plan.Estimate.Budget, t.Plan.Estimate.Cap, t.Plan.Estimate.Affordable)
+	}
+	b.WriteString("\n")
+
 	b.WriteString("## Cost\n\n")
-	fmt.Fprintf(&b, "- T_eval %.1f s: load %.1f, wait %.1f, measure %.1f, aggregate %.1f.\n",
-		t.TEvalSeconds, t.Phases.LoadSeconds, t.Phases.WaitSeconds,
-		t.Phases.MeasureSeconds, t.Phases.AggregateSeconds)
+	fmt.Fprintf(&b, "- T_eval %.1f s: load %.1f, switch %.1f, wait %.1f, measure %.1f, "+
+		"aggregate %.1f.\n", t.TEvalSeconds, t.Phases.LoadSeconds, t.Phases.SwitchSeconds,
+		t.Phases.WaitSeconds, t.Phases.MeasureSeconds, t.Phases.AggregateSeconds)
+	if len(t.Switches) > 0 {
+		fmt.Fprintf(&b, "- %d condition switch(es), inside T_eval. First-time preparation "+
+			"— a download, a compile, a second binary — is not in this number and is not "+
+			"in T_eval.\n", len(t.Switches))
+	}
 	fmt.Fprintf(&b, "- reuse %.0f%% (%d step(s) read back, %d measured) under kind `%s`.\n",
 		100*t.Reuse.Rate, t.Reuse.Reused, t.Reuse.Measured, t.Reuse.Kind)
 	if len(t.Reuse.KeyMismatch) > 0 {
@@ -870,6 +1061,7 @@ func (t TrialReport) Summary() string {
 		fmt.Fprintf(&b, "- %s `%s`: %d step(s), coverage %.3f, %d no-candidate, %d unmeasured.\n",
 			name, c.ID, c.Steps, c.Coverage, c.NoCandidate, c.Unmeasured)
 	}
+
 	if len(t.ChangedSelections) == 0 {
 		b.WriteString("- no selection changed.\n")
 	}
@@ -881,6 +1073,29 @@ func (t TrialReport) Summary() string {
 		b.WriteString("\n")
 	}
 
+	b.WriteString("\n## How the answers were settled\n\n")
+	b.WriteString("Counted from `judge.json`'s own fields — `consensus` and " +
+		"`tie_break.key` — and not from `outcome.reason`. A consensus group parted by a " +
+		"hash carries the key in the field and the word `consensus` in the sentence, so " +
+		"the two counts differ and only one of them is a count of anything.\n\n")
+	b.WriteString("| condition | stage | key | steps |\n|---|---|---|---:|\n")
+	rows := 0
+	for _, name := range []string{ConditionBase, ConditionCandidate} {
+		c := t.Conditions[name]
+		for _, row := range c.TieBreaks {
+			fmt.Fprintf(&b, "| %s `%s` | %s | `%s` | %d |\n", name, c.ID, row.Stage, row.Key, row.Steps)
+			rows++
+		}
+	}
+	if rows == 0 {
+		b.WriteString("| — | — | no tie-break was recorded | 0 |\n")
+	}
+	for _, name := range []string{ConditionBase, ConditionCandidate} {
+		c := t.Conditions[name]
+		fmt.Fprintf(&b, "\n- %s `%s`: %d step(s) settled by consensus before the judge was asked.",
+			name, c.ID, c.Consensus)
+	}
+	b.WriteString("\n")
 	b.WriteString("\n## Suggested, not decided\n\n")
 	fmt.Fprintf(&b, "**%s.** ", t.Suggested.Value)
 	b.WriteString(strings.TrimSuffix(strings.Join(t.Suggested.Why, "; "), "."))
@@ -896,6 +1111,23 @@ func (t TrialReport) Summary() string {
 		"is not evidence that the two conditions are the same. `decision` is written " +
 		"by a person, in the card of whatever happens next.\n")
 	return b.String()
+}
+
+// countWords is a small count map as one line, in a fixed order.
+func countWords(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s %d", key, counts[key]))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func sortedSetKeys(m map[string]TrialSetQuality) []string {

@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,7 +151,7 @@ func (f *trialFixture) savedRun(item, runID, outcome, chosen string, opts savedR
 	block := judgeBlock(opts.Judge)
 	block["allow_tie"] = true
 	block["prompt_version"] = prompt
-	trialJSON(f.t, filepath.Join(dir, JudgeFile), map[string]any{
+	judgeBody := map[string]any{
 		"schema_version": 1, "run_id": runID, "judge": block,
 		"candidates":   Positions,
 		"presentation": map[string]any{"seed": 1, "nonce": "abcd"},
@@ -162,7 +165,23 @@ func (f *trialFixture) savedRun(item, runID, outcome, chosen string, opts savedR
 		}},
 		"outcome":               map[string]any{"kind": outcome, "candidate_id": chosen, "reason": opts.Reason},
 		"swap_consistent_pairs": 1, "invalid_output_retries": 0, "latency_ms": 20000,
-	})
+	}
+	// The two structured fields, written the way the harness writes them: the
+	// agreement inside `consensus`, the key inside `tie_break`. A report that
+	// counted `outcome.reason` instead would miss the consensus group a hash
+	// parted, which is the difference the 2026-09-06 review resolved by hand.
+	if opts.Consensus != "" {
+		judgeBody["consensus"] = map[string]any{
+			"normalisation": "trim-lower", "chosen": chosen,
+			"groups": [][]string{{"c1", "c2"}, {"c3"}}, "agreement": opts.Consensus,
+		}
+	}
+	if opts.TieBreak != "" {
+		judgeBody["tie_break"] = map[string]any{
+			"among": []string{"c1", "c2"}, "key": opts.TieBreak, "chosen": chosen,
+		}
+	}
+	trialJSON(f.t, filepath.Join(dir, JudgeFile), judgeBody)
 	trialJSON(f.t, filepath.Join(dir, "select.json"), map[string]any{
 		"schema_version": 1, "run_id": runID, "rule": rule,
 	})
@@ -175,6 +194,8 @@ type savedRunOpts struct {
 	CMoAVersion   string
 	Rule          string
 	Reason        string
+	Consensus     string
+	TieBreak      string
 	Judge         map[string]any
 }
 
@@ -203,13 +224,26 @@ type fakeTrialRunner struct {
 	Cost func(item, config string) time.Duration
 	// Fail makes one call fail.
 	Fail func(item, config string) error
+	// Before runs at the top of a call, which is where a test checks what the
+	// runner had already written to disk before it asked anything.
+	Before func(item, config string)
+	// Settle decides how the trace says the answer was reached: the consensus
+	// agreement and the tie-break key, both structured fields.
+	Settle func(item, config string) (consensus, tieBreak string)
 }
 
-func (r *fakeTrialRunner) Judge(_ context.Context, taskDir string, _ []string,
-	config string, seed, _ int,
+func (r *fakeTrialRunner) Judge(_ context.Context, req TrialRequest,
 ) (Judged, time.Duration, error) {
+	taskDir, config, seed := req.TaskDir, req.Config, req.Seed
 	item := filepath.Base(taskDir)
-	r.Calls = append(r.Calls, item+"|"+filepath.Base(config))
+	call := item + "|" + filepath.Base(config)
+	if req.Binary != "" {
+		call += "@" + filepath.Base(req.Binary)
+	}
+	r.Calls = append(r.Calls, call)
+	if r.Before != nil {
+		r.Before(item, config)
+	}
 	cost := fixtureCallCost
 	if r.Cost != nil {
 		cost = r.Cost(item, config)
@@ -231,7 +265,11 @@ func (r *fakeTrialRunner) Judge(_ context.Context, taskDir string, _ []string,
 		return Judged{}, cost, err
 	}
 	// The trace goes under the item so the reuse key reads the same corpus.
-	saved := r.fixture.savedRun(item, runID, outcome, chosen, savedRunOpts{})
+	var settled savedRunOpts
+	if r.Settle != nil {
+		settled.Consensus, settled.TieBreak = r.Settle(item, config)
+	}
+	saved := r.fixture.savedRun(item, runID, outcome, chosen, settled)
 	judged, err := ReadJudged(saved)
 	if err != nil {
 		return Judged{}, cost, err
@@ -674,7 +712,12 @@ func TestTrialReportArithmetic(t *testing.T) {
 		}
 		return 8 * time.Second
 	}
-	card := f.card("arith", []string{"i1", "i2", "i3", "i4"}, nil)
+	// The floor on evaluable items is lowered to what this fixture has: the
+	// arithmetic under test is the arithmetic, and the floor is tested where
+	// it belongs, in TestTrialQualityFloor.
+	card := f.card("arith", []string{"i1", "i2", "i3", "i4"}, func(m *map[string]any) {
+		(*m)["min_evaluable_items"] = 4
+	})
 	out := filepath.Join(t.TempDir(), "out")
 	result, err := Trial(context.Background(), f.options(card, out))
 	if err != nil {
@@ -803,6 +846,7 @@ func TestTrialWeightsAStratumWithEnoughItems(t *testing.T) {
 	card := f.card("weighted", []string{"i1"}, func(m *map[string]any) {
 		(*m)["manifests"] = []string{manifest}
 		(*m)["min_items_per_category"] = 3
+		(*m)["min_evaluable_items"] = 4
 	})
 	result, err := Trial(context.Background(), f.options(card, filepath.Join(t.TempDir(), "out")))
 	if err != nil {
@@ -834,5 +878,489 @@ func TestReuseKeyDiffNamesTheField(t *testing.T) {
 	}
 	if a.Digest() == b.Digest() {
 		t.Fatal("two different keys hash alike")
+	}
+}
+
+// set writes one manifest of a named set beside the fixture's root.
+func (f *trialFixture) set(file, kind string, items []string) string {
+	f.t.Helper()
+	var entries []map[string]any
+	for i, item := range items {
+		entries = append(entries, map[string]any{
+			"id": item, "order": i + 1,
+			"strata": map[string]string{"category": "writing", "language": "en"},
+			"reason": "typical",
+		})
+	}
+	path := filepath.Join(f.root, file)
+	trialJSON(f.t, path, map[string]any{
+		"schema_version": 1, "set": kind, "items": entries,
+	})
+	return path
+}
+
+// TestTrialManifestOrderIsCheckedAgainstFileOrder: the order a manifest states
+// and the order it is in have to be the same statement.
+func TestTrialManifestOrderIsCheckedAgainstFileOrder(t *testing.T) {
+	dir := t.TempDir()
+	item := func(id string, order int) map[string]any {
+		out := map[string]any{"id": id, "strata": map[string]string{"category": "math"}}
+		if order != 0 {
+			out["order"] = order
+		}
+		return out
+	}
+	for _, row := range []struct {
+		name  string
+		items []map[string]any
+		want  string
+	}{
+		{"numbered in file order", []map[string]any{item("a", 1), item("b", 2)}, ""},
+		{"numbered by nobody", []map[string]any{item("a", 0), item("b", 0)}, ""},
+		{"numbered out of order", []map[string]any{item("a", 2), item("b", 1)},
+			"calls it order 2"},
+		{"numbered halfway", []map[string]any{item("a", 1), item("b", 0)},
+			"calls it order 0"},
+		{"numbered from the second", []map[string]any{item("a", 0), item("b", 2)},
+			"leaves the first item unnumbered"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			name := filepath.Join(dir, strings.ReplaceAll(row.name, " ", "-")+".json")
+			trialJSON(t, name, map[string]any{
+				"schema_version": 1, "set": "D", "items": row.items,
+			})
+			_, err := LoadTrialManifest(name)
+			switch {
+			case row.want == "" && err != nil:
+				t.Fatalf("want no error, got %v", err)
+			case row.want == "":
+			case err == nil:
+				t.Fatalf("want an error mentioning %q, got none", row.want)
+			case !strings.Contains(err.Error(), row.want):
+				t.Fatalf("want an error mentioning %q, got %v", row.want, err)
+			}
+		})
+	}
+}
+
+// TestCommittedChatSetsCarryTheirExecutionOrder reads the sets this repository
+// ships and checks the property the order exists for: that a prefix is a
+// representative set rather than whatever the ids happened to be.
+func TestCommittedChatSetsCarryTheirExecutionOrder(t *testing.T) {
+	d, err := LoadTrialManifest(filepath.Join("..", "..", "examples", "suite-chat", "sets", "D.json"))
+	if err != nil {
+		t.Fatalf("load D: %v", err)
+	}
+	if len(d.Items) != 40 {
+		t.Fatalf("D holds %d items, want 40", len(d.Items))
+	}
+	// One item of every category in the first eight, three of every category
+	// in the first twenty-four, and all three length bins by the fourth item.
+	for _, row := range []struct {
+		prefix     int
+		categories int
+		each       int
+	}{{4, 4, 1}, {8, 8, 1}, {24, 8, 3}} {
+		counts := map[string]int{}
+		for _, item := range d.Items[:row.prefix] {
+			counts[item.Strata["category"]]++
+		}
+		if len(counts) != row.categories {
+			t.Errorf("the first %d items cover %d categories, want %d: %v",
+				row.prefix, len(counts), row.categories, counts)
+		}
+		for category, n := range counts {
+			if n != row.each {
+				t.Errorf("the first %d items hold %d of %s, want %d",
+					row.prefix, n, category, row.each)
+			}
+		}
+	}
+	bins := map[string]int{}
+	for _, item := range d.Items[:4] {
+		bins[item.Strata["length_bin"]]++
+	}
+	if len(bins) != 3 {
+		t.Errorf("the first four items cover %d length bins, want all three: %v", len(bins), bins)
+	}
+
+	r, err := LoadTrialManifest(filepath.Join("..", "..", "examples", "suite-chat", "sets", "R.json"))
+	if err != nil {
+		t.Fatalf("load R: %v", err)
+	}
+	// The stage A take, interleaved: a clock that stops the run early still
+	// leaves a known-failure item in the comparison.
+	card := TrialCard{Take: map[string]int{SetD: 4, SetR: 2}}
+	var got []string
+	for _, step := range TrialPlan(card, []TrialManifest{d, r}) {
+		if step.Condition == ConditionCandidate {
+			got = append(got, step.Set)
+		}
+	}
+	want := "D R D D R D"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("stage A order\n got %s\nwant %s", strings.Join(got, " "), want)
+	}
+}
+
+// TestTrialTakeIsAPrefixAndTheCapCoversBothSets: the take runs the first k of
+// each set, and the ceiling is over D and R together.
+func TestTrialTakeIsAPrefixAndTheCapCoversBothSets(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1", "i3": "c1", "i4": "c1"})
+	dev := f.set("d.json", "D", []string{"i1", "i2", "i3"})
+	fail := f.set("r.json", "R", []string{"i4"})
+	load := func(card string) (TrialCard, []TrialManifest) {
+		t.Helper()
+		loaded, err := LoadTrialCard(card)
+		if err != nil {
+			t.Fatalf("load card: %v", err)
+		}
+		var manifests []TrialManifest
+		for _, name := range loaded.Manifests {
+			manifest, err := LoadTrialManifest(loaded.Path(name))
+			if err != nil {
+				t.Fatalf("load manifest: %v", err)
+			}
+			manifests = append(manifests, manifest)
+		}
+		return loaded, manifests
+	}
+
+	card, manifests := load(f.card("take", []string{"i1"}, func(m *map[string]any) {
+		(*m)["manifests"] = []string{dev, fail}
+		(*m)["take"] = map[string]int{"D": 2, "R": 1}
+	}))
+	if err := CheckPlan(card, manifests); err != nil {
+		t.Fatalf("three items inside a cap of eight: %v", err)
+	}
+	taken := Taken(card, manifests)
+	if len(taken[0].Items) != 2 || len(taken[1].Items) != 1 {
+		t.Fatalf("take is a prefix, got %d and %d", len(taken[0].Items), len(taken[1].Items))
+	}
+	if taken[0].Items[0].ID != "i1" || taken[0].Items[1].ID != "i2" {
+		t.Fatalf("the prefix is the file's first items, got %v", taken[0].Items)
+	}
+
+	// The cap is over the two sets together, so three plus two is over a cap
+	// of four however it is split.
+	card, manifests = load(f.card("cap", []string{"i1"}, func(m *map[string]any) {
+		(*m)["manifests"] = []string{dev, fail}
+		(*m)["max_items"] = 3
+	}))
+	err := CheckPlan(card, manifests)
+	if err == nil || !strings.Contains(err.Error(), "D and R together") {
+		t.Fatalf("want a refusal naming the combined cap, got %v", err)
+	}
+
+	// And the budget refuses on its own arithmetic: four items, both
+	// conditions, at 100 s each is 800 s of a 600 s box.
+	card, manifests = load(f.card("budgeted", []string{"i1"}, func(m *map[string]any) {
+		(*m)["manifests"] = []string{dev, fail}
+		(*m)["planning"] = map[string]any{"item_seconds": 100, "overhead_seconds": 60}
+	}))
+	err = CheckPlan(card, manifests)
+	if err == nil || !strings.Contains(err.Error(), "affords 2") {
+		t.Fatalf("want a refusal naming what the budget affords, got %v", err)
+	}
+	// A card that says it expects the clock is not refused; it is stopped.
+	card, manifests = load(f.card("cut", []string{"i1"}, func(m *map[string]any) {
+		(*m)["manifests"] = []string{dev, fail}
+		(*m)["planning"] = map[string]any{
+			"item_seconds": 100, "overhead_seconds": 60, "accept_cut": true,
+		}
+	}))
+	if err := CheckPlan(card, manifests); err != nil {
+		t.Fatalf("accept_cut runs the fixed order anyway: %v", err)
+	}
+	if got := Estimate(card, manifests).Affordable; got != 2 {
+		t.Fatalf("the estimate affords %d items, want 2", got)
+	}
+}
+
+// TestTrialWritesThePlanBeforeTheFirstCall: the order is on disk, with a
+// timestamp, before anything is measured.
+func TestTrialWritesThePlanBeforeTheFirstCall(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1"})
+	out := filepath.Join(t.TempDir(), "out")
+	var seen TrialReport
+	f.runner.Before = func(string, string) {
+		if seen.Recorded != "" {
+			return
+		}
+		body, err := os.ReadFile(filepath.Join(out, TrialReportFile))
+		if err != nil {
+			t.Errorf("the plan is written before the first call: %v", err)
+			return
+		}
+		if err := json.Unmarshal(body, &seen); err != nil {
+			t.Errorf("unmarshal plan: %v", err)
+		}
+	}
+	card := f.card("prereg", []string{"i1", "i2"}, nil)
+	result, err := Trial(context.Background(), f.options(card, out))
+	if err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+	if seen.Recorded != RecordedPlan {
+		t.Fatalf("the file before the first call is %q, want %q", seen.Recorded, RecordedPlan)
+	}
+	if len(seen.Plan.Items) != 2 || seen.Plan.Items[0].Item != "i1" || seen.Plan.Items[0].Position != 1 {
+		t.Fatalf("the plan holds the fixed order, got %+v", seen.Plan.Items)
+	}
+	if seen.Plan.Sets["D"] != 2 {
+		t.Fatalf("the plan counts the composition, got %v", seen.Plan.Sets)
+	}
+	if result.Report.Recorded != RecordedResult {
+		t.Fatalf("the finished report is %q, want %q", result.Report.Recorded, RecordedResult)
+	}
+	if len(result.Report.Plan.Items) != 2 {
+		t.Fatal("the finished report repeats the order it ran")
+	}
+}
+
+// fakeSwitcher is a condition switch that costs time and restarts nothing.
+// No test in this repository restarts a real judge.
+type fakeSwitcher struct {
+	fixture *trialFixture
+	cost    time.Duration
+	calls   []string
+	fail    error
+}
+
+func (s *fakeSwitcher) Switch(_ context.Context, hook TrialSwitch, _ string) error {
+	s.calls = append(s.calls, hook.Command)
+	s.fixture.clock = s.fixture.clock.Add(s.cost)
+	return s.fail
+}
+
+// TestTrialChargesTEvalForAConditionSwitch is the review's second point:
+// asks for: the restart is inside the measured window, in its own phase.
+func TestTrialChargesTEvalForAConditionSwitch(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1"})
+	switcher := &fakeSwitcher{fixture: f, cost: 20 * time.Second}
+	card := f.card("switching", []string{"i1", "i2"}, func(m *map[string]any) {
+		hook := func(what string) map[string]any {
+			return map[string]any{"command": "./switch.sh " + what, "timeout_seconds": 30}
+		}
+		base := (*m)["base"].(map[string]any)
+		base["switch"] = hook("base")
+		candidate := (*m)["candidate"].(map[string]any)
+		candidate["switch"] = hook("candidate")
+	})
+	opts := f.options(card, filepath.Join(t.TempDir(), "out"))
+	opts.Switcher = switcher
+	result, err := Trial(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+	// Two items, candidate then base each time: four entries into a condition
+	// that costs something, the first one included.
+	if len(switcher.calls) != 4 {
+		t.Fatalf("%d switch(es), want 4: %v", len(switcher.calls), switcher.calls)
+	}
+	if got := result.Report.Phases.SwitchSeconds; got != 80 {
+		t.Fatalf("switch phase %v s, want 80", got)
+	}
+	if len(result.Report.Switches) != 4 || result.Report.Switches[0].Condition != ConditionCandidate {
+		t.Fatalf("the switches are recorded one by one, got %+v", result.Report.Switches)
+	}
+	// T_eval covers it, and no other phase double counts it.
+	phases := result.Report.Phases
+	if result.Report.TEvalSeconds < phases.SwitchSeconds+phases.MeasureSeconds {
+		t.Fatalf("T_eval %v is smaller than the phases inside it (%+v)",
+			result.Report.TEvalSeconds, phases)
+	}
+	if phases.WaitSeconds < 0 {
+		t.Fatalf("wait went negative once the switch was taken out of it: %+v", phases)
+	}
+	if !strings.Contains(result.Report.Summary(), "switch 80.0") {
+		t.Fatal("the summary names the switch phase")
+	}
+
+	// A switch that fails is a failed step rather than a silent measurement
+	// of whichever condition the fleet happened to be in.
+	f2 := newTrialFixture(t, map[string]string{"i1": "c1"})
+	broken := &fakeSwitcher{fixture: f2, fail: errors.New("compose refused")}
+	card2 := f2.card("broken-switch", []string{"i1"}, func(m *map[string]any) {
+		candidate := (*m)["candidate"].(map[string]any)
+		candidate["switch"] = map[string]any{"command": "./switch.sh"}
+	})
+	opts2 := f2.options(card2, filepath.Join(t.TempDir(), "out"))
+	opts2.Switcher = broken
+	result2, err := Trial(context.Background(), opts2)
+	if err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+	if len(f2.runner.Calls) != 1 {
+		t.Fatalf("the candidate is not asked when its switch failed, got %v", f2.runner.Calls)
+	}
+	if result2.Report.Switches[0].Error == "" {
+		t.Fatal("a failed switch is recorded with its error")
+	}
+}
+
+// TestCommandSwitcherRunsTheCommandAndWaits uses a stub command and a local
+// server. It starts nothing and restarts nothing.
+func TestCommandSwitcherRunsTheCommandAndWaits(t *testing.T) {
+	dir := t.TempDir()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	hook := TrialSwitch{
+		Command: "printf ready > switched.txt", ReadyURL: server.URL, TimeoutSeconds: 10,
+	}
+	if err := (CommandSwitcher{}).Switch(context.Background(), hook, dir); err != nil {
+		t.Fatalf("switch: %v", err)
+	}
+	if body, err := os.ReadFile(filepath.Join(dir, "switched.txt")); err != nil || string(body) != "ready" {
+		t.Fatalf("the command runs in the card's directory: %v %q", err, body)
+	}
+
+	if err := (CommandSwitcher{}).Switch(context.Background(),
+		TrialSwitch{Command: "exit 3", TimeoutSeconds: 10}, dir); err == nil {
+		t.Fatal("a command that fails is a failed switch")
+	}
+
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer down.Close()
+	err := (CommandSwitcher{}).Switch(context.Background(),
+		TrialSwitch{Command: "true", ReadyURL: down.URL, TimeoutSeconds: 1}, dir)
+	if err == nil || !strings.Contains(err.Error(), "did not answer") {
+		t.Fatalf("want a refusal naming the ready URL, got %v", err)
+	}
+}
+
+// TestTrialCountsTieBreaksFromTheStructuredFields: the table is counted from
+// judge.json's own fields, and a reason sentence that would fool a grep does
+// not move it.
+func TestTrialCountsTieBreaksFromTheStructuredFields(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1", "i3": "c1"})
+	f.runner.Settle = func(item, _ string) (string, string) {
+		switch item {
+		case "i1":
+			// A consensus group parted by a hash: the key is in the field and
+			// the word `consensus` is in the sentence, which is the pair the
+			// 2026-09-06 review had to separate by hand.
+			return "numeric", "hash"
+		case "i2":
+			return "", "length"
+		}
+		return "", ""
+	}
+	card := f.card("keys", []string{"i1", "i2", "i3"}, nil)
+	result, err := Trial(context.Background(), f.options(card, filepath.Join(t.TempDir(), "out")))
+	if err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+	for _, condition := range []string{ConditionBase, ConditionCandidate} {
+		stats := result.Report.Conditions[condition]
+		if stats.Consensus != 1 {
+			t.Fatalf("%s settled %d step(s) by consensus, want 1", condition, stats.Consensus)
+		}
+		want := []TrialTieBreakRow{
+			{Stage: TieBreakStageConsensus, Key: "hash", Steps: 1},
+			{Stage: TieBreakStageCopeland, Key: "length", Steps: 1},
+		}
+		if len(stats.TieBreaks) != len(want) {
+			t.Fatalf("%s: %+v, want %+v", condition, stats.TieBreaks, want)
+		}
+		for i, row := range want {
+			if stats.TieBreaks[i] != row {
+				t.Fatalf("%s row %d is %+v, want %+v", condition, i, stats.TieBreaks[i], row)
+			}
+		}
+	}
+	summary := result.Report.Summary()
+	if !strings.Contains(summary, "| consensus | `hash` | 1 |") {
+		t.Fatalf("the summary carries the stage-by-key table:\n%s", summary)
+	}
+	if !strings.Contains(summary, "not from `outcome.reason`") {
+		t.Fatal("the summary says where the counts came from")
+	}
+}
+
+// TestTrialQualityNeedsEnoughEvaluableItems: below the floor there is no ΔQ,
+// and what is printed instead is 未評価 and the count.
+func TestTrialQualityNeedsEnoughEvaluableItems(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1", "i3": "c1"})
+	card := f.card("floor", []string{"i1", "i2", "i3"}, nil)
+	result, err := Trial(context.Background(), f.options(card, filepath.Join(t.TempDir(), "out")))
+	if err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+	quality := result.Report.Quality
+	if quality.Measured {
+		t.Fatalf("three evaluable items is under the floor of %d, got %+v",
+			DefaultMinEvaluableItems, quality)
+	}
+	if quality.Evaluable != 3 || quality.DeltaPoints != 0 {
+		t.Fatalf("the count is kept and the difference is not printed, got %+v", quality)
+	}
+	if !strings.Contains(quality.Note, "未評価") || !strings.Contains(quality.Note, "33.3 points") {
+		t.Fatalf("the note says what one label is worth, got %q", quality.Note)
+	}
+	if result.Report.Suggested.Value != DecisionInconclusive {
+		t.Fatalf("an unmeasured quality suggests %q, want %q",
+			result.Report.Suggested.Value, DecisionInconclusive)
+	}
+}
+
+// TestCommittedTrialCardsAreRunnable reads the cards this repository ships:
+// they load, they name no machine, and their plan is one the runner accepts.
+func TestCommittedTrialCardsAreRunnable(t *testing.T) {
+	dir := filepath.Join("..", "..", "examples", "suite-chat", "cards")
+	names, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	if err != nil || len(names) == 0 {
+		t.Fatalf("no committed cards under %s: %v", dir, err)
+	}
+	for _, name := range names {
+		t.Run(filepath.Base(name), func(t *testing.T) {
+			body, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			// A committed card is read by people who are not on this machine.
+			for _, line := range strings.Split(string(body), "\n") {
+				if strings.Contains(line, `": "/`) || strings.Contains(line, `"/home/`) {
+					t.Fatalf("a committed card names an absolute path: %s", strings.TrimSpace(line))
+				}
+			}
+			card, err := LoadTrialCard(name)
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if card.Take[SetD] != 4 || card.Take[SetR] != 2 {
+				t.Fatalf("the stage A take is D 4 and R 2, got %v", card.Take)
+			}
+			if card.BudgetSeconds != 600 || card.Reuse.Kind != ReuseNone {
+				t.Fatalf("both conditions are measured in a 600 s box, got %d s and reuse %q",
+					card.BudgetSeconds, card.Reuse.Kind)
+			}
+			var manifests []TrialManifest
+			for _, manifest := range card.Manifests {
+				loaded, err := LoadTrialManifest(card.Path(manifest))
+				if err != nil {
+					t.Fatalf("manifest: %v", err)
+				}
+				manifests = append(manifests, loaded)
+			}
+			if err := CheckPlan(card, manifests); err != nil {
+				t.Fatalf("the committed card's plan is refused: %v", err)
+			}
+			// Six items, and the interleave keeps an R item in the first four.
+			plan := TrialPlan(card, manifests)
+			var sets []string
+			for _, step := range plan {
+				if step.Condition == ConditionCandidate {
+					sets = append(sets, step.Set)
+				}
+			}
+			if strings.Join(sets, " ") != "D R D D R D" {
+				t.Fatalf("the stage A order is D R D D R D, got %s", strings.Join(sets, " "))
+			}
+		})
 	}
 }

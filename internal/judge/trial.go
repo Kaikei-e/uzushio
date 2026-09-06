@@ -37,6 +37,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -207,6 +210,21 @@ type TrialCard struct {
 	// run. The order of the plan is the order of these files and of the items
 	// inside them, and it does not change between conditions or between runs.
 	Manifests []string `json:"manifests"`
+	// Take is how many items of each set this stage runs: the **first** k of
+	// the manifest, in file order, keyed by set name.
+	//
+	// It is a prefix rather than a selection because the prefix is the thing
+	// the set's own order was built to make representative. A card that picked
+	// items instead would be choosing which categories the stage sees, and
+	// choosing them again after seeing a result is how a set stops measuring
+	// anything. A set the take does not name runs whole.
+	Take map[string]int `json:"take,omitempty"`
+	// MaxItems is the ceiling on the D+R total this stage may run. Zero takes
+	// the stage's own cap: 8 at A, 40 at B, and none at C, where the count is
+	// fixed in advance by the card rather than by a default.
+	MaxItems int `json:"max_items,omitempty"`
+	// Planning is the pre-run cost estimate the take is checked against.
+	Planning TrialPlanning `json:"planning,omitempty"`
 	// Labels are human label files, as `judge calibrate` reads them.
 	Labels []string `json:"labels,omitempty"`
 	// Base and Candidate are the two conditions.
@@ -236,6 +254,18 @@ type TrialCard struct {
 	// the report gives it a number rather than calling it unevaluated. Zero
 	// takes DefaultMinItemsPerCategory.
 	MinItemsPerCategory int `json:"min_items_per_category,omitempty"`
+	// MinEvaluableItems is how many evaluable items the whole comparison
+	// needs before the report prints a quality difference at all. Zero takes
+	// DefaultMinEvaluableItems.
+	//
+	// It exists because a stage A take is small and the labels are smaller:
+	// 29 of D's 40 items carry a human position, so four items of D yield
+	// about three evaluable ones, and on three items a single label is 33
+	// points of ΔQ. A number one label can swing past every threshold in the
+	// card is not a measurement of the change, and printing it invites
+	// somebody to read it as one. Below the floor the report says 未評価 and
+	// the run decides on behaviour and time.
+	MinEvaluableItems int `json:"min_evaluable_items,omitempty"`
 	// Dir is the directory the card was read from; every relative path in it
 	// is resolved against this.
 	Dir string `json:"-"`
@@ -248,6 +278,29 @@ type TrialCondition struct {
 	ID string `json:"id"`
 	// Config is the harness configuration this condition runs under.
 	Config string `json:"config"`
+	// CMoA is the harness binary this condition runs, where the two
+	// conditions are two builds rather than two configuration files.
+	//
+	// Some of what a judge does is a constant in the harness's source — the
+	// length a reason is truncated to, say — and a constant cannot be moved
+	// by a configuration file. Such a change is a second binary, and naming
+	// it here is the only way the card can say which one produced which
+	// column. A value with no path separator is a name looked up on PATH; one
+	// with a separator is resolved against the card's own directory, so a
+	// committed card never carries somebody's home directory. Empty takes the
+	// binary the command was given.
+	//
+	// The build is in the reuse key as `cmoa_version`, read from the run the
+	// harness actually made. Two conditions naming two binaries therefore
+	// cannot share a base: the base's expected key is resolved from the
+	// candidate's run, and a run made by the other build does not answer for
+	// it — so the base is measured. That is the safe direction and the runner
+	// takes it without being asked.
+	CMoA string `json:"cmoa,omitempty"`
+	// Switch is what puts the fleet into this condition, where entering it
+	// costs something. It is nil for a condition a configuration file alone
+	// selects.
+	Switch *TrialSwitch `json:"switch,omitempty"`
 	// ConfigSHA256 is what that file hashed to when the card was written. It
 	// is checked before anything is spent: a local configuration is edited
 	// between experiments, and a trial that silently ran the edited one would
@@ -260,6 +313,68 @@ type TrialReuse struct {
 	Kind   string `json:"kind"`
 	Source string `json:"source,omitempty"`
 }
+
+// TrialSwitch is the cost of entering a condition: a command, and a URL that
+// says when the thing the command started is ready to answer.
+//
+// It exists because some conditions are not a flag. A reasoning budget that
+// lives in a compose file is a judge container that has to be rewritten and
+// restarted, and the restart is inside the experiment: the memo's `T_eval`
+// covers load, wait, measure and aggregate, so a comparison that timed only
+// the inference has not shown that the change can be judged inside ten
+// minutes. The runner measures the switch and reports it as its own phase.
+//
+// What is *not* in `T_eval` is the first-time preparation — downloading a
+// model, compiling a runtime, building the second binary. That is a
+// separate preparation cost (準備工数), it is ranked separately, and it is
+// not smuggled into a per-switch number by being run once inside a trial.
+type TrialSwitch struct {
+	// Command is run through `sh -c` in the card's own directory. A card
+	// names it relative or by a documented placeholder; a committed card does
+	// not carry an absolute path.
+	Command string `json:"command"`
+	// ReadyURL is polled until it answers 2xx. Empty means the command's own
+	// exit is the whole of the readiness test, which is true of a command
+	// that blocks until the server is up and false of most others.
+	ReadyURL string `json:"ready_url,omitempty"`
+	// TimeoutSeconds bounds the command and the wait together. Zero takes
+	// DefaultSwitchTimeoutSeconds.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+}
+
+// DefaultSwitchTimeoutSeconds bounds a switch that names no timeout.
+const DefaultSwitchTimeoutSeconds = 300
+
+// TrialPlanning is the pre-run estimate, and every number in it is a 見積り.
+//
+// The memo puts the time box before the count: `planned = min(stage cap,
+// floor((budget − load/aggregate − switches) / per-item cost))`. The runner
+// cannot know the per-item cost before it has run anything, so the card
+// declares what the last pilot measured and the runner refuses a take the
+// arithmetic does not support. A card that declares nothing gets no
+// arithmetic and the budget stops it mid-set instead, which the report then
+// has to show as `interrupted_items`.
+type TrialPlanning struct {
+	// ItemSeconds is one item under one condition, retries included.
+	ItemSeconds float64 `json:"item_seconds,omitempty"`
+	// OverheadSeconds is the load and aggregate allowance.
+	OverheadSeconds float64 `json:"overhead_seconds,omitempty"`
+	// SwitchSeconds is one condition switch: the restart and the ready wait.
+	SwitchSeconds float64 `json:"switch_seconds_estimate,omitempty"`
+	// AcceptCut says the card knows its take is larger than its budget
+	// affords and wants the fixed order run anyway.
+	//
+	// It is the difference between a plan that does not add up and a plan
+	// that expects the clock. A stage A take of six at today's per-item cost
+	// is about 606 seconds against a 600 second box, and the answer to that
+	// is not a bigger box — it is running the fixed order, letting the budget
+	// stop new work, and reporting `interrupted_items` and 時間・資源切れ.
+	// What the card may not do is leave the arithmetic out and be surprised.
+	AcceptCut bool `json:"accept_cut,omitempty"`
+}
+
+// Declared says the card gave enough to plan by time rather than by count.
+func (p TrialPlanning) Declared() bool { return p.ItemSeconds > 0 }
 
 // TrialRules are the thresholds, in the memo's units: quality in points on a
 // 0–100 scale over the evaluable items, time as a ratio of means.
@@ -306,6 +421,15 @@ func (r TrialRules) Thresholds() (minDeltaQ, maxTimeRatio float64) {
 // all: a stratum thinner than the whole first stage has not been evaluated,
 // and printing a mean over two items invites somebody to read it as one.
 const DefaultMinItemsPerCategory = 4
+
+// DefaultMinEvaluableItems is the floor under a quality difference.
+//
+// Eight is the top of stage A's own item range: a comparison with fewer
+// evaluable items than the smallest stage runs has not evaluated quality, and
+// at eight items one item is still 12.5 points. The floor does not make the
+// number below it trustworthy; it stops the report printing a number that is
+// not.
+const DefaultMinEvaluableItems = 8
 
 // LoadTrialCard reads and validates an experiment card.
 func LoadTrialCard(name string) (TrialCard, error) {
@@ -379,8 +503,39 @@ func (c *TrialCard) validate(name string) error {
 	if c.BlockSize <= 0 {
 		c.BlockSize = 4
 	}
+	for set, n := range c.Take {
+		if !slices.Contains([]string{SetD, SetR, SetH}, set) {
+			return fmt.Errorf("%w: %s takes items from set %q, which is not %s, %s or %s",
+				ErrJudge, name, set, SetD, SetR, SetH)
+		}
+		if n < 0 {
+			return fmt.Errorf("%w: %s takes %d items of set %s", ErrJudge, name, n, set)
+		}
+	}
+	if c.MaxItems < 0 {
+		return fmt.Errorf("%w: %s caps the run at %d items", ErrJudge, name, c.MaxItems)
+	}
+	if c.Planning.ItemSeconds < 0 || c.Planning.OverheadSeconds < 0 || c.Planning.SwitchSeconds < 0 {
+		return fmt.Errorf("%w: %s plans with a negative cost", ErrJudge, name)
+	}
+	for _, condition := range []TrialCondition{c.Base, c.Candidate} {
+		if condition.Switch == nil {
+			continue
+		}
+		if strings.TrimSpace(condition.Switch.Command) == "" {
+			return fmt.Errorf("%w: %s gives condition %s a switch with no command",
+				ErrJudge, name, condition.ID)
+		}
+		if condition.Switch.TimeoutSeconds < 0 {
+			return fmt.Errorf("%w: %s gives condition %s a switch timeout of %d seconds",
+				ErrJudge, name, condition.ID, condition.Switch.TimeoutSeconds)
+		}
+	}
 	if c.MinItemsPerCategory <= 0 {
 		c.MinItemsPerCategory = DefaultMinItemsPerCategory
+	}
+	if c.MinEvaluableItems <= 0 {
+		c.MinEvaluableItems = DefaultMinEvaluableItems
 	}
 	return nil
 }
@@ -393,6 +548,173 @@ func defaultBudget(stage string) int {
 		return BudgetB
 	}
 	return BudgetC
+}
+
+// The item ceiling of each stage, over D and R together.
+//
+// The memo counts A in items and not in sets: four to eight of D and R
+// combined, not eight of each. C has no default, because a stage C count is
+// fixed in advance from a pilot and a precision argument, and a number this
+// package invented would be a number nobody argued for.
+const (
+	CapA = 8
+	CapB = 40
+)
+
+// StageCap is the ceiling on the D+R total, or zero where the card sets it.
+func StageCap(stage string) int {
+	switch stage {
+	case StageA:
+		return CapA
+	case StageB:
+		return CapB
+	}
+	return 0
+}
+
+// Cap is the ceiling this card runs under: its own, or its stage's.
+func (c TrialCard) Cap() int {
+	if c.MaxItems > 0 {
+		return c.MaxItems
+	}
+	return StageCap(c.Stage)
+}
+
+// Taken applies the card's take: the first k items of each set, in file order.
+//
+// A set the take does not name is run whole, which is what a card with no take
+// at all has always done. Taking more than a set holds takes the set.
+func Taken(card TrialCard, manifests []TrialManifest) []TrialManifest {
+	if len(card.Take) == 0 {
+		return manifests
+	}
+	out := make([]TrialManifest, 0, len(manifests))
+	for _, manifest := range manifests {
+		if n, ok := card.Take[manifest.Set]; ok && n < len(manifest.Items) {
+			manifest.Items = manifest.Items[:n]
+		}
+		out = append(out, manifest)
+	}
+	return out
+}
+
+// TrialEstimate is the pre-run arithmetic: what the take costs, what the
+// budget allows, and whether the two agree.
+//
+// Every second in it is declared rather than measured — the card carries what
+// a pilot found — so the report labels the whole record 見積り. It is
+// deliberately conservative in one place: it prices both conditions as
+// measured, even where the card names a reuse source, because a reuse key that
+// misses is exactly the case the plan has to survive.
+type TrialEstimate struct {
+	// Label is the word this record is read under.
+	Label string `json:"label"`
+	// Items and Steps are what the take asks for.
+	Items int `json:"items"`
+	Steps int `json:"steps"`
+	// Switches is how many times the plan enters a condition that declares a
+	// switch hook, the first entry included.
+	Switches int `json:"switches"`
+	// Cap is the item ceiling, and Affordable the count the budget allows.
+	// Affordable is −1 where the card declared no per-item cost.
+	Cap        int `json:"cap"`
+	Affordable int `json:"affordable_items"`
+	// The declared costs, echoed so the arithmetic can be checked.
+	ItemSeconds     float64 `json:"item_seconds"`
+	OverheadSeconds float64 `json:"overhead_seconds"`
+	SwitchSeconds   float64 `json:"switch_seconds"`
+	// Seconds is the whole estimate, and Budget what the card allows.
+	Seconds float64 `json:"estimated_seconds"`
+	Budget  int     `json:"budget_seconds"`
+}
+
+// Estimate prices the card's take before anything is spent.
+func Estimate(card TrialCard, manifests []TrialManifest) TrialEstimate {
+	taken := Taken(card, manifests)
+	plan := TrialPlan(card, taken)
+	out := TrialEstimate{
+		Label: "見積り / estimate, from the card's declared costs and not from " +
+			"anything this run measured; both conditions are priced as measured",
+		Steps: len(plan), Switches: switchCount(card, plan),
+		Cap: card.Cap(), Affordable: -1, Budget: card.BudgetSeconds,
+		ItemSeconds:     card.Planning.ItemSeconds,
+		OverheadSeconds: card.Planning.OverheadSeconds,
+		SwitchSeconds:   card.Planning.SwitchSeconds,
+	}
+	for _, manifest := range taken {
+		out.Items += len(manifest.Items)
+	}
+	if !card.Planning.Declared() {
+		return out
+	}
+	out.Seconds = card.Planning.OverheadSeconds +
+		float64(out.Switches)*card.Planning.SwitchSeconds +
+		float64(out.Steps)*card.Planning.ItemSeconds
+	left := float64(card.BudgetSeconds) - card.Planning.OverheadSeconds -
+		float64(out.Switches)*card.Planning.SwitchSeconds
+	perItem := 2 * card.Planning.ItemSeconds
+	out.Affordable = 0
+	if left > 0 && perItem > 0 {
+		out.Affordable = int(math.Floor(left / perItem))
+	}
+	return out
+}
+
+// switchCount is how many times the plan enters a condition that costs
+// something to enter, counting the first entry: the fleet's state at the start
+// of a trial is whatever the last experiment left, so the first condition is
+// entered too.
+func switchCount(card TrialCard, plan []TrialStep) int {
+	hooks := map[string]bool{
+		ConditionBase:      card.Base.Switch != nil,
+		ConditionCandidate: card.Candidate.Switch != nil,
+	}
+	n, current := 0, ""
+	for _, step := range plan {
+		if step.Condition == current {
+			continue
+		}
+		current = step.Condition
+		if hooks[current] {
+			n++
+		}
+	}
+	return n
+}
+
+// CheckPlan refuses a take the stage's ceiling or the card's own budget will
+// not hold.
+//
+// It runs before the first call, because the alternative is a run that spends
+// twenty minutes and then reports two thirds of a set: an interrupted set is a
+// biased set — the fast items — and no arithmetic afterwards recovers what the
+// clock dropped. The refusal names both numbers so the card can be corrected
+// rather than guessed at.
+func CheckPlan(card TrialCard, manifests []TrialManifest) error {
+	estimate := Estimate(card, manifests)
+	if ceiling := card.Cap(); ceiling > 0 && estimate.Items > ceiling {
+		where := fmt.Sprintf("stage %s runs at most %d", card.Stage, ceiling)
+		if card.MaxItems > 0 {
+			where = fmt.Sprintf("the card caps itself at %d", ceiling)
+		}
+		return fmt.Errorf(
+			"%w: card %s takes %d item(s) of D and R together and %s. The cap is over the "+
+				"two sets combined, not over each; name a `take` that fits, or raise "+
+				"`max_items` deliberately",
+			ErrJudge, card.ID, estimate.Items, where)
+	}
+	if estimate.Affordable >= 0 && estimate.Items > estimate.Affordable && !card.Planning.AcceptCut {
+		return fmt.Errorf(
+			"%w: card %s takes %d item(s), and its own estimate affords %d in %d seconds "+
+				"(%.0f s overhead, %d switch(es) at %.0f s, %.0f s per item per condition, "+
+				"both conditions measured). Every number there is a 見積り from the card; "+
+				"lower the take, or set `planning.accept_cut` to run the fixed order and "+
+				"be stopped by the clock, which reports 時間・資源切れ and `inconclusive`",
+			ErrJudge, card.ID, estimate.Items, estimate.Affordable, card.BudgetSeconds,
+			card.Planning.OverheadSeconds, estimate.Switches, card.Planning.SwitchSeconds,
+			card.Planning.ItemSeconds)
+	}
+	return nil
 }
 
 // Path resolves a path the card named, against the card's own directory.
@@ -428,7 +750,16 @@ type TrialManifest struct {
 
 // TrialManifestItem is one item of a set.
 type TrialManifestItem struct {
-	ID     string            `json:"id"`
+	ID string `json:"id"`
+	// Order is the item's position in the execution order, counting from one.
+	//
+	// The file's own order is what the runner follows; this field is that
+	// order written down a second time so that a reordering shows up as a
+	// mismatch rather than as a silently different experiment. A manifest
+	// either numbers every item or numbers none, and a numbering that is not
+	// 1..n in file order is a validation error: two statements of the same
+	// order that disagree are worse than one.
+	Order  int               `json:"order,omitempty"`
 	Strata map[string]string `json:"strata,omitempty"`
 	Reason string            `json:"reason,omitempty"`
 }
@@ -456,6 +787,7 @@ func LoadTrialManifest(name string) (TrialManifest, error) {
 		return TrialManifest{}, fmt.Errorf("%w: %s holds no items", ErrJudge, name)
 	}
 	seen := map[string]bool{}
+	numbered := m.Items[0].Order != 0
 	for i, item := range m.Items {
 		if item.ID == "" {
 			return TrialManifest{}, fmt.Errorf("%w: %s: item %d has no id", ErrJudge, name, i)
@@ -464,6 +796,19 @@ func LoadTrialManifest(name string) (TrialManifest, error) {
 			return TrialManifest{}, fmt.Errorf("%w: %s names item %s twice", ErrJudge, name, item.ID)
 		}
 		seen[item.ID] = true
+		switch {
+		case !numbered && item.Order != 0:
+			return TrialManifest{}, fmt.Errorf(
+				"%w: %s numbers item %s as %d and leaves the first item unnumbered; a "+
+					"manifest numbers every item or none",
+				ErrJudge, name, item.ID, item.Order)
+		case numbered && item.Order != i+1:
+			return TrialManifest{}, fmt.Errorf(
+				"%w: %s puts item %s at position %d of the file and calls it order %d. "+
+					"The execution order is the file's order; a second statement of it "+
+					"that disagrees is not a note, it is another experiment",
+				ErrJudge, name, item.ID, i+1, item.Order)
+		}
 	}
 	for stratum, share := range m.Weights {
 		if share < 0 {
@@ -796,13 +1141,25 @@ func ConfigDigest(name string) (string, error) {
 	return digest, nil
 }
 
+// TrialRequest is one question for the harness: one item, under one
+// condition's configuration and one condition's build.
+type TrialRequest struct {
+	TaskDir    string
+	Candidates []string
+	Config     string
+	// Binary is the condition's own harness, empty where the condition names
+	// none and the runner's default stands.
+	Binary    string
+	Seed      int
+	JudgeSeed int
+}
+
 // TrialRunner asks the harness one question. It is an interface so the
 // arithmetic above it is testable without a fleet.
 type TrialRunner interface {
-	// Judge runs one item under one configuration and answers with what the
-	// judge concluded, where the trace went, and the wall clock the call took.
-	Judge(ctx context.Context, taskDir string, candidates []string,
-		config string, seed, judgeSeed int) (Judged, time.Duration, error)
+	// Judge runs one item under one condition and answers with what the judge
+	// concluded, where the trace went, and the wall clock the call took.
+	Judge(ctx context.Context, req TrialRequest) (Judged, time.Duration, error)
 }
 
 // CMoATrialRunner runs the judge by asking the harness binary to do it.
@@ -812,18 +1169,22 @@ type CMoATrialRunner struct {
 }
 
 // Judge shells out to `cmoa judge` and reads the trace it left.
-func (r CMoATrialRunner) Judge(ctx context.Context, taskDir string, candidates []string,
-	config string, seed, judgeSeed int,
+func (r CMoATrialRunner) Judge(ctx context.Context, req TrialRequest,
 ) (Judged, time.Duration, error) {
+	taskDir, seed := req.TaskDir, req.Seed
+	binary := r.Binary
+	if req.Binary != "" {
+		binary = req.Binary
+	}
 	args := []string{"judge", "--task", taskDir}
-	for _, candidate := range candidates {
+	for _, candidate := range req.Candidates {
 		args = append(args, "--candidate", candidate)
 	}
-	args = append(args, "--config", config, "--seed", strconv.Itoa(seed))
-	if judgeSeed != 0 {
-		args = append(args, "--judge-seed", strconv.Itoa(judgeSeed))
+	args = append(args, "--config", req.Config, "--seed", strconv.Itoa(seed))
+	if req.JudgeSeed != 0 {
+		args = append(args, "--judge-seed", strconv.Itoa(req.JudgeSeed))
 	}
-	cmd := exec.CommandContext(ctx, r.Binary, args...) //nolint:gosec // the caller names the harness
+	cmd := exec.CommandContext(ctx, binary, args...) //nolint:gosec // the caller names the harness
 	var out, errOut strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
@@ -850,6 +1211,85 @@ func (r CMoATrialRunner) Judge(ctx context.Context, taskDir string, candidates [
 	return judged, elapsed, nil
 }
 
+// TrialSwitcher puts the fleet into one condition and says how long that took.
+//
+// It is an interface for the same reason the runner is one: a test must be
+// able to spend a condition switch without restarting anything. No test in
+// this repository runs a real restart.
+type TrialSwitcher interface {
+	Switch(ctx context.Context, hook TrialSwitch, dir string) error
+}
+
+// CommandSwitcher runs the card's command and waits for its ready URL.
+type CommandSwitcher struct {
+	// Client is the HTTP client the ready URL is polled with. Nil takes a
+	// client of this package's own.
+	Client *http.Client
+	Log    func(string)
+}
+
+// switchPollInterval is how often the ready URL is asked.
+const switchPollInterval = time.Second
+
+// Switch runs the command, then waits for the URL to answer.
+//
+// The command and the wait share one deadline, because what the card is
+// bounding is the time until the condition can be judged and not the time
+// until a script exits. A switch that fails is an error rather than a warning:
+// the alternative is measuring the candidate condition twice and calling one
+// of the columns `base`.
+func (s CommandSwitcher) Switch(ctx context.Context, hook TrialSwitch, dir string) error {
+	timeout := hook.TimeoutSeconds
+	if timeout <= 0 {
+		timeout = DefaultSwitchTimeoutSeconds
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", hook.Command) //nolint:gosec // the card names the command
+	cmd.Dir = dir
+	var errOut strings.Builder
+	cmd.Stderr = &errOut
+	cmd.Stdout = &errOut
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: switch command failed: %w: %s",
+			ErrJudge, err, firstLine(errOut.String()))
+	}
+	if hook.ReadyURL == "" {
+		return nil
+	}
+	client := s.Client
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+	for {
+		if ready(ctx, client, hook.ReadyURL) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w: %s did not answer within %d s of the switch; the "+
+				"condition is not loaded and a comparison against it would be a "+
+				"comparison against the condition before it",
+				ErrJudge, hook.ReadyURL, timeout)
+		case <-time.After(switchPollInterval):
+		}
+	}
+}
+
+func ready(ctx context.Context, client *http.Client, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
 // TrialStep is one item under one condition: the unit the plan is made of and
 // the unit a resume skips.
 type TrialStep struct {
@@ -874,8 +1314,17 @@ type TrialRecord struct {
 	Outcome   string `json:"outcome"`
 	Candidate string `json:"candidate,omitempty"`
 	Reason    string `json:"reason,omitempty"`
-	Category  string `json:"category,omitempty"`
-	Measured  bool   `json:"measured"`
+	// Consensus and TieBreakKey are the structured fields of judge.json:
+	// which agreement settled the run before the judge was asked, and which
+	// key parted the candidates the score could not. They are recorded here
+	// so the report counts them by field. `outcome.reason` is a sentence for
+	// a person, and a sentence that is grepped is a sentence that changes
+	// wording and silently changes a count — the 87-against-91 the 2026-09-06
+	// review had to resolve by hand.
+	Consensus   string `json:"consensus,omitempty"`
+	TieBreakKey string `json:"tie_break_key,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Measured    bool   `json:"measured"`
 	// The costs. WallSeconds is nil for a reused answer, and nil is the whole
 	// point: an old wall time is not this trial's wall time.
 	Calls          int      `json:"calls"`
@@ -900,6 +1349,10 @@ type TrialOptions struct {
 	Manifests []TrialManifest
 	Labels    []Label
 	Runner    TrialRunner
+	// Switcher enters a condition that costs something to enter. Nil takes a
+	// CommandSwitcher; it is never used at all unless a condition declares a
+	// switch hook.
+	Switcher TrialSwitcher
 	// Out is where the journal and the report go.
 	Out string
 	// Resume continues an interrupted run: every step already in the journal
@@ -933,24 +1386,24 @@ type TrialResult struct {
 // order for a change to the runtime, where running one condition to the end
 // and then the other would confound the change with the hour.
 func (o TrialOptions) Plan() []TrialStep {
-	var items []TrialStep
-	for _, manifest := range o.Manifests {
-		for _, item := range manifest.Items {
-			items = append(items, TrialStep{Item: item.ID, Set: manifest.Set})
-		}
-	}
+	return TrialPlan(o.Card, o.Manifests)
+}
+
+// TrialPlan is the plan of a card over its manifests, take applied.
+func TrialPlan(card TrialCard, manifests []TrialManifest) []TrialStep {
+	items := interleave(Taken(card, manifests))
 	var plan []TrialStep
 	with := func(step TrialStep, condition string) TrialStep {
 		step.Condition = condition
 		return step
 	}
-	if !o.Card.AlternatingBlocks {
+	if !card.AlternatingBlocks {
 		for _, item := range items {
 			plan = append(plan, with(item, ConditionCandidate), with(item, ConditionBase))
 		}
 		return plan
 	}
-	size := o.Card.BlockSize
+	size := card.BlockSize
 	for start, block := 0, 0; start < len(items); start, block = start+size, block+1 {
 		end := min(start+size, len(items))
 		first, second := ConditionCandidate, ConditionBase
@@ -964,6 +1417,65 @@ func (o TrialOptions) Plan() []TrialStep {
 		}
 	}
 	return plan
+}
+
+// interleave is the item order: D and R spread through each other, and any
+// other set after them in manifest order.
+//
+// R goes into D rather than after it because the clock is what decides where a
+// stage stops. A run that put its two known-failure items last would, on the
+// day it ran out of budget, drop exactly the items it was carrying them for —
+// and it would drop both. Spread evenly, a cut takes at most one. The
+// positions are fixed arithmetic over the two counts, not a choice made per
+// experiment: R item i of r follows D item round(i·d/(r+1)), which for the
+// stage A take of four and two is D1 R1 D2 D3 R2 D4.
+//
+// A plan with no R, or none of D, is the manifests' order, which is what it
+// has always been.
+func interleave(manifests []TrialManifest) []TrialStep {
+	var dev, fail, rest []TrialStep
+	for _, manifest := range manifests {
+		for _, item := range manifest.Items {
+			step := TrialStep{Item: item.ID, Set: manifest.Set}
+			switch manifest.Set {
+			case SetD:
+				dev = append(dev, step)
+			case SetR:
+				fail = append(fail, step)
+			default:
+				rest = append(rest, step)
+			}
+		}
+	}
+	if len(dev) == 0 || len(fail) == 0 {
+		return append(append(dev, fail...), rest...)
+	}
+	after := map[int][]TrialStep{}
+	d, r := len(dev), len(fail)
+	for i, step := range fail {
+		// round(i·d/(r+1)) in integers, i counting from one.
+		position := (2*(i+1)*d + (r + 1)) / (2 * (r + 1))
+		after[position] = append(after[position], step)
+	}
+	out := make([]TrialStep, 0, d+r+len(rest))
+	out = append(out, after[0]...)
+	for i, step := range dev {
+		out = append(out, step)
+		out = append(out, after[i+1]...)
+	}
+	// An R item the arithmetic put past the end of D still runs, in position
+	// order: a plan is not allowed to depend on a map's iteration.
+	var tail []int
+	for position := range after {
+		if position > d {
+			tail = append(tail, position)
+		}
+	}
+	sort.Ints(tail)
+	for _, position := range tail {
+		out = append(out, after[position]...)
+	}
+	return append(out, rest...)
 }
 
 // ReadTrialRecords reads a results journal back.
@@ -1017,6 +1529,10 @@ func Trial(ctx context.Context, opts TrialOptions) (TrialResult, error) {
 		completed[record.Key()] = true
 	}
 
+	if err := CheckPlan(opts.Card, opts.Manifests); err != nil {
+		return TrialResult{}, err
+	}
+
 	run := &trialRun{
 		opts: opts, now: now, log: log, journal: journal,
 		records: done, tasks: map[string]Task{}, corpus: map[string]ReuseKey{},
@@ -1037,6 +1553,13 @@ func Trial(ctx context.Context, opts TrialOptions) (TrialResult, error) {
 	run.loadSeconds = loaded.Sub(started).Seconds()
 
 	plan := opts.Plan()
+	// The order and the composition are written down before the first call.
+	// A set whose order is settled after the numbers are in is a set that was
+	// chosen for its answer, and the only way to tell the two apart later is
+	// for the plan to be on disk with a timestamp before the first trace.
+	if err := run.preregister(plan); err != nil {
+		return TrialResult{}, err
+	}
 	deadline := started.Add(time.Duration(opts.Card.BudgetSeconds) * time.Second)
 	for _, step := range plan {
 		if completed[step] {
@@ -1066,6 +1589,7 @@ func Trial(ctx context.Context, opts TrialOptions) (TrialResult, error) {
 	}
 	measured := now()
 	report := run.assemble(plan, started, measured)
+	report.Plan = run.planRecord(plan)
 	report.Phases.AggregateSeconds = now().Sub(measured).Seconds()
 	report.TEvalSeconds = now().Sub(started).Seconds()
 	return TrialResult{Report: report, Records: run.records}, nil
@@ -1100,10 +1624,109 @@ type trialRun struct {
 	// mismatch is why the first rejected reuse was rejected, for the report.
 	mismatch []string
 
+	// current is the condition the fleet is in, as far as this run knows. It
+	// is empty at the start: whatever the last experiment left is not a
+	// condition this card named.
+	current  string
+	switches []TrialSwitchRecord
+
 	loadSeconds    float64
 	measureSeconds float64
+	switchSeconds  float64
 	skipped        int
 	overBudget     bool
+}
+
+// preregister writes the plan into the report file before anything is spent.
+func (r *trialRun) preregister(plan []TrialStep) error {
+	report := TrialReport{
+		SchemaVersion: TrialSchemaVersion,
+		Recorded:      RecordedPlan,
+		Card:          r.redactedCard(),
+		At:            r.now().UTC().Format(time.RFC3339),
+		Plan:          r.planRecord(plan),
+		Notes: []string{"This is the plan, written before the first call. The order of the " +
+			"items and the composition of the prefix are fixed here; the result " +
+			"overwrites this file with `recorded: result` when the run ends."},
+		Conditions:        map[string]TrialConditionStats{},
+		ChangedSelections: []TrialChange{},
+		Items:             []TrialItem{},
+	}
+	body, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrJudge, err)
+	}
+	return writeFile(filepath.Join(r.opts.Out, TrialReportFile), append(body, '\n'))
+}
+
+// hook is the switch that enters a condition, or nil where entering it is free.
+func (r *trialRun) hook(condition string) *TrialSwitch {
+	if condition == ConditionBase {
+		return r.opts.Card.Base.Switch
+	}
+	return r.opts.Card.Candidate.Switch
+}
+
+// binary is the harness build a condition runs, empty where it names none.
+//
+// A value with a path separator is the card's own directory's; a bare name is
+// left alone for the PATH to answer, which is what keeps a committed card free
+// of somebody's home directory.
+func (r *trialRun) binary(condition string) string {
+	name := r.opts.Card.Candidate.CMoA
+	if condition == ConditionBase {
+		name = r.opts.Card.Base.CMoA
+	}
+	if name == "" || !strings.ContainsRune(name, '/') {
+		return name
+	}
+	return r.opts.Card.Path(name)
+}
+
+// enter puts the fleet into a condition, and charges the trial for it.
+//
+// The cost is inside T_eval and not beside it. §4.1 counts load, wait, measure
+// and aggregate; a comparison whose inference fits ten minutes only because
+// the two restarts around it were not counted has not shown that the change
+// can be judged in ten minutes. What is outside is the first-time preparation
+// — a model downloaded, a runtime compiled, a second binary built — which is a
+// preparation cost that gets its own line rather than a share of this one.
+func (r *trialRun) enter(ctx context.Context, condition string) error {
+	if r.current == condition {
+		return nil
+	}
+	hook := r.hook(condition)
+	if hook == nil {
+		r.current = condition
+		return nil
+	}
+	switcher := r.opts.Switcher
+	if switcher == nil {
+		switcher = CommandSwitcher{Log: r.log}
+	}
+	started := r.now()
+	err := switcher.Switch(ctx, *hook, r.opts.Card.Dir)
+	elapsed := r.now().Sub(started).Seconds()
+	r.switchSeconds += elapsed
+	r.switches = append(r.switches, TrialSwitchRecord{
+		Condition: condition, ConditionID: r.conditionID(condition),
+		Seconds: round3(elapsed), At: started.UTC().Format(time.RFC3339),
+		Error: scrubbedError(err, r.opts.Vault, r.opts.Suite.Dir, r.opts.Card.Dir),
+	})
+	if err != nil {
+		return err
+	}
+	r.current = condition
+	r.log(fmt.Sprintf("switched to %s (%.1fs)", condition, elapsed))
+	return nil
+}
+
+// scrubbedError is an error as a report may carry it, or the empty string.
+func scrubbedError(err error, bases ...string) string {
+	if err == nil {
+		return ""
+	}
+	return scrub(err.Error(), bases...)
 }
 
 func (r *trialRun) openJournal() error {
@@ -1234,9 +1857,17 @@ func (r *trialRun) step(ctx context.Context, step TrialStep, deadline time.Time)
 	if r.now().After(deadline) {
 		return errBudget
 	}
-	judged, elapsed, err := r.opts.Runner.Judge(ctx, r.opts.Suite.TaskDir(task),
-		r.opts.Suite.Candidates(task), r.config(step.Condition),
-		r.opts.Card.Seed, r.opts.Card.JudgeSeed)
+	// The switch is inside the box as well as inside T_eval: a restart that
+	// runs past the deadline stops the next step rather than this one, which
+	// is the same rule the calls run under.
+	if err := r.enter(ctx, step.Condition); err != nil {
+		return err
+	}
+	judged, elapsed, err := r.opts.Runner.Judge(ctx, TrialRequest{
+		TaskDir: r.opts.Suite.TaskDir(task), Candidates: r.opts.Suite.Candidates(task),
+		Config: r.config(step.Condition), Binary: r.binary(step.Condition),
+		Seed: r.opts.Card.Seed, JudgeSeed: r.opts.Card.JudgeSeed,
+	})
 	r.measureSeconds += elapsed.Seconds()
 	if err != nil {
 		return err
@@ -1262,6 +1893,7 @@ func (r *trialRun) step(ctx context.Context, step TrialStep, deadline time.Time)
 		ReuseKey: key.Digest(),
 		RunDir:   RecordPath(judged.RunDir, r.opts.Vault, r.opts.Suite.Dir),
 		Outcome:  judged.Outcome, Candidate: judged.Candidate, Reason: judged.Reason,
+		Consensus: judged.Consensus, TieBreakKey: judged.TieBreak,
 		Category: answerCategory(judged), Measured: judged.Measured(),
 		Calls: callsOf(judged), InvalidRetries: judged.InvalidRetries,
 		SwapConsistent: judged.SwapConsistent, LatencyMS: judged.LatencyMS,
@@ -1281,6 +1913,11 @@ func (r *trialRun) step(ctx context.Context, step TrialStep, deadline time.Time)
 // prompt_version and are all rejected. That is the safe direction: the trial
 // measures the base rather than reusing a run made under a different prompt.
 func (r *trialRun) resolve(produced ReuseKey) {
+	if r.opts.Card.Base.CMoA != r.opts.Card.Candidate.CMoA {
+		r.log("the two conditions name two harness builds, so the candidate's run " +
+			"cannot say what the base's `cmoa_version` would be; the base will be measured")
+		return
+	}
 	r.expected.PromptVersion = produced.PromptVersion
 	r.expected.CMoAVersion = produced.CMoAVersion
 	r.expected.SelectionRule = produced.SelectionRule
@@ -1339,6 +1976,7 @@ func (r *trialRun) reuseStep(step TrialStep, dir string, key ReuseKey) error {
 		ConditionID: r.conditionID(step.Condition), Source: SourceReused,
 		ReuseKey: key.Digest(), RunDir: RecordPath(dir, r.opts.Vault, r.opts.Suite.Dir),
 		Outcome: judged.Outcome, Candidate: judged.Candidate, Reason: judged.Reason,
+		Consensus: judged.Consensus, TieBreakKey: judged.TieBreak,
 		Category: answerCategory(judged), Measured: judged.Measured(),
 		Calls: callsOf(judged), InvalidRetries: judged.InvalidRetries,
 		SwapConsistent: judged.SwapConsistent, LatencyMS: judged.LatencyMS,

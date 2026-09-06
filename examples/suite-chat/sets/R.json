@@ -4,6 +4,7 @@
   "items": [
     {
       "id": "mtb-136-t1-h",
+      "order": 1,
       "strata": {
         "category": "extraction",
         "length_bin": "short",
@@ -13,6 +14,7 @@
     },
     {
       "id": "mtb-105-t1-e",
+      "order": 2,
       "strata": {
         "category": "reasoning",
         "length_bin": "short",
@@ -22,6 +24,7 @@
     },
     {
       "id": "mtb-099-t2-g",
+      "order": 3,
       "strata": {
         "category": "roleplay",
         "length_bin": "medium",
@@ -31,6 +34,7 @@
     },
     {
       "id": "mtb-083-t2-a",
+      "order": 4,
       "strata": {
         "category": "writing",
         "length_bin": "medium",
@@ -40,6 +44,7 @@
     },
     {
       "id": "mtb-097-t1-p",
+      "order": 5,
       "strata": {
         "category": "roleplay",
         "length_bin": "long",
@@ -49,6 +54,7 @@
     },
     {
       "id": "mtb-083-t1-f",
+      "order": 6,
       "strata": {
         "category": "writing",
         "length_bin": "medium",

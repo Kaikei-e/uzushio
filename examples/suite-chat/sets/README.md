@@ -44,11 +44,85 @@ Stratified by **category** (the corpus's own eight), **length_bin** and
   a card may list both. `judge trial` refuses a card whose manifests name one
   item twice.
 
+### The execution order
+
+The sample decides **which** 40 items. It does not decide the order they run
+in, and the order is what a stage actually uses: a stage runs a **prefix**, so
+a set ordered by id is a set whose first eight items are whatever the ids
+happened to be — for this sample, five writing items and three roleplay ones,
+with `stem` and `humanities` unseen at 24. A prefix like that is not a
+representative set, and no weighting recovers a category nobody ran.
+
+So the file order is the execution order, it is fixed here before any result,
+and it is this recipe:
+
+1. **Categories in corpus-share order**: `stem, math, humanities, roleplay,
+   writing, extraction, reasoning, coding` (0.180, 0.150, 0.130, 0.125, 0.115,
+   0.110, 0.095, 0.095; `reasoning` before `coding` at the tie).
+2. **Round-robin**: one item per category per round, skipping a category that
+   has run out. Seven rounds empty the set.
+3. **Length bins inside a category**: `short → medium → long`, rotating, and
+   the rotation **continues across rounds**. Category *k* (0-based in the order
+   above) starts its rotation at bin *k* mod 3 — `stem` at short, `math` at
+   medium, `humanities` at long, and so on — so the first round already holds
+   all three lengths instead of eight short items. A bin that is empty is
+   skipped and the rotation moves on; ties inside a bin go by id.
+
+Every item also carries `order`, its 1-based position, which is the same
+statement twice on purpose: `judge trial` refuses a manifest whose numbering
+disagrees with its file order, so a reordering has to be deliberate rather than
+a diff nobody read.
+
+**What the prefixes are made of** (D alone, before R is interleaved):
+
+| first | categories | short / medium / long |
+|---:|---|---|
+| 4 | stem, math, humanities, roleplay — 1 each | 1 / 2 / 1 |
+| 6 | + writing, extraction — 1 each | 1 / 3 / 2 |
+| 8 | all eight — 1 each | 2 / 4 / 2 |
+| 12 | stem, math, humanities, roleplay 2; the other four 1 | 3 / 6 / 3 |
+| 24 | all eight — 3 each | 8 / 9 / 7 |
+| 40 | stem 7, math 6, humanities 5, roleplay 5, writing 5, extraction 4, reasoning 4, coding 4 | 14 / 13 / 13 |
+
+Categories are balanced from the first four; the lengths are balanced from the
+first four as well, which is what the phase offset in step 3 buys. Nothing
+about the composition is chosen after a result, and a set that has to change
+gets a new file.
+
+### Where R goes
+
+A card that names D and R runs them **interleaved**, not one after the other.
+The reason is the clock: a run that put its two known-failure items last would,
+on the day the budget stopped it, drop exactly the items it was carrying them
+for — and drop both. R item *i* of *r* follows D item round(*i·d*/(*r*+1)), so
+the stage A take of four and two runs
+
+```
+D1  R1  D2  D3  R2  D4
+```
+
+— `mtb-142-t1-j` (stem, medium), `mtb-136-t1-h` (R, extraction, short),
+`mtb-120-t2-a` (math, medium), `mtb-152-t1-g` (humanities, long),
+`mtb-105-t1-e` (R, reasoning, short), `mtb-095-t1-j` (roleplay, short): six
+categories, and short 3 / medium 2 / long 1. A cut at four or five items still
+leaves one R item and four categories. The order is written into `trial.json`
+**before the first call**, with the composition counted, so a prefix cannot be
+chosen after the fact.
+
 **29 of the 40 carry a human label naming a position** (`c1`/`c2`/`c3`); the
 other 11 are `tie` or `all_bad` in the corpus's own aggregation. Under the
 trial's quality handling — `human-position-only, failure-as-zero` — only those
 29 enter ΔQ, and the rest are counted as `no_reference_items`. A stage A card
 drawing 4 items from D should expect roughly three of them to be evaluable.
+
+That is below the floor. `judge trial` prints **no quality difference** under
+`min_evaluable_items` (default 8) and reports 未評価 instead: on three items a
+single label is 33 points of ΔQ, which is larger than every threshold a card
+can name, and a number one label can swing is not a measurement of the change.
+A stage A run of these sets measures **behaviour and time**; the items that
+changed selection are still listed by name, and the stage A two-item heuristic
+still reads them, because ordering work by which items moved is what that rule
+is for.
 
 ## R — the known-failure set (6 items)
 
@@ -104,6 +178,26 @@ and with the allowance above:
 | A | 600 s | **8 items** | **4 items** |
 | B | 1800 s cumulative | **~25 items** | **~12 items** |
 
+A **condition switch** comes out of the same budget. Where a condition is not a
+configuration key — a reasoning budget in a compose file — entering it is a
+rewrite, a restart and a ready wait, and §4.1 puts that inside `T_eval`: an
+experiment whose inference fits ten minutes only because the two restarts
+around it were not counted has not fitted ten minutes. A card declares
+`planning.switch_seconds_estimate` and the runner subtracts *switches × that*
+from the budget before deciding what the take affords. The model load alone
+measured **19.9 s**; the stop and the readiness polling on top of it are not
+measured yet, so an estimate built from 19.9 alone is optimistic and says so.
+First-time preparation — a download, a compile, a second binary — is **not** in
+`T_eval` and is not in that number.
+
+The committed stage A cards take D4 + R2, which is **six** items with both
+conditions measured: about 606 s against a 600 s box. The answer is not a
+bigger box. They set `planning.accept_cut`, the runner runs the fixed order,
+the budget stops new work, and the report says `interrupted_items`,
+`out_of_budget` / 時間・資源切れ and `inconclusive`. **Expect 4–5 of the 6 to
+finish** at today's speeds — and because R is interleaved rather than appended,
+a cut there still leaves a known-failure item in the comparison.
+
 **40 items do not fit thirty minutes.** At the slow-item allowance they are
 about 45 minutes with the base reused and about 90 with both conditions
 measured. The 40-item cap in ADR 0010 D8 is a ceiling on the set, not a
@@ -116,7 +210,7 @@ is only available when the reuse key matches — same harness build, same
 selection rule, same judge settings, same seeds. A run that changes any of
 those pays the right-hand column.
 
-## Reproducing the sample
+## Reproducing the sample and the order
 
 The generator was a throwaway Python script over a derived `strata.json`; this
 repository is a Go module with one generator, `internal/fixture/gen`, wired
@@ -127,6 +221,11 @@ shares as the quotas, largest-remainder allocation over 40 and again over the
 length bins inside each category, bins cut at 2,454 and 5,224 characters, pools
 sorted by id and shuffled with `random.Random(20260906)`, R excluded from D's
 pool. Every item also carries its own derivation in `reason`.
+
+The **order** is reproducible without any of that, from the file alone: the
+recipe above is deterministic over the 40 items and their strata, and the
+`order` field is checked against the file's own order every time a manifest
+loads.
 
 These sets are fixed. Adding or dropping items after seeing a candidate's
 results is how a set stops measuring anything, so a set that has to change gets

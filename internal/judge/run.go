@@ -57,6 +57,13 @@ type Judged struct {
 	Reason    string `json:"reason,omitempty"`
 	// Pairs is the six calls, as three pairs of two orders.
 	Pairs []Pair `json:"pairs"`
+	// Consensus is how the candidates agreed with each other where they
+	// did — `exact` or `numeric` — and empty where the judge was asked.
+	// TieBreak is the key that parted the candidates the score could not,
+	// and is empty where nothing was tied. Both are CMoA's words, and both
+	// are absent from a trace written before the harness had the stages.
+	Consensus string `json:"consensus,omitempty"`
+	TieBreak  string `json:"tie_break,omitempty"`
 	// SwapConsistent, InvalidRetries and LatencyMS are the judge's own
 	// summary of the run.
 	SwapConsistent int   `json:"swap_consistent_pairs"`
@@ -152,6 +159,12 @@ type judgeFile struct {
 		CandidateID string `json:"candidate_id"`
 		Reason      string `json:"reason"`
 	} `json:"outcome"`
+	Consensus *struct {
+		Agreement string `json:"agreement"`
+	} `json:"consensus"`
+	TieBreak *struct {
+		Key string `json:"key"`
+	} `json:"tie_break"`
 	SwapConsistent int   `json:"swap_consistent_pairs"`
 	InvalidRetries int   `json:"invalid_output_retries"`
 	LatencyMS      int64 `json:"latency_ms"`
@@ -251,6 +264,12 @@ func ReadJudged(dir string) (Judged, error) {
 		SwapConsistent: file.SwapConsistent,
 		InvalidRetries: file.InvalidRetries,
 		LatencyMS:      file.LatencyMS,
+	}
+	if file.Consensus != nil {
+		judged.Consensus = file.Consensus.Agreement
+	}
+	if file.TieBreak != nil {
+		judged.TieBreak = file.TieBreak.Key
 	}
 	for _, pair := range file.Pairs {
 		if len(pair.Pair) != 2 {

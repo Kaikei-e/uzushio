@@ -43,7 +43,13 @@ func newJudgeTrialCmd() *cobra.Command {
 			"seeds and the selection rule. A reused base contributes no wall time, so a\n" +
 			"trial that read its base off disk reports no speed ratio rather than comparing\n" +
 			"today against another day. And the report suggests a decision without making\n" +
-			"one: `decision` is a person's, and nothing here is a statistical confirmation.",
+			"one: `decision` is a person's, and nothing here is a statistical confirmation.\n\n" +
+			"The stage runs a prefix of each set — `take` — and the order it runs them in is\n" +
+			"the manifests' own, written into trial.json before the first call. The item cap\n" +
+			"is over D and R together, the card's own cost estimate is checked against the\n" +
+			"budget before anything is spent, and a condition that costs something to enter\n" +
+			"(a compose rewrite, a judge restart) declares a `switch` hook whose seconds are\n" +
+			"reported as their own phase inside T_eval. First-time preparation is not.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireFlags(cmd, "card"); err != nil {
@@ -71,6 +77,13 @@ func newJudgeTrialCmd() *cobra.Command {
 			if err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
+			// The take is applied before anything else looks at the items: a
+			// stage that runs four of D has no business refusing because the
+			// thirty-ninth item's answers are not on disk.
+			manifests = judge.Taken(card, manifests)
+			if err := judge.CheckPlan(card, manifests); err != nil {
+				return &exitError{code: exitUsage, err: err}
+			}
 			if err := haveItems(suite, manifests); err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
@@ -78,8 +91,10 @@ func newJudgeTrialCmd() *cobra.Command {
 			if err != nil {
 				return &exitError{code: exitUsage, err: err}
 			}
-			if err := hasJudgeCommand(cmd.Context(), cmoa); err != nil {
-				return &exitError{code: exitUsage, err: err}
+			for _, binary := range binaries(card, cmoa) {
+				if err := hasJudgeCommand(cmd.Context(), binary); err != nil {
+					return &exitError{code: exitUsage, err: err}
+				}
 			}
 			if out == "" {
 				out = filepath.Join(filepath.Dir(cardPath), "trial-"+card.ID)
@@ -95,9 +110,19 @@ func newJudgeTrialCmd() *cobra.Command {
 				Log: func(line string) { fmt.Fprintln(errOut, line) },
 			}
 			plan := opts.Plan()
+			estimate := judge.Estimate(card, manifests)
 			fmt.Fprintf(errOut, "card %s, stage %s: %d step(s) over %d item(s), "+
 				"budget %d s, reuse %s\n",
 				card.ID, card.Stage, len(plan), items(manifests), card.BudgetSeconds, card.Reuse.Kind)
+			if estimate.Switches > 0 {
+				fmt.Fprintf(errOut, "%d condition switch(es), counted inside T_eval; "+
+					"first-time preparation is not\n", estimate.Switches)
+			}
+			if estimate.ItemSeconds > 0 {
+				fmt.Fprintf(errOut, "見積り / estimate: %.0f s of a %d s budget "+
+					"(cap %d item(s), budget affords %d)\n",
+					estimate.Seconds, card.BudgetSeconds, estimate.Cap, estimate.Affordable)
+			}
 			if dryRun {
 				fmt.Fprintf(errOut, "dry run: nothing spent (would write %s)\n", out)
 				return nil
@@ -162,6 +187,26 @@ func checkConfigs(card judge.TrialCard) error {
 		}
 	}
 	return nil
+}
+
+// binaries is every harness this card runs: the command's own, and whatever a
+// condition names instead. A card that names a second build has the second
+// build checked before anything is spent, for the same reason as the first.
+func binaries(card judge.TrialCard, fallback string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, name := range []string{card.Base.CMoA, card.Candidate.CMoA} {
+		if name == "" {
+			name = fallback
+		} else if strings.ContainsRune(name, '/') {
+			name = card.Path(name)
+		}
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func loadManifests(card judge.TrialCard) ([]judge.TrialManifest, error) {
