@@ -384,6 +384,42 @@ read — two raters biased in *opposite* directions score higher than two
 well-calibrated ones, and high observed agreement collapses to a low kappa
 wherever one answer dominates.
 
+### Which way the bias runs, and what it costs
+
+`swap_kappa` says the judge changed its mind when the candidates changed
+places. It cannot say *which way*, and a judge that flips symmetrically and one
+that names whichever answer came first every time have the same flip rate. So
+`swap.position` counts the single calls rather than the pairs:
+
+- `p_first`, the share of **decided calls** — status `ok`, and one of the two
+  answers named — that named the answer shown first. Half is a judge with no
+  position preference; `bias` is the distance from it. The interval is the
+  leave-one-item-out jackknife, because six calls of one item move together.
+- `swap.disagree_breakdown`, over the **pairs** the harness recorded as
+  `draw_reason: disagree`: `both_first` is the two orders both answering `A`,
+  which is the judge reading the fence rather than the answers.
+
+`abstention_by_gold` is what that costs. It is the judge's outcome against
+whether the people decided the item, pooled and per seed, and the number it
+exists for is `abstained_on_gold_decided`: **runs** that reached no candidate
+on an item the humans had no trouble with. Those items are not missing data —
+they are in the validity table as disagreements.
+
+### Rebuilding a report without re-running the judge
+
+```sh
+uzushio judge calibrate --replay calibrations/<judge>@<day> --vault .
+```
+
+The arithmetic over a calibration's traces is cheap and changes often; the
+traces are a couple of hours of a fleet. `--replay` recomputes `report.json`
+and `items.jsonl` from the run directories the journal names — nothing is
+judged, and the vault document is not touched, because a calibration document
+is the claim somebody made on a day and is append-only history. It exits 2
+when a recorded run directory is not on disk, and when what it recomputes
+differs from what the report already carries at the precision the document
+publishes: the document names the report and has to keep matching it.
+
 ### Which human labels
 
 `human_kappa` is the judge against people, and there are two places people

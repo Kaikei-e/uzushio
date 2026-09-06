@@ -69,7 +69,7 @@ func newTaskDoctorCmd() *cobra.Command {
 				// The refused flags are the ones that say how to run something.
 				// A replay runs nothing, and a command that accepted --parallel
 				// and then ignored it would be lying about what it did.
-				if err := refuseWithReplay(cmd,
+				if err := refuseWithReplay(cmd, "recomputes a report and verifies nothing",
 					"parallel", "timeout", "out", "only", "reuse-reference"); err != nil {
 					return &exitError{code: exitUsage, err: err}
 				}
@@ -190,12 +190,14 @@ func newTaskDoctorCmd() *cobra.Command {
 // They are refused rather than ignored. Each of them says how to run
 // something, a replay runs nothing, and the failure mode of accepting them is
 // somebody believing a report was re-measured under a timeout it never had.
-func refuseWithReplay(cmd *cobra.Command, names ...string) error {
+//
+// does is what this command's replay does and does not do, so the message
+// names the command's own job rather than a generic one.
+func refuseWithReplay(cmd *cobra.Command, does string, names ...string) error {
 	for _, name := range names {
 		if cmd.Flags().Changed(name) {
-			return fmt.Errorf(
-				"--replay recomputes a report and verifies nothing, so --%s has nothing to do; "+
-					"drop one of the two", name)
+			return fmt.Errorf("--replay %s, so --%s has nothing to do; drop one of the two",
+				does, name)
 		}
 	}
 	return nil

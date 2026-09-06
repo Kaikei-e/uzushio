@@ -57,21 +57,29 @@ func (f fakeRunner) Judge(_ context.Context, _ judge.Suite, task judge.Task, see
 			if i < len(s.orders) {
 				chose = s.orders[i][order]
 			}
-			status := "ok"
-			if chose == "" {
-				status = "invalid_output"
+			// The call's own answer is `A` or `B` — the slot, not the name —
+			// and which candidate that was is only in First and Second.
+			status, choice := judge.CallOK, judge.CallChoseSecond
+			switch chose {
+			case "":
+				status, choice = "invalid_output", ""
+			case members[order]:
+				choice = judge.CallChoseFirst
 			}
 			pair.Orders = append(pair.Orders, judge.Order{
-				First: members[order], Second: members[1-order],
+				First: members[order], Second: members[1-order], Choice: choice,
 				ChoiceCandidate: chose, Status: status, LatencyMS: 300,
 			})
 		}
-		if pair.Orders[0].ChoiceCandidate == pair.Orders[1].ChoiceCandidate &&
-			pair.Orders[0].ChoiceCandidate != "" {
+		switch {
+		case pair.Orders[0].ChoiceCandidate == pair.Orders[1].ChoiceCandidate &&
+			pair.Orders[0].ChoiceCandidate != "":
 			pair.Verdict = pair.Orders[0].ChoiceCandidate
 			out.SwapConsistent++
-		} else {
-			pair.Verdict = "draw"
+		case pair.Orders[0].Decided() && pair.Orders[1].Decided():
+			pair.Verdict, pair.DrawReason = "draw", judge.DrawDisagree
+		default:
+			pair.Verdict, pair.DrawReason = "draw", "invalid"
 		}
 		out.Pairs = append(out.Pairs, pair)
 	}
@@ -240,6 +248,28 @@ func TestPositionBiasIsVisible(t *testing.T) {
 	}
 	if report.Outcomes.NoCandidateByReason["all_draws"] != 4 {
 		t.Fatalf("no-candidate reasons = %+v", report.Outcomes.NoCandidateByReason)
+	}
+	// The flip rate says the judge changed its mind; it cannot say which way.
+	// These flips are all one way — every call named whichever answer it was
+	// shown first — and that is a different finding from a judge flipping
+	// symmetrically, which would have the same flip rate.
+	position := report.Swap.Position
+	if position.DecidedCalls != 24 || position.FirstChosen != 24 {
+		t.Fatalf("position = %+v, want all 24 decided calls naming the first answer", position)
+	}
+	if position.PFirst.Float() != 1 || position.Bias.Float() != 0.5 {
+		t.Fatalf("p_first %v, bias %v; want 1 and 0.5", position.PFirst, position.Bias)
+	}
+	if position.CIMethod != stats.MethodClusterJackknife || position.Clusters != 4 {
+		t.Fatalf("the position interval is a %s over %d cluster(s); the calls share items",
+			position.CIMethod, position.Clusters)
+	}
+	if d := report.Swap.DisagreeBreakdown; d.Pairs != 12 || d.BothFirst != 12 ||
+		d.BothSecond != 0 || d.Other != 0 {
+		t.Fatalf("disagreements = %+v, want all twelve chosen first", d)
+	}
+	if !strings.Contains(report.Summary(), "### Position bias") {
+		t.Fatalf("the document body has no position section:\n%s", report.Summary())
 	}
 	// Every answer is an abstention and every gold is a choice, so the two
 	// raters have disjoint marginals and observed agreement is zero.
@@ -886,5 +916,206 @@ func TestSummarySaysWhatASecondSeedMoves(t *testing.T) {
 			t.Fatalf("the summary still claims the seed reorders the candidates (%q):\n%s",
 				wrong, summary)
 		}
+	}
+}
+
+// TestAbstentionIsCountedAgainstWhatThePeopleDecided is the coverage half of
+// the position numbers. An abstention rate on its own says nothing about what
+// was lost: abstaining on the items the people could not decide either is
+// agreement, and abstaining on the ones they decided cleanly is an item the
+// judge's own indecision cost the suite.
+func TestAbstentionIsCountedAgainstWhatThePeopleDecided(t *testing.T) {
+	gold := map[string]string{
+		"decided-agreed": "c1", "decided-lost": "c2", "tie-abstained": "tie", "tie-chosen": "tie",
+	}
+	answers := map[string][]script{
+		"decided-agreed": {agrees("c1")},
+		"decided-lost":   {flips()},
+		"tie-abstained":  {flips()},
+		"tie-chosen":     {agrees("c3")},
+	}
+	report := calibrate(t, suite(t, gold), fakeRunner{answers: answers},
+		judge.Options{Reruns: 0}).Report
+
+	pooled := report.AbstentionByGold.Pooled
+	if pooled.Runs != 4 || pooled.Ungolded != 0 {
+		t.Fatalf("the table counts %d run(s) and leaves %d out", pooled.Runs, pooled.Ungolded)
+	}
+	if pooled.GoldDecided != 2 || pooled.GoldTie != 2 {
+		t.Fatalf("columns = %d decided, %d tie; want two each", pooled.GoldDecided, pooled.GoldTie)
+	}
+	// The one number the table exists for: an item the people had no trouble
+	// with, on which the judge reached no candidate.
+	if pooled.AbstainedOnDecided != 1 {
+		t.Fatalf("abstained on a decided item %d time(s), want 1", pooled.AbstainedOnDecided)
+	}
+	want := map[string][2]int{
+		judge.CoverageAgrees:  {1, 0},
+		judge.CoverageDiffers: {0, 1},
+		"all_draws":           {1, 1},
+	}
+	got := map[string][2]int{}
+	for _, row := range pooled.Rows {
+		got[row.Outcome] = [2]int{row.GoldDecided, row.GoldTie}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("the table holds rows %v, want %v", got, want)
+	}
+	for outcome, cells := range want {
+		if got[outcome] != cells {
+			t.Fatalf("row %s = %v, want %v", outcome, got[outcome], cells)
+		}
+	}
+	// One seed was run, so its table is the pooled one — but it is reported
+	// separately, because an abstention rate that moves between two seeds of
+	// one suite is a finding pooling would hide.
+	if len(report.AbstentionByGold.BySeed) != 1 ||
+		report.AbstentionByGold.BySeed[0].Seed != judge.DefaultSeed ||
+		report.AbstentionByGold.BySeed[0].Runs != 4 {
+		t.Fatalf("per-seed tables = %+v", report.AbstentionByGold.BySeed)
+	}
+	if !strings.Contains(report.Summary(), "1 of the 2 run(s) on an item the people had decided reached no candidate") {
+		t.Fatalf("the document body does not read the table:\n%s", report.Summary())
+	}
+}
+
+// tracingRunner is the fake runner with its traces on disk: it writes the
+// judge.json each answer would have left behind, which is what a replay reads.
+type tracingRunner struct {
+	fakeRunner
+	dir string
+}
+
+func (r tracingRunner) Judge(ctx context.Context, s judge.Suite, task judge.Task, seed int) (judge.Judged, error) {
+	judged, err := r.fakeRunner.Judge(ctx, s, task, seed)
+	if err != nil {
+		return judge.Judged{}, err
+	}
+	dir := filepath.Join(r.dir, fmt.Sprintf("%s-%d", task.ID, seed))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return judge.Judged{}, err
+	}
+	pairs := make([]map[string]any, 0, len(judged.Pairs))
+	for _, pair := range judged.Pairs {
+		pairs = append(pairs, map[string]any{
+			"pair":        []string{pair.Members[0], pair.Members[1]},
+			"orders":      pair.Orders,
+			"verdict":     pair.Verdict,
+			"draw_reason": pair.DrawReason,
+		})
+	}
+	body, err := json.Marshal(map[string]any{
+		"schema_version": 1,
+		"run_id":         filepath.Base(dir),
+		"candidates":     judge.Positions,
+		"pairs":          pairs,
+		"outcome": map[string]string{
+			"kind": judged.Outcome, "candidate_id": judged.Candidate, "reason": judged.Reason,
+		},
+		"swap_consistent_pairs":  judged.SwapConsistent,
+		"invalid_output_retries": judged.InvalidRetries,
+		"latency_ms":             judged.LatencyMS,
+	})
+	if err != nil {
+		return judge.Judged{}, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, judge.JudgeFile), body, 0o644); err != nil {
+		return judge.Judged{}, err
+	}
+	judged.RunDir = dir
+	return judged, nil
+}
+
+// replayed runs a small calibration whose traces are on disk and writes its
+// report, answering with the vault, the report directory and what was
+// measured.
+func replayed(t *testing.T) (vault, dir string, result judge.Result) {
+	t.Helper()
+	vault = t.TempDir()
+	gold := map[string]string{"i1": "c1", "i2": "c2", "i3": "c3", "i4": "tie"}
+	answers := map[string][]script{
+		"i1": {agrees("c1")}, "i2": {agrees("c2")},
+		"i3": {flips()}, "i4": {agrees("c3")},
+	}
+	runner := tracingRunner{
+		fakeRunner: fakeRunner{answers: answers},
+		dir:        filepath.Join(vault, "runs"),
+	}
+	result = calibrate(t, suite(t, gold), runner, judge.Options{Reruns: 1, Vault: vault})
+	dir = filepath.Join(vault, "calibrations", "test-judge@2026-09-06")
+	if err := result.Write(dir); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	return vault, dir, result
+}
+
+func asJSON(t *testing.T, value any) string {
+	t.Helper()
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return string(body)
+}
+
+// TestReplayRebuildsAReportFromItsTraces: the arithmetic over a calibration's
+// traces is cheap and changes often; the traces cost a fleet a couple of
+// hours. A replay is how a report written before a field existed gains it.
+func TestReplayRebuildsAReportFromItsTraces(t *testing.T) {
+	vault, dir, result := replayed(t)
+
+	again, err := judge.Replay(judge.ReplayOptions{Dir: dir, Vault: vault})
+	if err != nil {
+		t.Fatalf("Replay: %v", err)
+	}
+	if got, want := asJSON(t, again.Report), asJSON(t, result.Report); got != want {
+		t.Fatalf("the replayed report is not the one the run wrote:\n%s\n%s", got, want)
+	}
+	if got, want := asJSON(t, again.Items), asJSON(t, result.Items); got != want {
+		t.Fatalf("the replayed journal is not the one the run wrote:\n%s\n%s", got, want)
+	}
+}
+
+// TestReplayRefusesAMissingTrace: an item quietly dropped would move every
+// rate in a report that still called itself a measurement of the whole suite.
+func TestReplayRefusesAMissingTrace(t *testing.T) {
+	vault, dir, result := replayed(t)
+	gone := filepath.Join(vault, filepath.FromSlash(result.Items[0].Runs[0].RunDir))
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	_, err := judge.Replay(judge.ReplayOptions{Dir: dir, Vault: vault})
+	if err == nil {
+		t.Fatal("a replay of a calibration whose traces are half there rebuilt it anyway")
+	}
+	if !strings.Contains(err.Error(), result.Items[0].Item) ||
+		!strings.Contains(err.Error(), judge.JudgeFile) {
+		t.Fatalf("the refusal does not say which trace is missing: %v", err)
+	}
+}
+
+// TestReplayRefusesToChangeWhatTheDocumentSays: the vault document names its
+// report and is append-only history, so a report rewritten under one cannot
+// carry different coefficients from the ones the document quotes.
+func TestReplayRefusesToChangeWhatTheDocumentSays(t *testing.T) {
+	vault, dir, _ := replayed(t)
+	name := filepath.Join(dir, judge.ReportFile)
+	body, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var report map[string]any
+	if err := json.Unmarshal(body, &report); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	report["verdict"] = string(vocab.CalibratedYes)
+	write(t, name, report)
+
+	_, err = judge.Replay(judge.ReplayOptions{Dir: dir, Vault: vault})
+	if err == nil {
+		t.Fatal("a replay rewrote a report whose document says something else")
+	}
+	if !strings.Contains(err.Error(), "verdict was calibrated") {
+		t.Fatalf("the refusal does not name the difference: %v", err)
 	}
 }

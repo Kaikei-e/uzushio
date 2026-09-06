@@ -69,6 +69,60 @@ type Swap struct {
 	// pushes observed agreement — and so kappa — up. It must not be reported
 	// as a two-rater reliability.
 	Agreement Agreement `json:"agreement"`
+	// Position is the same bias read off the single calls rather than the
+	// pairs, and DisagreeBreakdown is which way the pairs that flipped fell.
+	Position          Position          `json:"position"`
+	DisagreeBreakdown DisagreeBreakdown `json:"disagree_breakdown"`
+}
+
+// Position is how often the judge named whichever answer it was shown first.
+//
+// The flip rate above says the judge changed its mind under a swap; this says
+// which way it leans, and the two answer different questions. A judge that
+// flips on nothing has no bias to report, and a judge that flips on everything
+// still might have none — it would flip both ways equally. `p_first` at 0.5 is
+// a judge with no position preference; the distance from it is the bias, and
+// it is what a flip rate cannot tell you.
+type Position struct {
+	// DecidedCalls is the denominator: single calls that came back readable
+	// and named one of the two answers. A tie and an unreadable answer are
+	// both excluded — one is the judge declining to choose a position, the
+	// other is not an answer at all.
+	DecidedCalls int `json:"decided_calls"`
+	// FirstChosen is how many of those named the answer shown first.
+	FirstChosen int `json:"first_chosen"`
+	// PFirst is FirstChosen over DecidedCalls, and Bias its distance from the
+	// half a judge with no position preference would sit at. Both are null
+	// where no call named an answer: a zero there would read as "the judge
+	// never chose the first one", which is a finding rather than the absence
+	// of one.
+	PFirst stats.Coefficient `json:"p_first"`
+	Bias   stats.Coefficient `json:"bias"`
+	// Clusters is how many items those calls came from, and CI the interval
+	// over them. The rows are calls, and six calls of one item move together —
+	// a judge reading the fence on one prompt reads it on all six — so the
+	// interval is the same leave-one-item-out jackknife the rest of the report
+	// uses and never a score interval over the calls.
+	Clusters int             `json:"clusters"`
+	CI       *stats.Interval `json:"ci"`
+	Level    float64         `json:"level"`
+	CIMethod string          `json:"ci_method"`
+}
+
+// DisagreeBreakdown is which way the pairs whose two orders contradicted each
+// other fell.
+//
+// A pair is a disagreement when both orders named a candidate and named
+// different ones, and in a two-answer call there are only two ways for that to
+// happen: the judge said `A` both times, or `B` both times. BothFirst is the
+// first — the judge choosing whichever answer came first, which is the fence
+// speaking rather than the answers. Other is anything the arithmetic did not
+// expect and is reported rather than dropped.
+type DisagreeBreakdown struct {
+	Pairs      int `json:"pairs"`
+	BothFirst  int `json:"both_first"`
+	BothSecond int `json:"both_second"`
+	Other      int `json:"other"`
 }
 
 // Rerun is the judge against itself on another seed.
@@ -111,6 +165,65 @@ type Outcomes struct {
 	InvalidRetryRate float64          `json:"invalid_output_retry_rate"`
 }
 
+// The two rows of the abstention table a run's outcome is not already a word
+// for. Every other row is the no-candidate sub-reason the harness recorded, so
+// the vocabulary stays CMoA's.
+const (
+	// CoverageAgrees is a run that chose the candidate the people chose.
+	CoverageAgrees = "selected_agrees"
+	// CoverageDiffers is a run that chose another one — or chose at all on an
+	// item the people left undecided.
+	CoverageDiffers = "selected_differs"
+)
+
+// CoverageRows is the order the abstention table is reported in: what the
+// judge decided first, then the ways it did not, then the machine.
+var CoverageRows = []string{
+	CoverageAgrees, CoverageDiffers,
+	"no_majority", "all_draws", "cycle", "invalid_output", "too_few_candidates",
+	OutcomeJudgeTimeout, OutcomeJudgeFailed,
+}
+
+// Coverage is what the judge did against what the people decided: the
+// abstention table, pooled over the seeds and again at each of them.
+//
+// It is here because an abstention rate on its own says nothing about what was
+// lost. A judge that abstains on the items the people could not decide either
+// is agreeing with them; a judge that abstains on the items the people decided
+// cleanly has lost that item to its own indecision, and under a both-orders
+// protocol the ordinary way that happens is the two orders contradicting each
+// other. That is the coverage a position bias costs, and it is a count rather
+// than an inference.
+type Coverage struct {
+	Pooled Coverages   `json:"pooled"`
+	BySeed []Coverages `json:"by_seed"`
+}
+
+// Coverages is one cross-table: the rows against the two columns.
+type Coverages struct {
+	// Seed is the seed the table is of, and zero in the pooled one.
+	Seed int `json:"seed,omitempty"`
+	// Runs is how many runs it counts, and Ungolded how many were left out
+	// because their item carries no human label at all — there is no column
+	// for those, and dropping them silently would make the columns not sum.
+	Runs     int `json:"runs"`
+	Ungolded int `json:"runs_without_gold"`
+	// GoldDecided and GoldTie are the column totals.
+	GoldDecided int `json:"gold_decided"`
+	GoldTie     int `json:"gold_tie"`
+	// AbstainedOnDecided is the number the table is for: runs that reached no
+	// candidate on an item the people had decided.
+	AbstainedOnDecided int           `json:"abstained_on_gold_decided"`
+	Rows               []CoverageRow `json:"rows"`
+}
+
+// CoverageRow is one row of the table: an outcome against the two columns.
+type CoverageRow struct {
+	Outcome     string `json:"outcome"`
+	GoldDecided int    `json:"gold_decided"`
+	GoldTie     int    `json:"gold_tie"`
+}
+
 // Latency is what the runs cost.
 type Latency struct {
 	MedianMS int64 `json:"median_ms"`
@@ -148,12 +261,16 @@ type Report struct {
 	MinKappa     float64        `json:"min_kappa"`
 	Strata       map[string]int `json:"strata"`
 
-	Swap       Swap                `json:"swap"`
-	Rerun      Rerun               `json:"rerun"`
-	Validity   map[string]Validity `json:"validity"`
-	HumanHuman *Agreement          `json:"human_human,omitempty"`
-	Outcomes   Outcomes            `json:"outcomes"`
-	Latency    Latency             `json:"latency"`
+	Swap     Swap                `json:"swap"`
+	Rerun    Rerun               `json:"rerun"`
+	Validity map[string]Validity `json:"validity"`
+	// AbstentionByGold is what the judge did against what the people decided.
+	// It is the coverage half of the position numbers above: how many of the
+	// abstentions fell on items the people had no trouble deciding.
+	AbstentionByGold Coverage   `json:"abstention_by_gold"`
+	HumanHuman       *Agreement `json:"human_human,omitempty"`
+	Outcomes         Outcomes   `json:"outcomes"`
+	Latency          Latency    `json:"latency"`
 
 	// HumanKappa and NHuman are what the document carries, lifted out of the
 	// validity block so that the one number the verdict rests on is not
@@ -263,6 +380,8 @@ func (r Report) Summary() string {
 	b.WriteString("decision under an irrelevant-token perturbation, together with whatever the\n")
 	b.WriteString("server does differently at temperature 0, and it does not separate the two.\n")
 
+	r.position(&b)
+
 	b.WriteString("\n## Validity, which is the judge against people\n\n")
 	for _, reference := range []string{ReferenceHuman, ReferenceGold, ReferenceLabels} {
 		v, ok := r.Validity[reference]
@@ -340,6 +459,59 @@ func (r Report) Summary() string {
 		"stops on its own. A judge running on an expired calibration is a judge nobody\n"+
 		"has checked lately; `uzushio judge status` is where that shows up.\n", doc.ValidityDays)
 	return b.String()
+}
+
+// position is the position-bias part of the document body: the bias read off
+// the single calls, which way the pairs that contradicted themselves fell, and
+// what the indecision cost the suite.
+//
+// Every count says what it is over. The three denominators here — a decided
+// call, a disagreeing pair, a run — are different populations of different
+// sizes, and a number lifted out of this section against the wrong one is
+// wrong by a factor rather than by a rounding.
+func (r Report) position(b *strings.Builder) {
+	p := r.Swap.Position
+	b.WriteString("\n### Position bias\n\n")
+	fmt.Fprintf(b, "- the judge named the answer it was shown first in %d of %d decided "+
+		"call(s) — a call whose status was `ok` and which named one of the two answers, so "+
+		"a tie and an unreadable answer are in neither the numerator nor the denominator. "+
+		"p_first %s over %d item(s), %s. bias %s from the 0.500 of a judge with no position "+
+		"preference.\n",
+		p.FirstChosen, p.DecidedCalls, coefficient(p.PFirst), p.Clusters,
+		interval(p.CI, p.Level, p.CIMethod), coefficient(p.Bias))
+	d := r.Swap.DisagreeBreakdown
+	fmt.Fprintf(b, "- %d of %d swap disagreement(s) — pairs whose two orders both named a "+
+		"candidate and did not name the same one — were the judge choosing whichever answer "+
+		"came first; %d chose whichever came second, %d were neither.\n",
+		d.BothFirst, d.Pairs, d.BothSecond, d.Other)
+
+	pooled := r.AbstentionByGold.Pooled
+	if pooled.Runs == 0 {
+		return
+	}
+	b.WriteString("- what the judge did against what the people decided, " +
+		"as `gold decided`/`gold tie`:\n")
+	fmt.Fprintf(b, "  - pooled, %d run(s): %s\n", pooled.Runs, coverageLine(pooled))
+	for _, table := range r.AbstentionByGold.BySeed {
+		fmt.Fprintf(b, "  - seed %d, %d run(s): %s\n", table.Seed, table.Runs, coverageLine(table))
+	}
+	if pooled.Ungolded > 0 {
+		fmt.Fprintf(b, "  - %d run(s) are in no column: their item carries no human label.\n",
+			pooled.Ungolded)
+	}
+	fmt.Fprintf(b, "- %d of the %d run(s) on an item the people had decided reached no "+
+		"candidate. That is the coverage the bias above costs: those items are not missing "+
+		"data, they are disagreements with the people in the validity table below.\n",
+		pooled.AbstainedOnDecided, pooled.GoldDecided)
+}
+
+// coverageLine renders one cross-table's rows for prose.
+func coverageLine(t Coverages) string {
+	parts := make([]string, 0, len(t.Rows))
+	for _, row := range t.Rows {
+		parts = append(parts, fmt.Sprintf("`%s` %d/%d", row.Outcome, row.GoldDecided, row.GoldTie))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // labelerSet says where a validity coefficient's human side came from, which

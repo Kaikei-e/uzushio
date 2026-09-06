@@ -162,8 +162,21 @@ func Calibrate(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return assemble(opts, seeds, judged, failures)
+	measured, allBad, err := measurements(opts, judged, failures)
+	if err != nil {
+		return Result{}, err
+	}
+	return assemble(opts, assembly{
+		items:   measured,
+		seeds:   len(seeds),
+		allBad:  allBad,
+		ceiling: humanHuman(opts.Labels, kappaCategories(), opts.Alpha),
+	})
 }
+
+// kappaCategories is the vocabulary every table over a judge's answer is
+// scored on: the three slots and the one abstention.
+func kappaCategories() []string { return append(slices.Clone(Positions), Abstain) }
 
 // runAll judges every item at every seed, with the requested number of items
 // in flight.
@@ -217,9 +230,71 @@ func runAll(ctx context.Context, opts Options, seeds []int) ([][]Judged, []error
 	return out, failures, nil
 }
 
-// assemble turns the runs into the report and the journal.
-func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (Result, error) {
+// measurement is one item's identity and what the judge did on it: the two
+// halves the arithmetic reads. Where they came from is not its business — a
+// fleet answering now, or the traces a fleet left an hour ago and a replay
+// reads back — which is the whole reason the split exists.
+type measurement struct {
+	// item carries the identity, the strata and the human labels. Runs,
+	// Unmeasured and the outcome half of Error are assemble's to fill: those
+	// are what the runs say rather than what the caller knows.
+	item ItemResult
+	runs []Judged
+}
+
+// assembly is everything the arithmetic needs besides the runs.
+//
+// The two label-side facts travel in it rather than being recomputed inside,
+// because no trace records either: how many labels said none of the three was
+// worth choosing, and how far two people agreed with each other. A replay has
+// no labels file to read them from and takes them off the report it is
+// rebuilding, which is honest — they are the one part of a calibration the
+// traces cannot re-derive.
+type assembly struct {
+	items   []measurement
+	seeds   int
+	allBad  int
+	ceiling *Agreement
+}
+
+// measurements resolves every item's human label and pairs it with its runs.
+func measurements(opts Options, judged [][]Judged, failures []error) ([]measurement, int, error) {
 	labels := byItem(opts.Labels)
+	allBad := 0
+	out := make([]measurement, 0, len(opts.Suite.Tasks))
+	for i, task := range opts.Suite.Tasks {
+		gold, hasGold, err := opts.Suite.GoldOf(task)
+		if err != nil {
+			return nil, 0, err
+		}
+		item := ItemResult{Item: task.ID, Stratum: stratumOf(task, gold), Hard: gold.Hard}
+		if hasGold {
+			item.Gold = gold.Category()
+		}
+		if given := labels[task.ID]; len(given) > 0 {
+			item.Label = firstLabel(given)
+			for _, label := range given {
+				if label.Choice == ChoiceAllBad {
+					allBad++
+				}
+			}
+		}
+		switch {
+		case item.Label != "":
+			item.Human, item.HumanFrom = item.Label, ReferenceLabels
+		case item.Gold != "":
+			item.Human, item.HumanFrom = item.Gold, ReferenceGold
+		}
+		if failures[i] != nil {
+			item.Error = scrub(failures[i].Error(), opts.Vault, opts.Suite.Dir)
+		}
+		out = append(out, measurement{item: item, runs: judged[i]})
+	}
+	return out, allBad, nil
+}
+
+// assemble turns the runs into the report and the journal.
+func assemble(opts Options, a assembly) (Result, error) {
 	report := Report{
 		SchemaVersion: ReportSchemaVersion,
 		Suite:         opts.Suite.ID,
@@ -228,8 +303,9 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 		Judge:         opts.Judge,
 		Pool:          opts.Pool,
 		Day:           opts.Day,
-		Items:         len(opts.Suite.Tasks),
-		Seeds:         len(seeds),
+		Items:         len(a.items),
+		Seeds:         a.seeds,
+		AllBadLabels:  a.allBad,
 		Alpha:         opts.Alpha,
 		Level:         1 - opts.Alpha,
 		MinKappa:      opts.MinKappa,
@@ -250,7 +326,7 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %w", ErrJudge, err)
 	}
-	categories := append(slices.Clone(Positions), Abstain)
+	categories := kappaCategories()
 	rerun, err := stats.NewTable(categories)
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %w", ErrJudge, err)
@@ -266,40 +342,20 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 
 	var latencies []int64
 	var flips, decidedPairs []int
+	// The position counts are per item for the same reason the flip counts
+	// are: the rows are single calls, six of them come from one prompt, and
+	// six calls of one item move together.
+	var firstChosen, decidedCalls []int
+	coverage := newCoverage()
 	noCandidateItems, measuredItems := 0, 0
-	items := make([]ItemResult, 0, len(opts.Suite.Tasks))
-	for i, task := range opts.Suite.Tasks {
-		gold, hasGold, err := opts.Suite.GoldOf(task)
-		if err != nil {
-			return Result{}, err
-		}
-		item := ItemResult{Item: task.ID, Stratum: stratumOf(task, gold), Hard: gold.Hard}
+	items := make([]ItemResult, 0, len(a.items))
+	for _, measured := range a.items {
+		item := measured.item
+		runs := measured.runs
 		report.Strata[item.Stratum]++
-		if hasGold {
-			item.Gold = gold.Category()
-		}
-		if given := labels[task.ID]; len(given) > 0 {
-			item.Label = firstLabel(given)
-			for _, label := range given {
-				if label.Choice == ChoiceAllBad {
-					report.AllBadLabels++
-				}
-			}
-		}
-		switch {
-		case item.Label != "":
-			item.Human = item.Label
-			item.HumanFrom = ReferenceLabels
-		case item.Gold != "":
-			item.Human = item.Gold
-			item.HumanFrom = ReferenceGold
-		}
 
-		runs := judged[i]
-		if failures[i] != nil {
-			item.Error = scrub(failures[i].Error(), opts.Vault, opts.Suite.Dir)
-		}
 		itemFlips, itemDecided := 0, 0
+		itemFirst, itemCalls := 0, 0
 		for _, run := range runs {
 			item.Runs = append(item.Runs, RunResult{
 				Seed: run.Seed, Outcome: run.Outcome, Category: category(run),
@@ -313,6 +369,10 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 			report.Outcomes.ByKind[run.Outcome]++
 			report.Outcomes.Total++
 			report.Outcomes.InvalidRetries += run.InvalidRetries
+			// The abstention table counts the run that measured nothing too:
+			// what it is for is what the suite lost, and a run nobody could
+			// make is as lost as a run that could decide nothing.
+			coverage.observe(run, item.Gold)
 			if !run.Measured() {
 				report.Outcomes.Unmeasured++
 				continue
@@ -320,18 +380,33 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 			if run.Outcome == OutcomeNoCandidate {
 				reason := run.Reason
 				if reason == "" {
-					reason = "unstated"
+					reason = ReasonUnstated
 				}
 				report.Outcomes.NoCandidateByReason[reason]++
 			}
 			for _, pair := range run.Pairs {
 				report.Outcomes.Calls += len(pair.Orders)
+				// The single call, which is the unit the position bias lives
+				// in. The pair below is the unit the swap agreement lives in,
+				// and the two denominators are different on purpose.
+				for _, order := range pair.Orders {
+					if !order.Decided() {
+						continue
+					}
+					itemCalls++
+					if order.ChoseFirst() {
+						itemFirst++
+					}
+				}
+				if pair.DrawReason == DrawDisagree {
+					report.Swap.DisagreeBreakdown.observe(pair)
+				}
 				if len(pair.Orders) != 2 {
 					continue
 				}
 				report.Swap.Pairs++
 				first, second := pair.side(pair.Orders[0]), pair.side(pair.Orders[1])
-				if err := swap.ObserveIn(task.ID, first, second); err != nil {
+				if err := swap.ObserveIn(item.Item, first, second); err != nil {
 					return Result{}, fmt.Errorf("%w: %w", ErrJudge, err)
 				}
 				if first != Abstain && second != Abstain {
@@ -345,6 +420,10 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 		if itemDecided > 0 {
 			flips = append(flips, itemFlips)
 			decidedPairs = append(decidedPairs, itemDecided)
+		}
+		if itemCalls > 0 {
+			firstChosen = append(firstChosen, itemFirst)
+			decidedCalls = append(decidedCalls, itemCalls)
 		}
 		report.Swap.Decided += itemDecided
 		report.Swap.Flips += itemFlips
@@ -373,7 +452,7 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 			if !later.Measured() {
 				continue
 			}
-			if err := rerun.ObserveIn(task.ID, runs[0].Category(), later.Category()); err != nil {
+			if err := rerun.ObserveIn(item.Item, runs[0].Category(), later.Category()); err != nil {
 				return Result{}, fmt.Errorf("%w: %w", ErrJudge, err)
 			}
 		}
@@ -386,7 +465,7 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 			if human == "" {
 				continue
 			}
-			if err := validity[reference].observe(task.ID, answer, human); err != nil {
+			if err := validity[reference].observe(item.Item, answer, human); err != nil {
 				return Result{}, err
 			}
 			if reference == ReferenceHuman {
@@ -397,9 +476,11 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 	}
 
 	report.Swap.Rate = stats.ClusteredProportion(flips, decidedPairs, opts.Alpha)
+	report.Swap.Position = positionOf(firstChosen, decidedCalls, opts.Alpha)
 	report.Swap.Agreement = agreementOf(swap, opts.Alpha)
+	report.AbstentionByGold = coverage.report()
 	report.Rerun = Rerun{
-		Seeds:       len(seeds),
+		Seeds:       a.seeds,
 		Comparisons: rerun.N(),
 		Agreement:   agreementOf(rerun, opts.Alpha),
 	}
@@ -407,7 +488,7 @@ func assemble(opts Options, seeds []int, judged [][]Judged, failures []error) (R
 	for reference, tables := range validity {
 		report.Validity[reference] = tables.report(reference, opts.Alpha)
 	}
-	report.HumanHuman = humanHuman(opts.Labels, categories, opts.Alpha)
+	report.HumanHuman = a.ceiling
 	// One row per measured item, so this is the one rate in the report whose
 	// rows really are independent and the one that gets a Wilson interval.
 	report.Outcomes.NoCandidateRate = stats.IndependentProportion(noCandidateItems, measuredItems, opts.Alpha)

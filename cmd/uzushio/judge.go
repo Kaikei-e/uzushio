@@ -105,6 +105,7 @@ func newJudgeCalibrateCmd() *cobra.Command {
 		windowFrom    string
 		pool          string
 		dryRun        bool
+		replayDir     string
 	)
 	cmd := &cobra.Command{
 		Use:   "calibrate",
@@ -118,11 +119,24 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			"with every coefficient, in the report and in the document.\n\n" +
 			"It refuses before spending anything: a suite that is not the chat face, a\n" +
 			"harness with no judge command, or a configuration with no judge in it are all\n" +
-			"usage failures rather than a run that discovers them halfway through.",
+			"usage failures rather than a run that discovers them halfway through.\n\n" +
+			"--replay <report directory> rebuilds report.json and items.jsonl from the run\n" +
+			"directories the journal already names, asking no judge anything and writing no\n" +
+			"vault document. It is how a report written before a field existed gains it. It\n" +
+			"refuses when a recorded run directory is not on disk, and when the numbers it\n" +
+			"recomputes are not the ones the report already carries: the document that names\n" +
+			"the report is append-only history, and it has to keep matching what it quotes.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			errOut := cmd.ErrOrStderr()
+
+			if replayDir != "" {
+				return replayCalibration(cmd, replayDir, vault)
+			}
+			if err := requireFlags(cmd, "suite", "config"); err != nil {
+				return &exitError{code: exitUsage, err: err}
+			}
 
 			suite, err := judge.LoadSuite(suitePath)
 			if err != nil {
@@ -171,16 +185,22 @@ func newJudgeCalibrateCmd() *cobra.Command {
 			}
 
 			result, err := judge.Calibrate(ctx, judge.Options{
-				Suite:         suite,
-				Runner:        judge.CMoARunner{Binary: cmoa, Config: config, Log: func(line string) { fmt.Fprintln(errOut, line) }},
-				Reruns:        reruns,
-				Labels:        labels,
-				Judge:         judgeModel,
-				Pool:          pool,
-				Day:           day,
-				Alpha:         alpha,
-				MinKappa:      minKappa,
-				Parallel:      parallel,
+				Suite:    suite,
+				Runner:   judge.CMoARunner{Binary: cmoa, Config: config, Log: func(line string) { fmt.Fprintln(errOut, line) }},
+				Reruns:   reruns,
+				Labels:   labels,
+				Judge:    judgeModel,
+				Pool:     pool,
+				Day:      day,
+				Alpha:    alpha,
+				MinKappa: minKappa,
+				Parallel: parallel,
+				// The vault is what a recorded trace path is relative to. It
+				// was missing here, so a journal recorded its run directories
+				// against the suite instead and `--replay --vault` could not
+				// find them again — the paths were relative to a root nothing
+				// named.
+				Vault:         vault,
 				MaxUnmeasured: maxUnmeasured,
 			})
 			if err != nil {
@@ -224,7 +244,9 @@ func newJudgeCalibrateCmd() *cobra.Command {
 		"a JSONL file of human labels, matched to items by identifier; repeat for more")
 	cmd.Flags().StringVar(&out, "out", "",
 		"where the report goes (default: <vault>/"+CalibrationsDir+"/<judge>@<day>)")
-	cmd.Flags().StringVar(&vault, "vault", ".", "the vault the calibration document is written into")
+	cmd.Flags().StringVar(&vault, "vault", ".",
+		"the vault the calibration document is written into, "+
+			"and the root a replay's recorded run directories are relative to")
 	cmd.Flags().IntVar(&parallel, "parallel", 1, "items judged at once")
 	cmd.Flags().Float64Var(&alpha, "alpha", judge.DefaultAlpha, "the level every interval is computed at")
 	cmd.Flags().Float64Var(&minKappa, "min-kappa", judge.DefaultMinKappa,
@@ -237,9 +259,57 @@ func newJudgeCalibrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pool, "pool", doc.PoolExternal,
 		"what produced the candidates: a proposer pool, or external for answers read from files")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "check everything and run no judge")
-	_ = cmd.MarkFlagRequired("suite")
-	_ = cmd.MarkFlagRequired("config")
+	cmd.Flags().StringVar(&replayDir, "replay", "",
+		"rebuild this report directory from the run directories it names, judging nothing")
+	// --suite and --config are required of a measurement and meaningless to a
+	// replay, so the requirement is checked in the command rather than marked
+	// on the flags: cobra validates a marked flag before RunE can tell which
+	// of the two jobs it was asked for.
 	return cmd
+}
+
+// requireFlags reports the required flags that were left off.
+func requireFlags(cmd *cobra.Command, names ...string) error {
+	var missing []string
+	for _, name := range names {
+		if !cmd.Flags().Changed(name) {
+			missing = append(missing, `"`+name+`"`)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf(`required flag(s) %s not set`, strings.Join(missing, ", "))
+}
+
+// replayCalibration rebuilds a report from the traces it already read.
+//
+// It writes no vault document, and that is the point rather than an omission.
+// A calibration document is the claim somebody made on a day, it is
+// append-only history, and a rebuilt report that moved a document would be a
+// measurement rewriting its own record.
+func replayCalibration(cmd *cobra.Command, dir, vault string) error {
+	if err := refuseWithReplay(cmd, "rebuilds a report and judges nothing",
+		"suite", "cmoa", "config", "rerun", "labels", "out", "parallel", "alpha",
+		"min-kappa", "max-unmeasured", "as-of", "window-from", "pool", "dry-run"); err != nil {
+		return &exitError{code: exitUsage, err: err}
+	}
+	result, err := judge.Replay(judge.ReplayOptions{Dir: dir, Vault: vault})
+	if err != nil {
+		return &exitError{code: exitUsage, err: err}
+	}
+	if err := result.Write(dir); err != nil {
+		return err
+	}
+	errOut := cmd.ErrOrStderr()
+	for _, line := range strings.Split(strings.TrimRight(result.Report.Summary(), "\n"), "\n") {
+		fmt.Fprintln(errOut, line)
+	}
+	fmt.Fprintf(errOut, "replayed %d item(s) from their traces; no vault document was touched\n",
+		result.Report.Items)
+	fmt.Fprintf(errOut, "wrote: %s\n", dir)
+	fmt.Fprintln(cmd.OutOrStdout(), filepath.Join(dir, judge.ReportFile))
+	return nil
 }
 
 // hasJudgeCommand asks the harness whether it can judge at all, before a run
