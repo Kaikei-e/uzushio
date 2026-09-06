@@ -112,17 +112,17 @@ chosen after the fact.
 **29 of the 40 carry a human label naming a position** (`c1`/`c2`/`c3`); the
 other 11 are `tie` or `all_bad` in the corpus's own aggregation. Under the
 trial's quality handling — `human-position-only, failure-as-zero` — only those
-29 enter ΔQ, and the rest are counted as `no_reference_items`. A stage A card
-drawing 4 items from D should expect roughly three of them to be evaluable.
+29 enter ΔQ, and the rest are counted as `no_reference_items`. The committed
+A prefix D4 has **two** evaluable D labels (the full six-item D+R order has
+three labels total, with R remaining diagnostic only).
 
-That is below the floor. `judge trial` prints **no quality difference** under
-`min_evaluable_items` (default 8) and reports 未評価 instead: on three items a
-single label is 33 points of ΔQ, which is larger than every threshold a card
-can name, and a number one label can swing is not a measurement of the change.
-A stage A run of these sets measures **behaviour and time**; the items that
-changed selection are still listed by name, and the stage A two-item heuristic
-still reads them, because ordering work by which items moved is what that rule
-is for.
+That is below the floor. `judge trial` prints **no representative quality
+difference** under `min_evaluable_items` (default 8) and reports 未評価 instead.
+No ordering of the six A items can create eight labels. A stage A run measures
+**behaviour, retry, and time**; changed selections remain named, and the
+two-item heuristic still reads D/R individual regressions. It is a development
+ordering rule, not a quality result; quality comparisons move to B, subject to
+the same evidence gates.
 
 ## R — the known-failure set (6 items)
 
@@ -134,10 +134,11 @@ Each item's `reason` names the evidence and where it was read.
 
 **R carries no `weights`.** It stands for no population — it is a set of items
 picked because they already go wrong — so weighting its mean onto the corpus
-would be a category error. `judge trial` reports R on its own line and never
-averages it into D, and the file was edited to drop the population shares the
-generator had copied onto it so that nobody is tempted. That is the one edit
-made to the generated manifests.
+would be a category error. `judge trial` reports R on its own diagnostic line
+and never averages it into D: an R rescue cannot offset a D regression. An
+R-only card consequently has no representative quality result. The file was
+edited to drop the population shares the generator had copied onto it so that
+nobody is tempted. That is the one edit made to the generated manifests.
 
 ## H — held out for the adoption check (0 items)
 

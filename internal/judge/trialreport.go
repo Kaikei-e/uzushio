@@ -218,44 +218,50 @@ type TrialTieBreakRow struct {
 type TrialQuality struct {
 	Metric   string `json:"metric"`
 	Handling string `json:"handling"`
-	// Measured says a quality number could be computed at all.
+	// Basis is D for development stages A/B, and H for confirmation stage C.
+	Basis string `json:"basis"`
+	// Measured requires the representative set's item and stratum floors.
 	Measured bool `json:"measured"`
-	// Evaluable is the items both conditions answered and the people had
-	// named a position on.
-	Evaluable int `json:"evaluable_items"`
-	// NoReference is items with no human position, Unmeasured items the
-	// machine lost on one side or the other.
+	// These counts cover Basis only. Other sets keep their own diagnostics.
+	Evaluable   int `json:"evaluable_items"`
 	NoReference int `json:"no_reference_items"`
 	Unmeasured  int `json:"unmeasured_items"`
-	// QBase and QNew are shares in 0..1, DeltaPoints their difference in
-	// points of a hundred.
+	// The representative quality, weighted when D declares target shares.
 	QBase       float64 `json:"q_base"`
 	QNew        float64 `json:"q_new"`
 	DeltaPoints float64 `json:"delta_q_points"`
-	// NewlyWrong and NewlyRight are the items the change moved each way.
+	// D+R changes for the stage-A heuristic, independent of representative quality.
 	NewlyWrong int `json:"newly_wrong"`
 	NewlyRight int `json:"newly_right"`
-	// Sets is the same arithmetic per item set. D and R are never averaged
-	// together: R is a set of items chosen because they already go wrong.
+	// Set-level diagnostics never fill another set's quality denominator.
 	Sets map[string]TrialSetQuality `json:"sets,omitempty"`
-	// Weighted is D re-weighted by the manifest's target shares, absent where
-	// the manifest declares none.
+	// Weighted contains D's target-stratum evidence, including missing strata.
 	Weighted *TrialWeighted `json:"weighted_d,omitempty"`
-	// Note says why a number is missing, where one is.
-	Note string `json:"note,omitempty"`
+	Note     string         `json:"note,omitempty"`
 }
 
 // TrialSetQuality is one set's numbers.
 type TrialSetQuality struct {
-	Set         string  `json:"set"`
+	Set string `json:"set"`
+	// Measured says this set has at least one human-position comparison. It is
+	// independent of the trial-wide floor, so an R diagnostic remains useful
+	// when D has not yet measured representative quality.
+	Measured    bool    `json:"measured"`
 	Evaluable   int     `json:"evaluable_items"`
+	NoReference int     `json:"no_reference_items"`
+	Unmeasured  int     `json:"unmeasured_items"`
 	QBase       float64 `json:"q_base"`
 	QNew        float64 `json:"q_new"`
 	DeltaPoints float64 `json:"delta_q_points"`
+	NewlyWrong  int     `json:"newly_wrong"`
+	NewlyRight  int     `json:"newly_right"`
 }
 
 // TrialWeighted is the D set re-weighted onto the target population.
 type TrialWeighted struct {
+	// Measured is true only when every declared target stratum has enough D
+	// items. A partial re-weighting would silently change the target population.
+	Measured    bool    `json:"measured"`
 	QBase       float64 `json:"q_base"`
 	QNew        float64 `json:"q_new"`
 	DeltaPoints float64 `json:"delta_q_points"`
@@ -669,72 +675,97 @@ func score(record TrialRecord, reference string) *int {
 }
 
 func (r *trialRun) quality(items []TrialItem) TrialQuality {
-	q := TrialQuality{Metric: MetricSelectionTop1, Handling: TrialQualityHandling}
-	var base, newer []float64
-	perSet := map[string][]([2]int){}
+	basis := SetD
+	if r.opts.Card.Stage == StageC {
+		basis = SetH
+	}
+	q := TrialQuality{
+		Metric: MetricSelectionTop1, Handling: TrialQualityHandling, Basis: basis,
+		Sets: map[string]TrialSetQuality{},
+	}
+	type totals struct {
+		base, newer             []float64
+		noReference, unmeasured int
+		newlyWrong, newlyRight  int
+	}
+	perSet := map[string]*totals{}
+	anyEvaluable := 0
 	for _, item := range items {
+		set := perSet[item.Set]
+		if set == nil {
+			set = &totals{}
+			perSet[item.Set] = set
+		}
 		switch {
 		case item.Reference == "":
-			q.NoReference++
+			set.noReference++
 			continue
 		case item.QBase == nil || item.QNew == nil:
-			q.Unmeasured++
+			set.unmeasured++
 			continue
 		}
-		q.Evaluable++
-		base = append(base, float64(*item.QBase))
-		newer = append(newer, float64(*item.QNew))
-		perSet[item.Set] = append(perSet[item.Set], [2]int{*item.QBase, *item.QNew})
+		anyEvaluable++
+		set.base = append(set.base, float64(*item.QBase))
+		set.newer = append(set.newer, float64(*item.QNew))
 		switch {
 		case *item.QBase == 1 && *item.QNew == 0:
-			q.NewlyWrong++
+			set.newlyWrong++
 		case *item.QBase == 0 && *item.QNew == 1:
-			q.NewlyRight++
+			set.newlyRight++
 		}
+	}
+	for name, set := range perSet {
+		out := TrialSetQuality{
+			Set: name, Evaluable: len(set.base), NoReference: set.noReference,
+			Unmeasured: set.unmeasured, NewlyWrong: set.newlyWrong, NewlyRight: set.newlyRight,
+		}
+		if out.Evaluable > 0 {
+			out.Measured = true
+			out.QBase, out.QNew = round3(mean(set.base)), round3(mean(set.newer))
+			out.DeltaPoints = round3(100 * (mean(set.newer) - mean(set.base)))
+		}
+		q.Sets[name] = out
+	}
+	// A's two-item heuristic remains a development count across D and R.
+	for _, name := range []string{SetD, SetR} {
+		q.NewlyWrong += q.Sets[name].NewlyWrong
+		q.NewlyRight += q.Sets[name].NewlyRight
+	}
+	representative := q.Sets[basis]
+	q.Evaluable = representative.Evaluable
+	q.NoReference, q.Unmeasured = representative.NoReference, representative.Unmeasured
+	if basis == SetD {
+		q.Weighted = r.weighted(items)
+	}
+	if anyEvaluable == 0 {
+		q.Metric = MetricPairJudge
+		q.Note = "no evaluable human-position comparison exists. Pair-judge agreement " +
+			"is a different quantity and does not establish selection top-1 quality."
+		return q
 	}
 	if q.Evaluable == 0 {
-		q.Metric = MetricPairJudge
-		q.Note = "no item in this trial carries a human label naming a position, so no " +
-			"selection top-1 score exists. Where the only human evidence is pair " +
-			"preferences the quantity is a pair-judge agreement, which is a different " +
-			"claim and does not stand in for selection top-1. This run measured " +
-			"behaviour and time, and did not measure quality."
+		q.Note = fmt.Sprintf("未評価 / not evaluated: representative set %s has no evaluable items. "+
+			"Other sets are diagnostics and cannot supply its quality denominator.", basis)
 		return q
 	}
-	// The floor. A ΔQ over three items moves 33 points when one label moves,
-	// which is past every threshold a card can name, so the report counts the
-	// items and declines to divide by them. What the run still says is what
-	// changed selection, what it cost, and which items moved — and the stage A
-	// heuristic still reads the two counts, because ordering work by them is
-	// what that rule is for.
 	if q.Evaluable < r.opts.Card.MinEvaluableItems {
-		q.Note = fmt.Sprintf(
-			"未評価 / not evaluated: %d evaluable item(s) against the card's floor of %d. "+
-				"On %d item(s) a single human label is %.1f points of ΔQ, which is more "+
-				"than any threshold in the card, so no quality difference is printed. "+
-				"%d item(s) carried no human position and %d lost a side to the machine. "+
-				"This run measured behaviour and time; it did not measure quality.",
-			q.Evaluable, r.opts.Card.MinEvaluableItems, q.Evaluable,
-			100/float64(q.Evaluable), q.NoReference, q.Unmeasured)
+		q.Note = fmt.Sprintf("未評価 / not evaluated: representative set %s has %d evaluable item(s), "+
+			"below the card's floor of %d. One item is %.1f points in the raw set. "+
+			"No representative quality difference is reported; set diagnostics and individual changes remain available.",
+			basis, q.Evaluable, r.opts.Card.MinEvaluableItems, 100/float64(q.Evaluable))
 		return q
+	}
+	if q.Weighted != nil {
+		if !q.Weighted.Measured {
+			q.Note = "未評価 / not evaluated: D's target strata do not all reach min_items_per_category. " +
+				"A partial re-weighting would change the target population; raw set diagnostics remain available."
+			return q
+		}
+		q.QBase, q.QNew, q.DeltaPoints = q.Weighted.QBase, q.Weighted.QNew, q.Weighted.DeltaPoints
+	} else {
+		q.QBase, q.QNew, q.DeltaPoints = representative.QBase, representative.QNew, representative.DeltaPoints
 	}
 	q.Measured = true
-	q.QBase, q.QNew = round3(mean(base)), round3(mean(newer))
-	q.DeltaPoints = round3(100 * (mean(newer) - mean(base)))
-	q.Sets = map[string]TrialSetQuality{}
-	for set, pairs := range perSet {
-		var b, n []float64
-		for _, pair := range pairs {
-			b = append(b, float64(pair[0]))
-			n = append(n, float64(pair[1]))
-		}
-		q.Sets[set] = TrialSetQuality{
-			Set: set, Evaluable: len(pairs),
-			QBase: round3(mean(b)), QNew: round3(mean(n)),
-			DeltaPoints: round3(100 * (mean(n) - mean(b))),
-		}
-	}
-	q.Weighted = r.weighted(items)
 	return q
 }
 
@@ -783,6 +814,10 @@ func (r *trialRun) weighted(items []TrialItem) *TrialWeighted {
 	if total == 0 {
 		return &out
 	}
+	if len(out.Unevaluated) > 0 {
+		return &out
+	}
+	out.Measured = true
 	out.QBase = round3(weightedBase / total)
 	out.QNew = round3(weightedNew / total)
 	out.DeltaPoints = round3(100 * (weightedNew/total - weightedBase/total))
@@ -1018,32 +1053,44 @@ func (t TrialReport) Summary() string {
 		t.Inference.Runs, t.Inference.Calls, t.Inference.Retries)
 
 	b.WriteString("## Quality\n\n")
-	fmt.Fprintf(&b, "Metric `%s` under handling `%s`.\n\n", t.Quality.Metric, t.Quality.Handling)
+	fmt.Fprintf(&b, "Metric `%s` under handling `%s`; representative set **%s**.\n\n",
+		t.Quality.Metric, t.Quality.Handling, t.Quality.Basis)
 	if t.Quality.Measured {
-		fmt.Fprintf(&b, "- q(base) %.3f, q(new) %.3f, **ΔQ %+.1f pt** over %d evaluable item(s).\n",
+		fmt.Fprintf(&b, "- representative q(base) %.3f, q(new) %.3f, **ΔQ %+.1f pt** over %d evaluable item(s).\n",
 			t.Quality.QBase, t.Quality.QNew, t.Quality.DeltaPoints, t.Quality.Evaluable)
-		fmt.Fprintf(&b, "- %d item(s) newly wrong, %d newly right.\n",
-			t.Quality.NewlyWrong, t.Quality.NewlyRight)
-		fmt.Fprintf(&b, "- %d item(s) carried no human position and %d lost a side to the "+
-			"machine; neither is in the number above.\n",
-			t.Quality.NoReference, t.Quality.Unmeasured)
-		for _, set := range sortedSetKeys(t.Quality.Sets) {
-			s := t.Quality.Sets[set]
-			fmt.Fprintf(&b, "- set %s (shown on its own, never averaged into another): "+
-				"q %.3f → %.3f, ΔQ %+.1f pt over %d item(s).\n",
-				s.Set, s.QBase, s.QNew, s.DeltaPoints, s.Evaluable)
-		}
-		if t.Quality.Weighted != nil {
-			fmt.Fprintf(&b, "- D re-weighted onto the manifest's target shares: "+
-				"q %.3f → %.3f, ΔQ %+.1f pt.\n", t.Quality.Weighted.QBase,
-				t.Quality.Weighted.QNew, t.Quality.Weighted.DeltaPoints)
-			if len(t.Quality.Weighted.Unevaluated) > 0 {
-				fmt.Fprintf(&b, "- 未評価 / unevaluated strata (fewer than %d evaluable items): %s.\n",
-					t.Card.MinItemsPerCategory, strings.Join(t.Quality.Weighted.Unevaluated, ", "))
-			}
-		}
 	} else {
-		fmt.Fprintf(&b, "- not measured. %s\n", t.Quality.Note)
+		fmt.Fprintf(&b, "- representative quality not measured. %s\n", t.Quality.Note)
+	}
+	fmt.Fprintf(&b, "- representative set: %d without a human position, %d with an unmeasured side.\n",
+		t.Quality.NoReference, t.Quality.Unmeasured)
+	if t.Card.Stage == StageA {
+		fmt.Fprintf(&b, "- D+R early-cut counts: %d newly wrong, %d newly right (development heuristic).\n",
+			t.Quality.NewlyWrong, t.Quality.NewlyRight)
+	}
+	for _, set := range sortedSetKeys(t.Quality.Sets) {
+		s := t.Quality.Sets[set]
+		if !s.Measured {
+			fmt.Fprintf(&b, "- set %s diagnostic: no scored items; %d without a human position, %d unmeasured.\n",
+				s.Set, s.NoReference, s.Unmeasured)
+			continue
+		}
+		role := "diagnostic (raw, not the representative threshold)"
+		if s.Set == t.Quality.Basis && t.Quality.Measured && t.Quality.Weighted == nil {
+			role = "representative (unweighted)"
+		}
+		fmt.Fprintf(&b, "- set %s %s: q %.3f → %.3f, ΔQ %+.1f pt over %d item(s); "+
+			"%d newly wrong, %d newly right.\n",
+			s.Set, role, s.QBase, s.QNew, s.DeltaPoints, s.Evaluable, s.NewlyWrong, s.NewlyRight)
+	}
+	if w := t.Quality.Weighted; w != nil {
+		if w.Measured && t.Quality.Measured {
+			fmt.Fprintf(&b, "- representative quality uses complete weighted D: q %.3f → %.3f, ΔQ %+.1f pt.\n",
+				w.QBase, w.QNew, w.DeltaPoints)
+		}
+		if len(w.Unevaluated) > 0 {
+			fmt.Fprintf(&b, "- 未評価 / unevaluated strata (fewer than %d evaluable items): %s.\n",
+				t.Card.MinItemsPerCategory, strings.Join(w.Unevaluated, ", "))
+		}
 	}
 	b.WriteString("\n## Time\n\n")
 	if t.Speed.Comparable && t.Speed.GJudge != nil {

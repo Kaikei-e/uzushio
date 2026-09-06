@@ -254,17 +254,15 @@ type TrialCard struct {
 	// the report gives it a number rather than calling it unevaluated. Zero
 	// takes DefaultMinItemsPerCategory.
 	MinItemsPerCategory int `json:"min_items_per_category,omitempty"`
-	// MinEvaluableItems is how many evaluable items the whole comparison
-	// needs before the report prints a quality difference at all. Zero takes
-	// DefaultMinEvaluableItems.
+	// MinEvaluableItems is the minimum number of evaluable items in the
+	// stage's quality set: D at A/B, H at C. Other sets cannot fill its
+	// denominator. Zero takes DefaultMinEvaluableItems.
 	//
-	// It exists because a stage A take is small and the labels are smaller:
-	// 29 of D's 40 items carry a human position, so four items of D yield
-	// about three evaluable ones, and on three items a single label is 33
-	// points of ΔQ. A number one label can swing past every threshold in the
-	// card is not a measurement of the change, and printing it invites
-	// somebody to read it as one. Below the floor the report says 未評価 and
-	// the run decides on behaviour and time.
+	// The committed stage A take has only two position-labelled D items;
+	// adding its R items does not make D's quality measurable. Below the
+	// floor the report says 未評価, while keeping time, changed selections
+	// and the stage A two-item heuristic. This is an operational reporting
+	// floor, not a guarantee of statistical precision.
 	MinEvaluableItems int `json:"min_evaluable_items,omitempty"`
 	// Dir is the directory the card was read from; every relative path in it
 	// is resolved against this.

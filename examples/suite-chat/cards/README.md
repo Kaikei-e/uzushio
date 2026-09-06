@@ -76,11 +76,21 @@ selection rule, same judge settings, same seeds.
 ## What the clock is expected to do
 
 At the measured per-item cost these cards do not fit their own box: six items
-with both conditions measured is about 606 seconds against 600. The answer is
-not a bigger box. `planning.accept_cut` says the card knows, the runner runs
+with both conditions measured is an estimated **636 seconds** against 600: six
+items × two conditions × 48 seconds plus 60 seconds of overhead.
+`planning.accept_cut` records that the card accepts this risk: the runner runs
 the fixed order, the budget stops new work, and the report says
 `interrupted_items`, `stop_reason: out_of_budget` (時間・資源切れ) and
-`suggested: inconclusive`. Expect **4–5 of the 6** to finish at today's speeds.
+`suggested: inconclusive`. It is not a guarantee that the six items finish in
+ten minutes, or an automatic improvement in evaluation agility. Expect **4–5
+of the 6** to finish at today's speeds.
+
+These six items cannot measure representative quality at the default
+`min_evaluable_items: 8`, even if their order changes. A reports behaviour,
+retry, time, and individual D/R regressions; its two-item early cut keeps the
+D/R counts. Representative quality is D-only in A/B (H-only in C), so R is a
+separate diagnosis and cannot rescue a D regression; quality comparisons move
+to B, subject to the same evidence gates.
 
 The order is fixed before the first call, and the interleave is why a cut is
 survivable: `D1 R1 D2 D3 R2 D4`, so a clock that stops the run drops at most

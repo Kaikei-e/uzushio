@@ -550,10 +550,14 @@ known failures, H what is held back for the adoption check:
 ```
 
 `weights` is optional — a set built by hand for a stage A probe stands for no
-population — and where it is present D is reported both raw and re-weighted. A
-stratum with fewer than `min_items_per_category` evaluable items gets no number
-and is listed as 未評価 / unevaluated; R is always shown on its own and never
-averaged into D.
+population. In A/B the representative quality used for the card's threshold is
+D only; where D has weights, that representative is its re-weighted value only
+when **every** weighted stratum has at least `min_items_per_category`
+evaluable items. Otherwise representative quality is 未評価 / unevaluated,
+while the raw D and per-stratum diagnostics remain in the report. R is always
+shown on its own, never averaged into D, and never rescues a D regression. In
+C, H rather than D is the representative set. A card with R alone therefore
+has no representative quality result.
 
 **The file's order is the execution order**, and `order` is that order written
 down a second time: a manifest either numbers every item or none, and a
@@ -569,13 +573,15 @@ D item round(*i·d*/(*r*+1)), so a stage A take of four and two runs `D1 R1 D2
 D3 R2 D4`. Appending R would mean that the day the budget stopped the run, it
 dropped both of the items the run was carrying R for.
 
-Where fewer than `min_evaluable_items` items carry a human position — the
-default is 8, and a stage A take of four items of D yields about three — the
-report prints **no ΔQ at all** and says 未評価. On three items one label is 33
-points, which is past every threshold a card can name. What such a run still
-reports is behaviour, time, and every item whose selection changed; the stage A
-two-item heuristic still reads those, because ordering work by which items
-moved is exactly what it is for.
+Where the representative set carries fewer than `min_evaluable_items` human
+positions — the default is 8 — the report prints **no representative ΔQ at
+all** and says 未評価. The committed A take has only four D items, so no
+ordering of its six D+R items can reach that floor. It reports behaviour,
+retry, time, and every changed selection; the stage-A two-item heuristic still
+reads individual regressions across D and R, because it orders development work
+rather than demonstrating a quality result. Quality comparisons move to B,
+subject to the same evidence gates; R's separate diagnostic cannot offset a D
+regression.
 
 A set over a suite lives beside that suite, in `<suite dir>/sets/`. The ones
 for the chat calibration suite are **`examples/suite-chat/sets/`** — `D.json`
