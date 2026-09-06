@@ -20,6 +20,27 @@ const (
 	OutcomeJudgeFailed  = "judge_failed"
 )
 
+// The answers one call can give. They are the call's own two slots rather than
+// candidate names: inside a call the two answers are only ever `A` and `B`,
+// and which candidate is which is in the trace's `first` and `second`.
+const (
+	// CallChoseFirst is the call naming the answer it was shown first.
+	CallChoseFirst = "A"
+	// CallChoseSecond is the call naming the answer it was shown second.
+	CallChoseSecond = "B"
+)
+
+// CallOK is the status of a call that came back readable. A call with any
+// other status was never an answer about the candidates — the judge did not
+// abstain, it was not asked — so it is in no rate over calls.
+const CallOK = "ok"
+
+// DrawDisagree is the draw reason of a pair whose two orders both named a
+// candidate and did not name the same one. It is the one draw the position
+// speaks in: a tie is the judge declining, an invalid or unmeasured order is
+// the machine, and only this one is the same question answered two ways.
+const DrawDisagree = "disagree"
+
 // JudgeFile is the record one judge run leaves in its run directory.
 const JudgeFile = "judge.json"
 
@@ -69,6 +90,11 @@ type Pair struct {
 	Members [2]string `json:"members"`
 	Orders  []Order   `json:"orders"`
 	Verdict string    `json:"verdict"`
+	// DrawReason is why a draw was a draw, empty on a decided pair. It is the
+	// harness's split of `all_draws` into the three different findings that
+	// word covers, and a calibration reports them by name rather than folding
+	// them together.
+	DrawReason string `json:"draw_reason,omitempty"`
 }
 
 // Order is one judge call.
@@ -81,6 +107,17 @@ type Order struct {
 	Retries         int    `json:"retries"`
 	LatencyMS       int64  `json:"latency_ms"`
 }
+
+// Decided says the call came back readable and named one of the two answers it
+// was shown. A tie is readable and is not a choice between them; anything else
+// is the machine rather than the judge.
+func (o Order) Decided() bool {
+	return o.Status == CallOK && (o.Choice == CallChoseFirst || o.Choice == CallChoseSecond)
+}
+
+// ChoseFirst says the call named the answer it was shown first. It is only
+// meaningful for a decided call; a caller checks Decided first.
+func (o Order) ChoseFirst() bool { return o.Choice == CallChoseFirst }
 
 // side returns the order's answer as one of the pair's two canonical slots, or
 // Abstain.
@@ -105,9 +142,10 @@ type judgeFile struct {
 	SchemaVersion int      `json:"schema_version"`
 	Candidates    []string `json:"candidates"`
 	Pairs         []struct {
-		Pair    []string `json:"pair"`
-		Orders  []Order  `json:"orders"`
-		Verdict string   `json:"verdict"`
+		Pair       []string `json:"pair"`
+		Orders     []Order  `json:"orders"`
+		Verdict    string   `json:"verdict"`
+		DrawReason string   `json:"draw_reason"`
 	} `json:"pairs"`
 	Outcome struct {
 		Kind        string `json:"kind"`
@@ -219,9 +257,10 @@ func ReadJudged(dir string) (Judged, error) {
 			return Judged{}, fmt.Errorf("%w: %s: a pair names %d candidates", ErrJudge, name, len(pair.Pair))
 		}
 		judged.Pairs = append(judged.Pairs, Pair{
-			Members: [2]string{pair.Pair[0], pair.Pair[1]},
-			Orders:  pair.Orders,
-			Verdict: pair.Verdict,
+			Members:    [2]string{pair.Pair[0], pair.Pair[1]},
+			Orders:     pair.Orders,
+			Verdict:    pair.Verdict,
+			DrawReason: pair.DrawReason,
 		})
 	}
 	return judged, nil

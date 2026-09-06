@@ -778,3 +778,94 @@ func TestJudgeStatusExitsNonZeroOnAWarning(t *testing.T) {
 		t.Fatalf("an expired calibration exited zero:\n%s", expired.stdout)
 	}
 }
+
+// TestJudgeCalibrateReplay drives the rebuild through the command: the report
+// is recomputed from the traces it already read, no judge is asked anything,
+// and the vault document is not touched.
+func TestJudgeCalibrateReplay(t *testing.T) {
+	vault := t.TempDir()
+	suite := judgeSuite(t, filepath.Join(vault, "suite"))
+	bin := fakeJudgeCMoA(t, vault)
+	config := judgeConfig(t, vault, "gpt-oss-20b")
+
+	first := run(t, "judge", "calibrate", "--suite", suite, "--cmoa", bin, "--config", config,
+		"--vault", vault, "--rerun", "1", "--as-of", "2026-09-06")
+	if first.code != exitOK {
+		t.Fatalf("calibrate exit = %d\nstderr:\n%s", first.code, first.stderr)
+	}
+	dir := filepath.Join(vault, "calibrations", "gpt-oss-20b@2026-09-06")
+	documents := filepath.Join(vault, filepath.FromSlash(vocab.DirCalibrations))
+	before, err := os.ReadDir(documents)
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+
+	got := run(t, "judge", "calibrate", "--replay", dir, "--vault", vault)
+	if got.code != exitOK {
+		t.Fatalf("replay exit = %d\nstderr:\n%s", got.code, got.stderr)
+	}
+	if want := filepath.Join(dir, judge.ReportFile); strings.TrimSpace(got.stdout) != want {
+		t.Fatalf("replay printed %q, want the report it rebuilt", strings.TrimSpace(got.stdout))
+	}
+
+	// The traces are all ok calls that named one of the two answers, three of
+	// each per run, so the judge named the first answer exactly half the time.
+	var report struct {
+		Swap struct {
+			Position struct {
+				DecidedCalls int     `json:"decided_calls"`
+				FirstChosen  int     `json:"first_chosen"`
+				PFirst       float64 `json:"p_first"`
+				CIMethod     string  `json:"ci_method"`
+			} `json:"position"`
+		} `json:"swap"`
+	}
+	body, err := os.ReadFile(filepath.Join(dir, judge.ReportFile))
+	if err != nil {
+		t.Fatalf("read the report: %v", err)
+	}
+	if err := json.Unmarshal(body, &report); err != nil {
+		t.Fatalf("decode the report: %v", err)
+	}
+	position := report.Swap.Position
+	if position.DecidedCalls != 24 || position.FirstChosen != 12 || position.PFirst != 0.5 {
+		t.Fatalf("position = %+v, want twelve of twenty-four", position)
+	}
+	if position.CIMethod != "cluster-jackknife" {
+		t.Fatalf("the position interval is a %q; the calls share items", position.CIMethod)
+	}
+
+	// A replay is not a measurement, so it writes no record of one.
+	after, err := os.ReadDir(documents)
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("a replay wrote %d document(s) into the vault", len(after)-len(before))
+	}
+}
+
+// TestJudgeCalibrateReplayRefusesWhatItCannotDo: the flags that say what to
+// judge have nothing to do in a rebuild, and a measurement still needs them.
+func TestJudgeCalibrateReplayRefusesWhatItCannotDo(t *testing.T) {
+	vault := t.TempDir()
+	suite := judgeSuite(t, filepath.Join(vault, "suite"))
+
+	refused := run(t, "judge", "calibrate", "--replay", vault, "--suite", suite)
+	if refused.code != exitUsage {
+		t.Fatalf("exit = %d, want %d; stderr = %s", refused.code, exitUsage, refused.stderr)
+	}
+	if !strings.Contains(refused.stderr, "drop one of the two") {
+		t.Fatalf("the refusal does not say what to do:\n%s", refused.stderr)
+	}
+
+	// Without a replay the two flags a measurement cannot do without are still
+	// required, and leaving them off is a usage failure rather than a run.
+	missing := run(t, "judge", "calibrate", "--vault", vault)
+	if missing.code != exitUsage {
+		t.Fatalf("exit = %d, want %d; stderr = %s", missing.code, exitUsage, missing.stderr)
+	}
+	if !strings.Contains(missing.stderr, `required flag(s) "suite", "config" not set`) {
+		t.Fatalf("the refusal does not name the flags:\n%s", missing.stderr)
+	}
+}

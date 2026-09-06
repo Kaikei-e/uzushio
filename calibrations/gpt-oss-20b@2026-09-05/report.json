@@ -67,6 +67,25 @@
         "hi": 0.6394189540386962
       },
       "alpha": 0.05
+    },
+    "position": {
+      "decided_calls": 1961,
+      "first_chosen": 1143,
+      "p_first": 0.5828658847526772,
+      "bias": 0.0828658847526772,
+      "clusters": 197,
+      "ci": {
+        "lo": 0.5663382505444613,
+        "hi": 0.5993935189608931
+      },
+      "level": 0.95,
+      "ci_method": "cluster-jackknife"
+    },
+    "disagree_breakdown": {
+      "pairs": 124,
+      "both_first": 114,
+      "both_second": 10,
+      "other": 0
     }
   },
   "rerun": {
@@ -312,6 +331,124 @@
       "from_gold": 0,
       "from_labels": 0
     }
+  },
+  "abstention_by_gold": {
+    "pooled": {
+      "runs": 400,
+      "runs_without_gold": 0,
+      "gold_decided": 270,
+      "gold_tie": 130,
+      "abstained_on_gold_decided": 137,
+      "rows": [
+        {
+          "outcome": "selected_agrees",
+          "gold_decided": 111,
+          "gold_tie": 0
+        },
+        {
+          "outcome": "selected_differs",
+          "gold_decided": 22,
+          "gold_tie": 50
+        },
+        {
+          "outcome": "no_majority",
+          "gold_decided": 122,
+          "gold_tie": 53
+        },
+        {
+          "outcome": "all_draws",
+          "gold_decided": 8,
+          "gold_tie": 22
+        },
+        {
+          "outcome": "cycle",
+          "gold_decided": 1,
+          "gold_tie": 0
+        },
+        {
+          "outcome": "invalid_output",
+          "gold_decided": 6,
+          "gold_tie": 5
+        }
+      ]
+    },
+    "by_seed": [
+      {
+        "seed": 1,
+        "runs": 200,
+        "runs_without_gold": 0,
+        "gold_decided": 135,
+        "gold_tie": 65,
+        "abstained_on_gold_decided": 65,
+        "rows": [
+          {
+            "outcome": "selected_agrees",
+            "gold_decided": 59,
+            "gold_tie": 0
+          },
+          {
+            "outcome": "selected_differs",
+            "gold_decided": 11,
+            "gold_tie": 28
+          },
+          {
+            "outcome": "no_majority",
+            "gold_decided": 57,
+            "gold_tie": 24
+          },
+          {
+            "outcome": "all_draws",
+            "gold_decided": 3,
+            "gold_tie": 11
+          },
+          {
+            "outcome": "invalid_output",
+            "gold_decided": 5,
+            "gold_tie": 2
+          }
+        ]
+      },
+      {
+        "seed": 2,
+        "runs": 200,
+        "runs_without_gold": 0,
+        "gold_decided": 135,
+        "gold_tie": 65,
+        "abstained_on_gold_decided": 72,
+        "rows": [
+          {
+            "outcome": "selected_agrees",
+            "gold_decided": 52,
+            "gold_tie": 0
+          },
+          {
+            "outcome": "selected_differs",
+            "gold_decided": 11,
+            "gold_tie": 22
+          },
+          {
+            "outcome": "no_majority",
+            "gold_decided": 65,
+            "gold_tie": 29
+          },
+          {
+            "outcome": "all_draws",
+            "gold_decided": 5,
+            "gold_tie": 11
+          },
+          {
+            "outcome": "cycle",
+            "gold_decided": 1,
+            "gold_tie": 0
+          },
+          {
+            "outcome": "invalid_output",
+            "gold_decided": 1,
+            "gold_tie": 3
+          }
+        ]
+      }
+    ]
   },
   "outcomes": {
     "total": 400,
