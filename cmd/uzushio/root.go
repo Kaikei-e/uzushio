@@ -13,7 +13,9 @@
 // `uzushio judge` measures the other instrument in the loop: `import-mtbench`
 // derives a three-way calibration suite from a corpus of pairwise human
 // judgments, `calibrate` runs a judge over it and records the three
-// coefficients, and `status` says which calibrations still bind.
+// coefficients, `trial` compares two judge conditions on a small fixed item set
+// inside a time box before anyone pays for a calibration, and `status` says
+// which calibrations still bind.
 package main
 
 import (

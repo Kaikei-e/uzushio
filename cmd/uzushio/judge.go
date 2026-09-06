@@ -44,7 +44,8 @@ func newJudgeCmd() *cobra.Command {
 			"it agrees with people. Only the last is validity, and a judge can be perfectly\n" +
 			"consistent and consistently wrong.",
 	}
-	cmd.AddCommand(newJudgeCalibrateCmd(), newJudgeStatusCmd(), newJudgeImportMTBenchCmd())
+	cmd.AddCommand(newJudgeCalibrateCmd(), newJudgeStatusCmd(), newJudgeImportMTBenchCmd(),
+		newJudgeTrialCmd())
 	return cmd
 }
 

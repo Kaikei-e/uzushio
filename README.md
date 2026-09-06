@@ -32,7 +32,8 @@ uzushio depends on both layers below it. Neither of them depends on uzushio.
   proposes the edits that answer them; `uzushio run`, which measures a
   candidate edit against that harness; `uzushio judge`, which derives a
   calibration suite from pairwise human judgments, measures a judge model over
-  it and says which calibrations still bind; and `uzushio version`;
+  it, tries one change to it against a small fixed item set inside a time box
+  (`judge trial`) and says which calibrations still bind; and `uzushio version`;
 - five kinds for the harness-improvement loop — `edit` (a proposed change to
   one harness surface), `pattern` (a recurring failure, written as an STPA
   unsafe control action), `run` (one evaluation of one edit on one split),
@@ -456,6 +457,252 @@ is the claim somebody made on a day and is append-only history. It exits 2
 when a recorded run directory is not on disk, and when what it recomputes
 differs from what the report already carries at the precision the document
 publishes: the document names the report and has to keep matching it.
+
+### Trying a change before paying for a calibration
+
+```sh
+uzushio judge trial --card cards/cf-1.json --cmoa /path/to/cmoa --out cards/trial-cf-1
+uzushio judge trial --card cards/cf-1.json --cmoa /path/to/cmoa --out cards/trial-cf-1 --resume
+```
+
+A calibration is a couple of hours of a fleet, and making it the gate on every
+experiment means every experiment costs an afternoon — so most of them never
+happen. `judge trial` is the other reading: **two judge conditions, a handful
+of items fixed in advance, one seed, a time box, and a comparison that says
+whether the change is worth a calibration.** ADR 0010 records the policy.
+
+The **experiment card** is written first and echoed into the report, which is
+the whole of its job: a threshold moved after the numbers are in is only
+visible as one if the card and the result are in the same file.
+
+```jsonc
+{
+  "schema_version": 1,
+  "id": "cf-1-budget-96",
+  "hypothesis": "a smaller reasoning budget does not cost selection quality",
+  "change": "judge reasoning budget 512 -> 96",          // exactly one thing
+  "stage": "A",                                           // A | B | C
+  "suite": "../examples/suite-chat/suite.json",
+  "manifests": ["set-d.json", "set-r.json"],
+  "take": {"D": 4, "R": 2},                               // first k of each set, file order
+  "max_items": 8,                                         // D+R together; 0 takes the stage's cap
+  "labels": ["labels.jsonl"],                             // optional
+  "base":      {"id": "base-2026-09-05", "config": "…/cmoa-chat.json",
+                "config_sha256": "…"},                    // pinned, checked first
+  "candidate": {"id": "cf-1", "config": "…/cmoa-chat-cf1.json",
+                "cmoa": "cmoa-reason-200",                // optional: a second build
+                "switch": {                               // optional: entering costs something
+                  "command": "./switch-judge.sh 96",
+                  "ready_url": "http://127.0.0.1:8090/v1/models",
+                  "timeout_seconds": 300}},
+  "reuse": {"kind": "saved_runs", "source": "../examples/suite-chat"},
+  "seed": 1, "judge_seed": 7,                             // presentation, sampling
+  "metrics": ["selection_top1", "wall_time", "coverage"],
+  "rules": {"kind": "speed"},                             // speed | quality | output_fix
+  "budget_seconds": 600,
+  "planning": {"item_seconds": 48, "overhead_seconds": 60,
+               "switch_seconds_estimate": 20,             // all 見積り, from a pilot
+               "accept_cut": true},                       // the take is larger than the box
+  "alternating_blocks": false, "block_size": 4,           // for a runtime change
+  "min_items_per_category": 4,
+  "min_evaluable_items": 8
+}
+```
+
+`take` is a **prefix**, not a selection: the first k items of the manifest in
+file order, because the set's own order is what was built to make a prefix
+representative. A set the take does not name runs whole. The item ceiling is
+over **D and R together** — 8 at stage A, 40 at B, and whatever a stage C card
+declares — and `judge trial` refuses a take that exceeds it before spending
+anything.
+
+`planning` is the other refusal, and every number in it is a 見積り the card
+declares rather than anything the runner measured: `planned = min(cap,
+floor((budget − overhead − switches × switch_seconds) / per-item cost))`, with
+both conditions priced as measured, because a reuse key that misses is the case
+the plan has to survive. A take the arithmetic does not afford is refused
+unless the card sets `accept_cut`, which says it expects the clock: the runner
+then runs the fixed order and reports `interrupted_items` and 時間・資源切れ
+rather than pretending it fitted.
+
+`rules.kind` picks the thresholds the memo's own operating design values set —
+speed: ΔQ ≥ −2 pt **and** mean time −10%; quality: ΔQ ≥ +3 pt **and** time
+≤ +5%; output_fix: the named failures stop and D does not lose quality. Both
+are overridable per card as `min_delta_q_points` and `max_time_ratio`, and the
+budget defaults to 600 / 1800 / 5400 seconds by stage. These are numbers for
+starting a comparison, not lines anybody has published: on forty items one item
+is 2.5 points.
+
+An **item manifest** is one set — D the development representative set, R the
+known failures, H what is held back for the adoption check:
+
+```jsonc
+{
+  "schema_version": 1,
+  "set": "D",
+  "items": [
+    {"id": "mtb-083-t2-a", "order": 1,                // optional, and checked
+     "strata": {"category": "writing", "length_bin": "short", "language": "en"},
+     "reason": "typical two-turn writing item"}
+  ],
+  "weights": {"writing": 0.2, "math": 0.15}   // optional: target shares, keyed by stratum value
+}
+```
+
+`weights` is optional — a set built by hand for a stage A probe stands for no
+population — and where it is present D is reported both raw and re-weighted. A
+stratum with fewer than `min_items_per_category` evaluable items gets no number
+and is listed as 未評価 / unevaluated; R is always shown on its own and never
+averaged into D.
+
+**The file's order is the execution order**, and `order` is that order written
+down a second time: a manifest either numbers every item or none, and a
+numbering that disagrees with the file is a load error rather than a note. The
+runner writes the order and its composition into `trial.json` **before the
+first call**, as `recorded: plan`, and the finished report overwrites it as
+`recorded: result` — a prefix chosen after somebody saw a number is a prefix
+chosen for its answer, and the timestamps are the only thing that can tell the
+two apart afterwards.
+
+A card naming both D and R runs them **interleaved**: R item *i* of *r* follows
+D item round(*i·d*/(*r*+1)), so a stage A take of four and two runs `D1 R1 D2
+D3 R2 D4`. Appending R would mean that the day the budget stopped the run, it
+dropped both of the items the run was carrying R for.
+
+Where fewer than `min_evaluable_items` items carry a human position — the
+default is 8, and a stage A take of four items of D yields about three — the
+report prints **no ΔQ at all** and says 未評価. On three items one label is 33
+points, which is past every threshold a card can name. What such a run still
+reports is behaviour, time, and every item whose selection changed; the stage A
+two-item heuristic still reads those, because ordering work by which items
+moved is exactly what it is for.
+
+A set over a suite lives beside that suite, in `<suite dir>/sets/`. The ones
+for the chat calibration suite are **`examples/suite-chat/sets/`** — `D.json`
+(40 items, stratified by category, length bin and language at a recorded seed,
+carrying the corpus category shares as weights), `R.json` (6 known failures,
+deliberately unweighted), and `H.json`, which is **empty**: all 200 labelled
+items were used in the 2026-09-05 and 2026-09-06 calibrations, so nothing is
+held out and the generalisation confirmation is 未済. `judge trial` refuses an
+empty manifest, which is the right answer — a card cannot claim a stage C
+confirmation over a set with nothing in it. `examples/suite-chat/sets/README.md`
+records the sampling recipe, the execution order and its prefix compositions,
+why R carries no weights, and what actually fits in each stage's time box (at
+the pilot's per-item cost, **8 items in stage A** with the base reused and 4
+with both conditions measured; ~25 and ~12 in stage B — forty items do not fit
+thirty minutes).
+
+The cards that run over them are **`examples/suite-chat/cards/`**:
+`control.json`, which measures the same configuration against itself to get the
+run-to-run difference a real change has to beat, and `cf-2-reason-200.json`,
+whose two conditions are two harness builds. Both take D4 + R2, both give the
+box 600 seconds, and both **measure the base**. Neither names an absolute path;
+`examples/suite-chat/cards/README.md` documents the two placeholders — the
+local harness configuration beside the card, and the second build as a name on
+`PATH`.
+
+#### The saved runs of 2026-09-05 are not a baseline for today
+
+They were made at judge `max_tokens` 512 and `parallel` 3; the current
+configuration is 256 and 6. Those are different judge settings, the reuse key
+carries the judge settings, and the runner therefore refuses them — which is
+the right answer rather than an inconvenience. A comparison against them would
+mix whatever is under test with a generation budget and a parallelism nobody
+wrote into the card, and a pure replay of the old runs is not the old judgement
+re-taken under the new budget either.
+
+So **a judge-setting experiment measures its base once**, at today's settings,
+inside the same A/B window as the candidate. After that, the card that measured
+it is the base for the next one:
+
+```jsonc
+"reuse": {"kind": "trial", "source": "../cards/trial-control-2026-09-06"}
+```
+
+which still reuses only where the whole key matches. The same constraint
+applies anywhere else the 400 saved runs are used as a comparison point.
+
+#### The three refusals
+
+- **A saved run stands in for the base only when its reuse key matches.** The
+  key is the task file, the conversation, the rubric and reference, the
+  candidate texts *and which identifier each of them carries*, `prompt_version`,
+  `cmoa_version`, the selection rule, the judge's settings, `allow_tie`, and
+  both seeds. The runtime half is only knowable from a run the harness actually
+  made, so the trial runs the first candidate item and resolves the base's
+  expected key from it; the judge settings come from the base's own
+  configuration. A change to the prompt therefore rejects every saved base run
+  — which is the safe direction, and the base gets measured. `reuse.key_mismatch`
+  in the report names the field that rejected it. The conversation is compared
+  through the harness's own `conversation_sha256`, taken from the run the trial
+  just made rather than computed here: the harness hashes the decoded
+  conversation and not the bytes of the file, so a digest computed from the
+  file would reject every saved run for the wrong reason. The task file, the
+  rubric and the reference are not in a trace at all, so for those the corpus
+  stands for both sides — they say the two conditions were given the same
+  inputs, not that the saved run saw them.
+- **A condition that costs something to enter is charged for it.** A judge
+  whose setting lives in a compose file is a container that has to be rewritten
+  and restarted, so a condition may carry a `switch` hook — a command and a
+  URL that says when the thing it started can answer. The runner runs it on
+  entering the condition, including the first time, because the fleet starts in
+  whatever state the last experiment left; it waits for the URL; and it reports
+  the seconds as their own **`switch` phase** beside load, wait, measure and
+  aggregate. That is inside `T_eval` on purpose: an experiment whose inference
+  fits ten minutes only because the two restarts around it were not counted has
+  not fitted ten minutes. First-time preparation — a model downloaded, a
+  runtime compiled, a second binary built — is **not** in `T_eval`, gets its own
+  line, and is never smuggled into a per-switch number.
+- **A reused base contributes no wall time.** A run made on another day under
+  another load is not this trial's base, so a trial that read its base off disk
+  reports **no speed ratio at all** rather than one nobody should read. Where
+  both sides were measured in one session the number is `G_judge` — the judge
+  stage only, never swapped for a round's `G_T` — with the median beside it and
+  no p95, because a tail read off this many items is not a tail.
+- **The runner suggests and does not decide.** `suggested` is `drop`,
+  `advance` (stage A), `finalist` (B and C) or `inconclusive`; `adopt` is not in
+  its vocabulary. The two-item stage A rule — a change that newly loses two more
+  items than it rescues drops down the queue — is printed as a development
+  heuristic that says of itself that it is not a demonstration. `decision` is a
+  person's, and it belongs in the card of whatever happens next.
+
+#### Resuming, and what a budget stop leaves behind
+
+The resume unit is one **(item, condition)** step, because `Judge.Run` does not
+promise resumption inside a run. Each finished step is appended to
+`results.jsonl` and flushed, `--resume` skips every step already there and never
+asks about it again, and running without `--resume` over a non-empty journal is
+refused rather than silently redone.
+
+The time box stops **new measured work** only; a reused base still runs, so
+items stay paired. What the budget dropped is in the report by name —
+`interrupted_items`, `stop_reason: out_of_budget` (時間・資源切れ) and each
+item's `complete: false` — because a comparison over whatever finished is a
+comparison over the fast ones, and the only defence is being able to see which
+were dropped. A run its own clock stopped suggests `inconclusive`; it is the
+evaluation running out of time and not the model failing.
+
+`conditions.<side>.tie_breaks` is how the answers were settled: a `(stage,
+key)` table counted from `judge.json`'s own `consensus` and `tie_break.key`
+fields, per condition, and **never from `outcome.reason`**. The two are not the
+same count. A consensus group parted by a hash carries `hash` in the structured
+field and the word `consensus` in the sentence, so grepping sentences finds 87
+of the 2026-09-05 calibration's tie-breaks where counting fields finds 91 — a
+difference that had to be resolved by hand once and should not have to be
+again.
+
+Quality is scored under one named handling, `human-position-only,
+failure-as-zero`: only items where the people named a position count, a
+`no_candidate` there is a defined failure scoring zero rather than an excused
+item, and `judge_timeout` / `judge_failed` are the machine and enter no score.
+Where no item carries a human position the metric is named `pair_judge`, is
+reported as **not measured**, and does not stand in for selection top-1.
+
+The command writes `trial.json`, `trial.md` and `results.jsonl`, prints the
+report path on stdout, and exits non-zero when items were interrupted or a
+candidate step produced no readable judgement. Every path in the report is
+relative to `--vault` or reduced to its own name: the report is a file somebody
+commits, and a local configuration lives wherever its owner keeps it.
 
 ### Which human labels
 

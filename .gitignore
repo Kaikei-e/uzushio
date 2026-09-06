@@ -46,3 +46,10 @@
 /examples/*/cache/
 /examples/suite-go/cache/
 /examples/suite-go/runs/
+
+# What `uzushio judge trial` writes beside a card, and the local harness
+# configuration a card names. A trial output holds run directories and the
+# harness's own stderr; a configuration lives wherever its owner keeps it and
+# is a placeholder in every committed card (see examples/suite-chat/cards).
+/examples/suite-chat/cards/trial-*/
+/examples/suite-chat/cards/cmoa-*.json

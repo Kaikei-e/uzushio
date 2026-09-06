@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "set": "H",
+  "items": [],
+  "weights": {
+    "coding": 0.095,
+    "extraction": 0.11,
+    "humanities": 0.13,
+    "math": 0.15,
+    "reasoning": 0.095,
+    "roleplay": 0.125,
+    "stem": 0.18,
+    "writing": 0.115
+  }
+}

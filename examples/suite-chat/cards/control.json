@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "control-2026-09-06",
+  "hypothesis": "the two columns of a trial agree with each other when nothing differs between them",
+  "change": "nothing: both conditions are the same configuration and the same build",
+  "stage": "A",
+  "suite": "../suite.json",
+  "manifests": ["../sets/D.json", "../sets/R.json"],
+  "take": {"D": 4, "R": 2},
+  "labels": [],
+  "base": {
+    "id": "control-a",
+    "config": "cmoa-chat.json"
+  },
+  "candidate": {
+    "id": "control-b",
+    "config": "cmoa-chat.json"
+  },
+  "reuse": {"kind": "none"},
+  "seed": 1,
+  "judge_seed": 7,
+  "metrics": ["selection_top1", "wall_time", "coverage", "tie_break_key"],
+  "rules": {"kind": "speed"},
+  "budget_seconds": 600,
+  "planning": {
+    "item_seconds": 48,
+    "overhead_seconds": 60,
+    "accept_cut": true
+  },
+  "min_evaluable_items": 8
+}

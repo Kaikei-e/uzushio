@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "cf-2-reason-200",
+  "hypothesis": "halving the judge's reason budget costs no selection quality and buys time",
+  "change": "the harness truncates a judge's reason at 200 characters instead of 400",
+  "stage": "A",
+  "suite": "../suite.json",
+  "manifests": ["../sets/D.json", "../sets/R.json"],
+  "take": {"D": 4, "R": 2},
+  "labels": [],
+  "base": {
+    "id": "base-256-6",
+    "config": "cmoa-chat.json",
+    "cmoa": "cmoa"
+  },
+  "candidate": {
+    "id": "cf-2-reason-200",
+    "config": "cmoa-chat.json",
+    "cmoa": "cmoa-reason-200"
+  },
+  "reuse": {"kind": "none"},
+  "seed": 1,
+  "judge_seed": 7,
+  "metrics": ["selection_top1", "wall_time", "coverage", "tie_break_key"],
+  "rules": {"kind": "speed"},
+  "budget_seconds": 600,
+  "planning": {
+    "item_seconds": 48,
+    "overhead_seconds": 60,
+    "accept_cut": true
+  },
+  "min_evaluable_items": 8
+}
