@@ -357,16 +357,24 @@ are three different claims:
 | | what it compares | what it says |
 |---|---|---|
 | `swap_kappa` | the judge against itself with the two candidates in the other order | position bias |
-| `rerun_kappa` | the judge against itself on another seed | sensitivity to how the candidates were arranged |
+| `rerun_kappa` | the judge against itself on another seed | sensitivity to bytes that carry none of the question |
 | `human_kappa` | the judge against people | **validity** |
 
 Only the third is validity. The first two are the judge against itself, so the
 two readings are not independent, which pushes their agreement up; a judge can
 be perfectly self-consistent and consistently wrong, and the published work
-that measures both finds exactly that pair. The seed moves the order the
-candidates are shown in rather than the sampling — the judge runs at
-temperature 0 — so `rerun_kappa` is what a different arrangement does to the
-same decision.
+that measures both finds exactly that pair.
+
+The seed does **not** move the order the candidates are shown in. Both orders
+of every pair are always asked, so a round-robin re-run changes no request on
+that account, and there is no presentation permutation to move. What `--seed`
+moves is the nonce inside the candidate fences (CMoA ADR 0011, and the
+"presentation seed and the nonce" section of its `trace-schema.md`) — an
+irrelevant-token perturbation, the same question in different bytes, whose
+answer ought not to change. So `rerun_kappa` is what the same decision does
+when only those bytes differ, *plus* whatever non-determinism the server adds
+at temperature 0: the same request twice on a GPU can come back different, and
+this number does not separate the two.
 
 Each coefficient is stored with `p_o`, `p_e`, PABAK, both marginal
 distributions, the sample size and an interval, in the `report.json` the

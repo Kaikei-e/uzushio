@@ -855,3 +855,36 @@ func TestRecordedPathsAreNeverAbsolute(t *testing.T) {
 		t.Fatalf("RecordPath answered %q, which carries the machine's layout", relative)
 	}
 }
+
+// TestSummarySaysWhatASecondSeedMoves is a correction rather than a feature.
+// In a both-orders round robin the seed reorders nothing — both orders of
+// every pair are asked at every seed — so a document that read the re-run
+// coefficient as "what a different arrangement does" would name a perturbation
+// the run never applied. What the seed moves is the nonce inside the candidate
+// fences, and whatever the server does differently at temperature 0 rides
+// along with it.
+func TestSummarySaysWhatASecondSeedMoves(t *testing.T) {
+	gold := map[string]string{"i1": "c1", "i2": "c2"}
+	answers := map[string][]script{
+		"i1": {agrees("c1"), agrees("c1")},
+		"i2": {agrees("c2"), agrees("c2")},
+	}
+	summary := calibrate(t, suite(t, gold), fakeRunner{answers: answers},
+		judge.Options{Reruns: 1}).Report.Summary()
+
+	for _, want := range []string{
+		"Both orders of every pair are asked at\nevery seed",
+		"the nonce\ninside the candidate fences",
+		"temperature 0",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("the summary does not say %q:\n%s", want, summary)
+		}
+	}
+	for _, wrong := range []string{"arrangement", "the order the candidates are shown"} {
+		if strings.Contains(summary, wrong) {
+			t.Fatalf("the summary still claims the seed reorders the candidates (%q):\n%s",
+				wrong, summary)
+		}
+	}
+}

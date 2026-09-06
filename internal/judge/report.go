@@ -257,6 +257,11 @@ func (r Report) Summary() string {
 	b.WriteString("\nBoth are the judge against itself. The two readings are not independent,\n")
 	b.WriteString("which pushes observed agreement up, so neither is a two-rater reliability\n")
 	b.WriteString("and neither is evidence that the judge is measuring the right thing.\n")
+	b.WriteString("\nThe re-run arm moves no candidate. Both orders of every pair are asked at\n")
+	b.WriteString("every seed, so a second seed reorders nothing; what it moves is the nonce\n")
+	b.WriteString("inside the candidate fences. The re-run coefficient is therefore the same\n")
+	b.WriteString("decision under an irrelevant-token perturbation, together with whatever the\n")
+	b.WriteString("server does differently at temperature 0, and it does not separate the two.\n")
 
 	b.WriteString("\n## Validity, which is the judge against people\n\n")
 	for _, reference := range []string{ReferenceHuman, ReferenceGold, ReferenceLabels} {
