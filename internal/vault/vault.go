@@ -307,6 +307,12 @@ func addKinds(cfg *config.Config, allSurfaces []string) {
 			// makes a hand-written document answer to the same rule.
 			vocab.FieldReport.String():       {Required: true},
 			vocab.FieldInForceUntil.String(): {},
+			// Optional, and absent on a measurement. A rescoring re-reads
+			// the calls an earlier calibration recorded and asks the judge
+			// nothing; every other key it writes is indistinguishable from a
+			// measurement's, so the difference has to be a key of its own
+			// rather than a sentence in the body somebody might not read.
+			vocab.FieldRescoredFrom.String(): {},
 		},
 		// No edge and no rule, for two reasons that are worth keeping apart.
 		//

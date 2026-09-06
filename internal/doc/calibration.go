@@ -60,6 +60,11 @@ type Calibration struct {
 	NHuman int
 	// Verdict is what the calibration concluded about the judge.
 	Verdict vocab.Calibrated
+	// RescoredFrom names the calibration directory whose recorded judge
+	// calls this one re-aggregated, empty where the judge was asked. A
+	// rescoring is a measurement of the rule over answers already given, and
+	// nothing else in the frontmatter says so.
+	RescoredFrom string
 	// Report is the path to the report.json the calibration wrote, relative
 	// to the vault root. It is required: the three coefficients cannot be read
 	// without the marginals and the intervals beside them, and those are in
@@ -120,6 +125,7 @@ type CalibrationFrontmatter struct {
 	NHuman       string            `yaml:"n_human"`
 	Verdict      string            `yaml:"verdict"`
 	Report       string            `yaml:"report"`
+	RescoredFrom string            `yaml:"rescored_from,omitempty"`
 	Supersedes   []supersedesEntry `yaml:"supersedes,omitempty"`
 }
 
@@ -281,6 +287,7 @@ func (c Calibration) Frontmatter() (CalibrationFrontmatter, error) {
 		NHuman:       strconv.Itoa(c.NHuman),
 		Verdict:      c.Verdict.String(),
 		Report:       c.Report,
+		RescoredFrom: c.RescoredFrom,
 		Supersedes:   supersedesEntries(c.Supersedes),
 	}, nil
 }

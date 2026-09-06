@@ -55,7 +55,22 @@ const (
 	// measured against a mixture of them is measured against more items than
 	// either alone.
 	ReferenceHuman = "human"
+	// ReferenceHumanJudged is ReferenceHuman restricted to the items the
+	// judge was actually asked about.
+	//
+	// Since the harness settles a run the candidates agree on without a
+	// judge call, `human` has stopped being a coefficient about the judge
+	// and become one about the whole selector. Both are worth having and
+	// they are not the same claim, so the narrower one is computed beside
+	// it: it is the reading that stays comparable with a calibration made
+	// before the consensus stage existed.
+	ReferenceHumanJudged = "human_judge_decided"
 )
+
+// references are the four the report scores, in the order it writes them.
+func references() []string {
+	return []string{ReferenceGold, ReferenceLabels, ReferenceHuman, ReferenceHumanJudged}
+}
 
 // Options are one calibration.
 type Options struct {
@@ -73,6 +88,15 @@ type Options struct {
 	Pool  string
 	// Day is the day the window closes, as YYYY-MM-DD.
 	Day string
+	// RescoredFrom names the calibration whose recorded calls were
+	// re-aggregated, empty where the judge was asked, and Rescored is what
+	// that calibration concluded. Both travel into the report unchanged.
+	RescoredFrom string
+	Rescored     *Rescored
+	// Recorded answers what the source calibration concluded for one run,
+	// so a rescoring can check itself where the two rules must agree. Nil
+	// runs no check.
+	Recorded func(item string, seed int) (kind, candidate string)
 	// Alpha and MinKappa are the level and the threshold. Zero is the default.
 	Alpha    float64
 	MinKappa float64
@@ -303,6 +327,8 @@ func assemble(opts Options, a assembly) (Result, error) {
 		Judge:         opts.Judge,
 		Pool:          opts.Pool,
 		Day:           opts.Day,
+		RescoredFrom:  opts.RescoredFrom,
+		Rescored:      opts.Rescored,
 		Items:         len(a.items),
 		Seeds:         a.seeds,
 		AllBadLabels:  a.allBad,
@@ -314,6 +340,9 @@ func assemble(opts Options, a assembly) (Result, error) {
 		Outcomes: Outcomes{
 			ByKind:              map[string]int{},
 			NoCandidateByReason: map[string]int{},
+			ByRule:              map[string]int{},
+			ByTieBreak:          map[string]int{},
+			ByConsensus:         map[string]int{},
 		},
 	}
 
@@ -332,7 +361,7 @@ func assemble(opts Options, a assembly) (Result, error) {
 		return Result{}, fmt.Errorf("%w: %w", ErrJudge, err)
 	}
 	validity := map[string]*validityTables{}
-	for _, reference := range []string{ReferenceGold, ReferenceLabels, ReferenceHuman} {
+	for _, reference := range references() {
 		tables, err := newValidityTables(categories)
 		if err != nil {
 			return Result{}, err
@@ -369,6 +398,19 @@ func assemble(opts Options, a assembly) (Result, error) {
 			report.Outcomes.ByKind[run.Outcome]++
 			report.Outcomes.Total++
 			report.Outcomes.InvalidRetries += run.InvalidRetries
+			if rule := run.Rule(); rule != "" {
+				report.Outcomes.ByRule[rule]++
+			}
+			if run.TieBreak != "" {
+				report.Outcomes.ByTieBreak[run.TieBreak]++
+			}
+			if run.Consensus != "" {
+				report.Outcomes.ByConsensus[run.Consensus]++
+			}
+			if run.Measured() && run.Calls() == 0 {
+				report.Outcomes.Judgeless++
+			}
+			checkSweep(opts, report.Rescored, item.Item, run)
 			// The abstention table counts the run that measured nothing too:
 			// what it is for is what the suite lost, and a run nobody could
 			// make is as lost as a run that could decide nothing.
@@ -458,11 +500,18 @@ func assemble(opts Options, a assembly) (Result, error) {
 		}
 
 		answer := runs[0].Category()
-		for _, reference := range []string{ReferenceGold, ReferenceLabels, ReferenceHuman} {
+		for _, reference := range references() {
 			human := map[string]string{
-				ReferenceGold: item.Gold, ReferenceLabels: item.Label, ReferenceHuman: item.Human,
+				ReferenceGold: item.Gold, ReferenceLabels: item.Label,
+				ReferenceHuman: item.Human, ReferenceHumanJudged: item.Human,
 			}[reference]
 			if human == "" {
+				continue
+			}
+			// The restricted reading drops the items no judge answered for.
+			// It is the same comparison over fewer items, not a different
+			// one, and the count it reports is how many are left.
+			if reference == ReferenceHumanJudged && runs[0].Calls() == 0 {
 				continue
 			}
 			if err := validity[reference].observe(item.Item, answer, human); err != nil {
@@ -733,4 +782,27 @@ func latency(all []int64) Latency {
 		out.TotalMS += value
 	}
 	return out
+}
+
+// checkSweep is the one comparison a rescoring makes against the calibration
+// it re-read.
+//
+// A Condorcet winner is a candidate that won every pair under both orders,
+// and that is the same finding under either rule: the older rule selected
+// exactly such a candidate and nothing else. So on a run the new rule
+// settled that way — and where the candidates had not agreed with each
+// other, which the older rule could not see — the two must name the same
+// candidate. They are reading the same six recorded answers. A difference
+// is not a judge that changed its mind; it is a replay that did not replay,
+// and the count is put in the report rather than in a log nobody keeps.
+func checkSweep(opts Options, before *Rescored, item string, run Judged) {
+	if opts.Recorded == nil || before == nil || run.Rule() != RuleCondorcet {
+		return
+	}
+	kind, candidate := opts.Recorded(item, run.Seed)
+	if kind == OutcomeSelected && candidate == run.Candidate {
+		before.SweptAgree++
+		return
+	}
+	before.SweptDiffer++
 }

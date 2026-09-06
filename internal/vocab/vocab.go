@@ -478,6 +478,12 @@ const (
 	// FieldNHuman is how many items carried a human label, as a decimal
 	// string.
 	FieldNHuman Field = "n_human"
+	// FieldRescoredFrom names the calibration whose recorded judge calls were
+	// re-aggregated, where a measurement asked the judge nothing new. It is
+	// absent on a calibration that ran the judge, and its presence is the
+	// only thing that tells the two apart from the frontmatter: every other
+	// key of a rescoring reads exactly like a measurement's.
+	FieldRescoredFrom Field = "rescored_from"
 )
 
 // String returns the field as frontmatter writes it.
@@ -517,6 +523,7 @@ func CalibrationFields() []Field {
 		FieldJudge, FieldPool, FieldWindowFrom, FieldWindowTo, FieldNItems,
 		FieldTieHandling, FieldSwapKappa, FieldRerunKappa, FieldHumanKappa,
 		FieldNHuman, FieldVerdict, FieldReport, FieldInForceUntil,
+		FieldRescoredFrom,
 	})
 }
 

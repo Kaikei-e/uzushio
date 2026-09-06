@@ -24,6 +24,11 @@ type script struct {
 	reason  string
 	choice  string
 	orders  [][2]string
+	// consensus and tieBreak are the two stages the harness records as
+	// fields rather than as a sentence. A script that sets consensus made
+	// no judge call at all.
+	consensus string
+	tieBreak  string
 }
 
 // fakeRunner answers from a table, keyed by item and seed. It is the whole
@@ -45,8 +50,11 @@ func (f fakeRunner) Judge(_ context.Context, _ judge.Suite, task judge.Task, see
 		Seed: seed, Outcome: s.outcome, Candidate: s.choice, Reason: s.reason,
 		LatencyMS: 1000,
 	}
-	if !out.Measured() {
-		// A run that measured nothing left no pairs behind either.
+	out.Consensus, out.TieBreak = s.consensus, s.tieBreak
+	if !out.Measured() || s.consensus != "" {
+		// A run that measured nothing left no pairs behind, and neither did
+		// one the candidates settled between themselves: that stage runs
+		// before the call list exists.
 		return out, nil
 	}
 	pairs := [3][2]string{{"c1", "c2"}, {"c1", "c3"}, {"c2", "c3"}}
@@ -101,6 +109,7 @@ func agrees(choice string) script {
 	}
 	return script{
 		outcome: judge.OutcomeSelected, choice: choice,
+		reason: "condorcet winner, 2 of 3 pairs agreed under both orders",
 		orders: [][2]string{pick("c1", "c2"), pick("c1", "c3"), pick("c2", "c3")},
 	}
 }

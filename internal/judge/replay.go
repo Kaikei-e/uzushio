@@ -76,6 +76,8 @@ func Replay(opts ReplayOptions) (Result, error) {
 		Judge:         before.Judge,
 		Pool:          before.Pool,
 		Day:           before.Day,
+		RescoredFrom:  before.RescoredFrom,
+		Rescored:      before.Rescored,
 		Alpha:         before.Alpha,
 		MinKappa:      before.MinKappa,
 		MaxUnmeasured: before.MaxUnmeasured,

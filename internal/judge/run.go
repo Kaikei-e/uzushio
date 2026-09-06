@@ -57,6 +57,13 @@ type Judged struct {
 	Reason    string `json:"reason,omitempty"`
 	// Pairs is the six calls, as three pairs of two orders.
 	Pairs []Pair `json:"pairs"`
+	// Consensus is how the candidates agreed with each other where they
+	// did — `exact` or `numeric` — and empty where the judge was asked.
+	// TieBreak is the key that parted the candidates the score could not,
+	// and is empty where nothing was tied. Both are CMoA's words, and both
+	// are absent from a trace written before the harness had the stages.
+	Consensus string `json:"consensus,omitempty"`
+	TieBreak  string `json:"tie_break,omitempty"`
 	// SwapConsistent, InvalidRetries and LatencyMS are the judge's own
 	// summary of the run.
 	SwapConsistent int   `json:"swap_consistent_pairs"`
@@ -83,6 +90,43 @@ func (j Judged) Category() string {
 		return j.Candidate
 	}
 	return Abstain
+}
+
+// Calls is how many judge calls the run made. It is zero for a run the
+// candidates settled between themselves, which is the whole point of the
+// stage that settles them: agreement between proposers is evidence, and it
+// is the only evidence in the system that costs nothing.
+func (j Judged) Calls() int {
+	n := 0
+	for _, pair := range j.Pairs {
+		n += len(pair.Orders)
+	}
+	return n
+}
+
+// Rule is which stage of the harness's selection rule settled the run, or
+// empty where nothing was selected.
+//
+// The two structured fields answer it wherever they can, and the reason
+// sentence is read only to tell a Condorcet sweep from a Copeland argmax —
+// the one distinction the trace records in words alone. A sentence this
+// package does not recognise is RuleUnstated rather than a guess: the
+// vocabulary is CMoA's, and inventing a bucket for a word it has not
+// published would hide the day it publishes one.
+func (j Judged) Rule() string {
+	switch {
+	case j.Outcome != OutcomeSelected:
+		return ""
+	case j.Consensus != "":
+		return RuleConsensus
+	case strings.HasPrefix(j.Reason, RuleCondorcet):
+		return RuleCondorcet
+	case j.TieBreak != "":
+		return RuleTieBreak
+	case strings.HasPrefix(j.Reason, RuleCopeland):
+		return RuleCopeland
+	}
+	return RuleUnstated
 }
 
 // Pair is one pair of candidates and the two orders it was judged in.
@@ -152,6 +196,12 @@ type judgeFile struct {
 		CandidateID string `json:"candidate_id"`
 		Reason      string `json:"reason"`
 	} `json:"outcome"`
+	Consensus *struct {
+		Agreement string `json:"agreement"`
+	} `json:"consensus"`
+	TieBreak *struct {
+		Key string `json:"key"`
+	} `json:"tie_break"`
 	SwapConsistent int   `json:"swap_consistent_pairs"`
 	InvalidRetries int   `json:"invalid_output_retries"`
 	LatencyMS      int64 `json:"latency_ms"`
@@ -171,6 +221,10 @@ type CMoARunner struct {
 	Config string
 	// Env is added to the environment of the call.
 	Env []string
+	// Replay names, for one item at one seed, the run directory whose
+	// recorded judge calls the harness should re-aggregate instead of
+	// asking the judge. Nil, or an empty answer, runs the judge.
+	Replay func(task Task, seed int) string
 	// Log receives one line per call.
 	Log func(string)
 }
@@ -178,10 +232,17 @@ type CMoARunner struct {
 // Judge runs `cmoa judge` over one item and reads the trace it left.
 func (r CMoARunner) Judge(ctx context.Context, suite Suite, task Task, seed int) (Judged, error) {
 	args := []string{"judge", "--task", suite.TaskDir(task)}
-	for _, candidate := range suite.Candidates(task) {
-		args = append(args, "--candidate", candidate)
+	// A replay reads the candidates and the seed out of the run it replays,
+	// and the harness refuses either of them on the command line: they are
+	// how a caller would ask a different question than the record answers.
+	if source := r.replay(task, seed); source != "" {
+		args = append(args, "--replay-from", source)
+	} else {
+		for _, candidate := range suite.Candidates(task) {
+			args = append(args, "--candidate", candidate)
+		}
+		args = append(args, "--seed", strconv.Itoa(seed))
 	}
-	args = append(args, "--seed", strconv.Itoa(seed))
 	if r.Config != "" {
 		args = append(args, "--config", r.Config)
 	}
@@ -207,6 +268,14 @@ func (r CMoARunner) Judge(ctx context.Context, suite Suite, task Task, seed int)
 		r.Log(fmt.Sprintf("judge %s seed=%d -> %s", task.ID, seed, judged.Outcome))
 	}
 	return judged, nil
+}
+
+// replay is the run directory this call should re-aggregate, or empty.
+func (r CMoARunner) replay(task Task, seed int) string {
+	if r.Replay == nil {
+		return ""
+	}
+	return r.Replay(task, seed)
 }
 
 // runDir finds the trace directory in what the harness printed.
@@ -251,6 +320,12 @@ func ReadJudged(dir string) (Judged, error) {
 		SwapConsistent: file.SwapConsistent,
 		InvalidRetries: file.InvalidRetries,
 		LatencyMS:      file.LatencyMS,
+	}
+	if file.Consensus != nil {
+		judged.Consensus = file.Consensus.Agreement
+	}
+	if file.TieBreak != nil {
+		judged.TieBreak = file.TieBreak.Key
 	}
 	for _, pair := range file.Pairs {
 		if len(pair.Pair) != 2 {

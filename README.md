@@ -405,6 +405,43 @@ exists for is `abstained_on_gold_decided`: **runs** that reached no candidate
 on an item the humans had no trouble with. Those items are not missing data —
 they are in the validity table as disagreements.
 
+### Re-scoring a corpus when the selection rule changes, not the judge
+
+```sh
+uzushio judge calibrate --suite examples/suite-chat/suite.json \
+  --cmoa ./cmoa --config cmoa.json --vault . \
+  --rescore-from calibrations/<judge>@<day>
+```
+
+`--replay` below recomputes this package's arithmetic over unchanged traces.
+`--rescore-from` recomputes the **harness's** arithmetic: it runs the harness
+against every run the named calibration recorded, with `cmoa judge
+--replay-from`, so each of the six calls is answered by the attempt that call
+recorded and no judge is asked anything. The candidates, the prompt, the
+nonce and the six answers are the ones in the record; what runs again is the
+rule that turns them into a selection.
+
+That is the measurement to make when a harness changes how it reads its
+judge's answers rather than how it asks. The whole 400-run chat corpus
+re-scores in about twenty-five seconds against the four and a quarter hours
+it cost to judge, and because both readings are over the same recorded calls,
+every difference between the two reports is the rule and nothing else — not
+the fleet, not the day, not the seed.
+
+The document it writes carries `rescored_from:` and says in its first
+paragraph that the judge was not asked. It also carries the comparison table,
+the stage each run was settled by, and one check the rescoring runs on
+itself: on the runs the new rule settled with a Condorcet winner and no
+consensus, the old rule required the same sweep of the same answers and had
+to name the same candidate, so any difference there is a replay that did not
+replay.
+
+Two coefficients are reported against people rather than one, because a
+harness that settles some runs without a judge call has made `human_kappa` a
+statement about the whole selector. The restricted reading — the same
+comparison over only the items the judge was asked about — is the one that
+stays comparable with a calibration made before that stage existed.
+
 ### Rebuilding a report without re-running the judge
 
 ```sh
