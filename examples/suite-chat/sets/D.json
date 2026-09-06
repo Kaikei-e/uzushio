@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "set": "D",
+  "items": [
+    {
+      "id": "mtb-085-t1-b",
+      "strata": {
+        "category": "writing",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category writing (corpus share 0.115, quota 5), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-085-t2-c",
+      "strata": {
+        "category": "writing",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category writing (corpus share 0.115, quota 5), length_bin long (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-086-t1-f",
+      "strata": {
+        "category": "writing",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category writing (corpus share 0.115, quota 5), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-088-t1-b",
+      "strata": {
+        "category": "writing",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category writing (corpus share 0.115, quota 5), length_bin short (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-089-t2-e",
+      "strata": {
+        "category": "writing",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category writing (corpus share 0.115, quota 5), length_bin short (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-094-t1-g",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category roleplay (corpus share 0.125, quota 5), length_bin long (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-095-t1-j",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category roleplay (corpus share 0.125, quota 5), length_bin short (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-097-t1-e",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category roleplay (corpus share 0.125, quota 5), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-098-t1-a",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category roleplay (corpus share 0.125, quota 5), length_bin short (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-098-t2-c",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category roleplay (corpus share 0.125, quota 5), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-102-t2-d",
+      "strata": {
+        "category": "reasoning",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category reasoning (corpus share 0.095, quota 4), length_bin short (in-category quota 3), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-103-t1-h",
+      "strata": {
+        "category": "reasoning",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category reasoning (corpus share 0.095, quota 4), length_bin medium (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-107-t1-e",
+      "strata": {
+        "category": "reasoning",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category reasoning (corpus share 0.095, quota 4), length_bin short (in-category quota 3), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-108-t2-e",
+      "strata": {
+        "category": "reasoning",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category reasoning (corpus share 0.095, quota 4), length_bin short (in-category quota 3), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-114-t1-d",
+      "strata": {
+        "category": "math",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category math (corpus share 0.150, quota 6), length_bin short (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-115-t1-d",
+      "strata": {
+        "category": "math",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category math (corpus share 0.150, quota 6), length_bin short (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-116-t1-c",
+      "strata": {
+        "category": "math",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category math (corpus share 0.150, quota 6), length_bin short (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-116-t1-d",
+      "strata": {
+        "category": "math",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category math (corpus share 0.150, quota 6), length_bin short (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-117-t1-e",
+      "strata": {
+        "category": "math",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category math (corpus share 0.150, quota 6), length_bin short (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-120-t2-a",
+      "strata": {
+        "category": "math",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category math (corpus share 0.150, quota 6), length_bin medium (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-123-t1-n",
+      "strata": {
+        "category": "coding",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category coding (corpus share 0.095, quota 4), length_bin medium (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-123-t2-b",
+      "strata": {
+        "category": "coding",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category coding (corpus share 0.095, quota 4), length_bin long (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-124-t1-g",
+      "strata": {
+        "category": "coding",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category coding (corpus share 0.095, quota 4), length_bin short (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-127-t2-i",
+      "strata": {
+        "category": "coding",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category coding (corpus share 0.095, quota 4), length_bin long (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-133-t2-m",
+      "strata": {
+        "category": "extraction",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category extraction (corpus share 0.110, quota 4), length_bin long (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-134-t1-l",
+      "strata": {
+        "category": "extraction",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "category extraction (corpus share 0.110, quota 4), length_bin short (in-category quota 1), sampled with random.Random(20260906).shuffle over the category's short pool sorted by id"
+    },
+    {
+      "id": "mtb-137-t2-a",
+      "strata": {
+        "category": "extraction",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category extraction (corpus share 0.110, quota 4), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-138-t1-a",
+      "strata": {
+        "category": "extraction",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category extraction (corpus share 0.110, quota 4), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-142-t1-j",
+      "strata": {
+        "category": "stem",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-146-t1-g",
+      "strata": {
+        "category": "stem",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin long (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-146-t2-d",
+      "strata": {
+        "category": "stem",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin long (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-147-t2-i",
+      "strata": {
+        "category": "stem",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin long (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-148-t1-d",
+      "strata": {
+        "category": "stem",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin long (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-149-t1-l",
+      "strata": {
+        "category": "stem",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin long (in-category quota 5), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-150-t1-i",
+      "strata": {
+        "category": "stem",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category stem (corpus share 0.180, quota 7), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-152-t1-g",
+      "strata": {
+        "category": "humanities",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category humanities (corpus share 0.130, quota 5), length_bin long (in-category quota 3), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-152-t2-a",
+      "strata": {
+        "category": "humanities",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category humanities (corpus share 0.130, quota 5), length_bin long (in-category quota 3), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    },
+    {
+      "id": "mtb-157-t1-g",
+      "strata": {
+        "category": "humanities",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category humanities (corpus share 0.130, quota 5), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-158-t1-a",
+      "strata": {
+        "category": "humanities",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "category humanities (corpus share 0.130, quota 5), length_bin medium (in-category quota 2), sampled with random.Random(20260906).shuffle over the category's medium pool sorted by id"
+    },
+    {
+      "id": "mtb-159-t2-f",
+      "strata": {
+        "category": "humanities",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "category humanities (corpus share 0.130, quota 5), length_bin long (in-category quota 3), sampled with random.Random(20260906).shuffle over the category's long pool sorted by id"
+    }
+  ],
+  "weights": {
+    "coding": 0.095,
+    "extraction": 0.11,
+    "humanities": 0.13,
+    "math": 0.15,
+    "reasoning": 0.095,
+    "roleplay": 0.125,
+    "stem": 0.18,
+    "writing": 0.115
+  }
+}

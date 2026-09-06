@@ -491,6 +491,20 @@ stratum with fewer than `min_items_per_category` evaluable items gets no number
 and is listed as 未評価 / unevaluated; R is always shown on its own and never
 averaged into D.
 
+A set over a suite lives beside that suite, in `<suite dir>/sets/`. The ones
+for the chat calibration suite are **`examples/suite-chat/sets/`** — `D.json`
+(40 items, stratified by category, length bin and language at a recorded seed,
+carrying the corpus category shares as weights), `R.json` (6 known failures,
+deliberately unweighted), and `H.json`, which is **empty**: all 200 labelled
+items were used in the 2026-09-05 and 2026-09-06 calibrations, so nothing is
+held out and the generalisation confirmation is 未済. `judge trial` refuses an
+empty manifest, which is the right answer — a card cannot claim a stage C
+confirmation over a set with nothing in it. `examples/suite-chat/sets/README.md`
+records the sampling recipe, why R carries no weights, and what actually fits
+in each stage's time box (at the pilot's per-item cost, **8 items in stage A**
+with the base reused and 4 with both conditions measured; ~25 and ~12 in stage
+B — forty items do not fit thirty minutes).
+
 #### The three refusals
 
 - **A saved run stands in for the base only when its reuse key matches.** The

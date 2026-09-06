@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "set": "R",
+  "items": [
+    {
+      "id": "mtb-136-t1-h",
+      "strata": {
+        "category": "extraction",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "invalid_output at both seeds in calibrations/gpt-oss-20b@2026-09-06/items.jsonl; 11 attempts with finish_reason=length in runs/20260905T* (the corpus maximum); 6 invalid_output retries on 2026-09-05; re-measured today at 51.63 s with 3 retries and outcome no_candidate"
+    },
+    {
+      "id": "mtb-105-t1-e",
+      "strata": {
+        "category": "reasoning",
+        "length_bin": "short",
+        "language": "en"
+      },
+      "reason": "invalid_output at both seeds in calibrations/gpt-oss-20b@2026-09-06/items.jsonl; 8 attempts with finish_reason=length; 4 invalid_output retries on 2026-09-05"
+    },
+    {
+      "id": "mtb-099-t2-g",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "longest single run on 2026-09-05 (213.1 s wall, run 20260905T*); invalid_output at seed 1 on 2026-09-06; 3 attempts with finish_reason=length"
+    },
+    {
+      "id": "mtb-083-t2-a",
+      "strata": {
+        "category": "writing",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "second longest run on 2026-09-05 (166.3 s); re-measured today at 60.00 s with 4 retries, all four attempts finish_reason=length at max_tokens 256; 2 swap-disagree pairs"
+    },
+    {
+      "id": "mtb-097-t1-p",
+      "strata": {
+        "category": "roleplay",
+        "length_bin": "long",
+        "language": "en"
+      },
+      "reason": "most swap-disagree pairs in the corpus (5 over the two seeds, judge.json draw_reason=disagree); hash tie-break at both seeds"
+    },
+    {
+      "id": "mtb-083-t1-f",
+      "strata": {
+        "category": "writing",
+        "length_bin": "medium",
+        "language": "en"
+      },
+      "reason": "hash tie-break at both seeds over all three candidates (copeland tie, score 1 of 2, tie broken by hash among [c1 c2 c3]); 4 swap-disagree pairs"
+    }
+  ]
+}
