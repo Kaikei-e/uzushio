@@ -1322,7 +1322,10 @@ type TrialRecord struct {
 	Consensus   string `json:"consensus,omitempty"`
 	TieBreakKey string `json:"tie_break_key,omitempty"`
 	Category    string `json:"category,omitempty"`
-	Measured    bool   `json:"measured"`
+	// Rule is the CMoA selection stage that settled this run.  It is copied
+	// from Judged.Rule rather than re-parsed from a human reason sentence.
+	Rule     string `json:"rule,omitempty"`
+	Measured bool   `json:"measured"`
 	// The costs. WallSeconds is nil for a reused answer, and nil is the whole
 	// point: an old wall time is not this trial's wall time.
 	Calls          int      `json:"calls"`
@@ -1897,7 +1900,7 @@ func (r *trialRun) step(ctx context.Context, step TrialStep, deadline time.Time)
 		RunDir:   RecordPath(judged.RunDir, r.opts.Vault, r.opts.Suite.Dir),
 		Outcome:  judged.Outcome, Candidate: judged.Candidate, Reason: judged.Reason,
 		Consensus: judged.Consensus, TieBreakKey: judged.TieBreak,
-		Category: answerCategory(judged), Measured: judged.Measured(),
+		Category: answerCategory(judged), Rule: judged.Rule(), Measured: judged.Measured(),
 		Calls: callsOf(judged), InvalidRetries: judged.InvalidRetries,
 		SwapConsistent: judged.SwapConsistent, LatencyMS: judged.LatencyMS,
 		WallSeconds: &seconds, At: r.now().UTC().Format(time.RFC3339),
@@ -1980,7 +1983,7 @@ func (r *trialRun) reuseStep(step TrialStep, dir string, key ReuseKey) error {
 		ReuseKey: key.Digest(), RunDir: RecordPath(dir, r.opts.Vault, r.opts.Suite.Dir),
 		Outcome: judged.Outcome, Candidate: judged.Candidate, Reason: judged.Reason,
 		Consensus: judged.Consensus, TieBreakKey: judged.TieBreak,
-		Category: answerCategory(judged), Measured: judged.Measured(),
+		Category: answerCategory(judged), Rule: judged.Rule(), Measured: judged.Measured(),
 		Calls: callsOf(judged), InvalidRetries: judged.InvalidRetries,
 		SwapConsistent: judged.SwapConsistent, LatencyMS: judged.LatencyMS,
 		WallSeconds: nil, At: r.now().UTC().Format(time.RFC3339),

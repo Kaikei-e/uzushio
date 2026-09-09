@@ -460,6 +460,10 @@ publishes: the document names the report and has to keep matching it.
 
 ### Trying a change before paying for a calibration
 
+The fixed-H confirmation after a D/R finalist is documented in
+[P1 evaluation](docs/p1-evaluation.md). It requires a separately managed,
+non-public evaluation dataset and does not itself deploy a selector change.
+
 ```sh
 uzushio judge trial --card cards/cf-1.json --cmoa /path/to/cmoa --out cards/trial-cf-1
 uzushio judge trial --card cards/cf-1.json --cmoa /path/to/cmoa --out cards/trial-cf-1 --resume

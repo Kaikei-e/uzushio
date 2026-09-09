@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 )
 
@@ -24,6 +25,13 @@ type trialResumeState struct {
 	Fingerprint   string            `json:"fingerprint"`
 	Files         map[string]string `json:"files"`
 	Binaries      map[string]string `json:"binaries"`
+	// Card and Plan expose the canonical identity that Fingerprint binds. They
+	// let a later fixed-H assessment prove that its finalist report and journal
+	// describe this exact D/R measurement, rather than merely three files with
+	// individually valid digests. They are local resume provenance, never a
+	// shareable trial report.
+	Card TrialCard   `json:"card"`
+	Plan []TrialStep `json:"plan"`
 }
 
 // resumeFingerprint binds every input that can change a recorded step's
@@ -100,6 +108,8 @@ func resumeFingerprint(opts TrialOptions, plan []TrialStep) (trialResumeState, e
 	}
 	card := opts.Card
 	card.BudgetSeconds = 0
+	state.Card = card
+	state.Plan = slices.Clone(plan)
 	runnerType := "<nil>"
 	if opts.Runner != nil {
 		runnerType = reflect.TypeOf(opts.Runner).String()

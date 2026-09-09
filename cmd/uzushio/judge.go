@@ -45,7 +45,7 @@ func newJudgeCmd() *cobra.Command {
 			"consistent and consistently wrong.",
 	}
 	cmd.AddCommand(newJudgeCalibrateCmd(), newJudgeStatusCmd(), newJudgeImportMTBenchCmd(),
-		newJudgeTrialCmd())
+		newJudgeTrialCmd(), newJudgeAssessCmd(), newJudgeLabelPacketCmd(), newJudgeLabelImportCmd(), newJudgeLabelMergeCmd())
 	return cmd
 }
 
