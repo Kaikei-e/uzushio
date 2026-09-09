@@ -715,8 +715,9 @@ reported as **not measured**, and does not stand in for selection top-1.
 The command writes `trial.json`, `trial.md` and `results.jsonl`, prints the
 report path on stdout, and exits non-zero when items were interrupted or a
 candidate step produced no readable judgement. Every path in the report is
-relative to `--vault` or reduced to its own name: the report is a file somebody
-commits, and a local configuration lives wherever its owner keeps it.
+relative to `--vault` or reduced to its own name. This path handling does not
+make a report safe to publish: P1 reports, journals, input data and labels stay
+in Git-ignored private storage, including reports from interrupted runs.
 
 ### Which human labels
 
@@ -975,6 +976,13 @@ skills/<name>/SKILL.md      one line each: the name and the description
 directories are part of the contract, because they are what tell a proposer
 where it is allowed to act.
 
+For the first P1 code loop, use a `memory/` edit. A `skills/` edit is represented
+in the harness vocabulary, but its body is not yet injected by CMoA; it cannot
+by itself demonstrate an executed runtime change.
+
+An initial private P1 code pilot has measured only held-in paired comparisons.
+Its held-out gate remains incomplete, and no memory edit has been adopted.
+
 A `memory` or `skill` edit carries its content in the document body: the body
 *is* the file, and changing it is a new edit that `supersedes` the old one. A
 `system-prompt` edit carries a sidecar unified diff at `spec/edits/<id>.diff`
@@ -1010,6 +1018,11 @@ uzushio run --edit he-0007 ... --dry-run    # render, check and plan; run nothin
 uzushio run --edit he-0007 ... --aa         # calibrate: the baseline against itself
 uzushio run --replay <run-dir>/run.json     # recompute the verdicts from the journal
 ```
+
+`run --replay` reads the saved header and journal without model calls. Coding
+`run` has no `--resume` option: preserve an interrupted run as incomplete
+evidence and use a separate output directory for a later measurement. This
+differs from `judge trial --resume` and `judge assess --resume`.
 
 | flag | |
 |---|---|

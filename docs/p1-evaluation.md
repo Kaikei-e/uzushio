@@ -7,9 +7,9 @@ packets, and any generator that embeds them are non-public data. This document
 specifies their required form and operation; it does not publish task text,
 answers, labels, or a claim that any local data are representative.
 
-At present, only the evaluation foundation and private diagnostic preparation
-exist. No H assessment has run, no real-model quality result has been recorded,
-and no selector change has been adopted.
+Private D/R pilot executions have occurred, but their data, outputs, and
+observations are non-public and do not establish a quality result. No H
+assessment has run and no selector change has been adopted.
 
 `metadata.json` uses `EvaluationDataset` schema version 1. Every item records
 the set, source/source ID, license, task cluster, raw conversation SHA-256,
@@ -45,9 +45,8 @@ uzushio judge label-import --packet data/p1/packets/reviewer-2 \
 human annotation per item. Each imported annotation binds SHA-256 values for
 the task declaration, exact conversation, rubric, optional reference, and every
 candidate body. The declaration's paths are used for both annotation and judging.
-Merge only imports
-that bind identical content; assessment rechecks these values against the H
-assets after the H claim and before measurement.
+Merge only imports that bind identical content; assessment rechecks these
+values against the H assets after the H claim and before measurement.
 
 ```sh
 # Writes a reviewable merged file. It exits nonzero after writing if a human
@@ -63,7 +62,9 @@ uzushio judge label-merge --dataset data/p1/metadata.json --set H \
 ```
 
 Keep packet mappings, original answers, imports, adjudications, and the merged
-label artifact as pinned private inputs.
+label artifact as pinned private inputs. Every packet, import, and merge
+`--out` path must be new; these commands refuse to overwrite a prior review
+artifact.
 
 ## Finalist versus assessment
 
@@ -111,6 +112,10 @@ durable opening registry:
 uzushio judge assess --card data/p1/cards/selector-x-h.json --cmoa /path/to/cmoa \
   --out data/p1/assessments/selector-x-h --registry data/p1/holdout-registry --vault .
 ```
+
+Use the identical command with `--resume` only to continue that interrupted
+assessment. `--dry-run` still requires its card, output directory, and shared
+registry flags, while leaving H content and the registry unread and unchanged.
 
 Before opening H, the command checks pins. It atomically writes three O_EXCL
 claims per item: `conversation`, `source`, and `source_cluster`. Their keys are
