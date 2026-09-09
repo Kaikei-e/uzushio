@@ -566,7 +566,9 @@ propose)
   run="$TMPDIR_RUN"
   mkdir -p "$run/candidates"
   printf '%s' "$*" > "$run/argv.txt"
-  printf '{"run_id":"20260905T000000Z-abcdef01","harness":{"render":{"tree_sha256":"'"$UZ_DIGEST"'"}}}' > "$run/run.json"
+  if [ "$UZ_WRITE_RUN_JSON" = "true" ]; then
+    printf '%s' "$UZ_RUN_JSON" > "$run/run.json"
+  fi
   printf '{"status":"ok","usage":{"prompt_tokens":11,"completion_tokens":7}}' > "$run/candidates/a.json"
   echo "$run"
   ;;
@@ -576,6 +578,7 @@ select)
     if [ "$1" = "--run" ]; then run="$2"; fi
     shift
   done
+  : > "$run/select-called"
   printf '{"selection":{"kind":"selected","candidate_id":"a"}}' > "$run/select.json"
   echo "selected a"
   ;;
@@ -588,14 +591,19 @@ esac
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	const digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	runner := loop.CMoARunner{
 		Binary: script,
 		Config: filepath.Join(dir, "cmoa.json"),
-		Env:    []string{"TMPDIR_RUN=" + runDir, "UZ_DIGEST=deadbeef"},
+		Env: []string{
+			"TMPDIR_RUN=" + runDir,
+			"UZ_WRITE_RUN_JSON=true",
+			`UZ_RUN_JSON={"run_id":"20260905T000000Z-abcdef01","harness":{"render":{"tree_sha256":"` + digest + `"}}}`,
+		},
 	}
 	outcome, err := runner.Run(t.Context(), loop.Trial{
 		Task: "a-task", TaskDir: dir, Repeat: 1, Seed: 42,
-		Arm: loop.ArmEdit, Harness: dir, HarnessSHA256: "deadbeef",
+		Arm: loop.ArmEdit, Harness: dir, HarnessSHA256: digest,
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -616,13 +624,47 @@ esac
 		}
 	}
 
-	// A harness that read a different directory from the one the render
-	// describes invalidates the pair, not one trial in it.
-	_, err = runner.Run(t.Context(), loop.Trial{
-		Task: "a-task", TaskDir: dir, Arm: loop.ArmBase, Harness: dir, HarnessSHA256: "notthesame",
-	})
-	if err == nil {
-		t.Error("a harness digest mismatch was accepted")
+	// A trace must identify itself and prove which complete harness digest CMoA
+	// read before select is allowed to turn the proposal into a measurement.
+	for _, tc := range []struct {
+		name     string
+		write    bool
+		body     string
+		expected string
+	}{
+		{"missing run.json", false, "", digest},
+		{"malformed run.json", true, `{`, digest},
+		{"empty run id", true, `{"run_id":"","harness":{"render":{"tree_sha256":"` + digest + `"}}}`, digest},
+		{"empty actual digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":""}}}`, digest},
+		{"short actual digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":"deadbeef"}}}`, digest},
+		{"non-hex actual digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":"` + strings.Repeat("g", 64) + `"}}}`, digest},
+		{"mismatched digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":"` + strings.Repeat("b", 64) + `"}}}`, digest},
+		{"empty expected digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":"` + digest + `"}}}`, ""},
+		{"short expected digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":"` + digest + `"}}}`, "deadbeef"},
+		{"non-hex expected digest", true, `{"run_id":"a","harness":{"render":{"tree_sha256":"` + digest + `"}}}`, strings.Repeat("g", 64)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.Remove(filepath.Join(runDir, "select-called")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if err := os.Remove(filepath.Join(runDir, "run.json")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				t.Fatal(err)
+			}
+			runner.Env = []string{
+				"TMPDIR_RUN=" + runDir,
+				"UZ_WRITE_RUN_JSON=" + strconv.FormatBool(tc.write),
+				"UZ_RUN_JSON=" + tc.body,
+			}
+			_, err := runner.Run(t.Context(), loop.Trial{
+				Task: "a-task", TaskDir: dir, Arm: loop.ArmBase, Harness: dir, HarnessSHA256: tc.expected,
+			})
+			if !errors.Is(err, loop.ErrRun) {
+				t.Fatalf("Run error = %v, want ErrRun", err)
+			}
+			if _, err := os.Stat(filepath.Join(runDir, "select-called")); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("select ran after invalid run header: %v", err)
+			}
+		})
 	}
 }
 

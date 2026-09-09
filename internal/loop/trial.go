@@ -196,6 +196,11 @@ func (r CMoARunner) Run(ctx context.Context, trial Trial) (Outcome, error) {
 		o.WallMS = time.Since(started).Milliseconds()
 		return o, nil
 	}
+	if !isSHA256(trial.HarnessSHA256) {
+		return Outcome{}, fmt.Errorf(
+			"%w: task %s %s: render supplied invalid harness digest %q",
+			ErrRun, trial.Task, trial.Arm, trial.HarnessSHA256)
+	}
 
 	args := []string{
 		"propose",
@@ -226,14 +231,23 @@ func (r CMoARunner) Run(ctx context.Context, trial Trial) (Outcome, error) {
 	// not what the record says they were, which invalidates the pair rather
 	// than one trial in it, so it is an error rather than an outcome.
 	var header runFile
-	if err := readJSON(filepath.Join(outcome.RunDir, "run.json"), &header); err == nil {
-		outcome.RunID = header.RunID
-		got := header.Harness.Render.TreeSHA256
-		if got != "" && trial.HarnessSHA256 != "" && got != trial.HarnessSHA256 {
-			return Outcome{}, fmt.Errorf(
-				"%w: task %s %s: the harness read a directory with digest %s, the render says %s",
-				ErrRun, trial.Task, trial.Arm, got, trial.HarnessSHA256)
-		}
+	if err := readJSON(filepath.Join(outcome.RunDir, "run.json"), &header); err != nil {
+		return Outcome{}, fmt.Errorf("%w: task %s %s: read CMoA run header: %w", ErrRun, trial.Task, trial.Arm, err)
+	}
+	if strings.TrimSpace(header.RunID) == "" {
+		return Outcome{}, fmt.Errorf("%w: task %s %s: CMoA run header has no run_id", ErrRun, trial.Task, trial.Arm)
+	}
+	outcome.RunID = header.RunID
+	got := header.Harness.Render.TreeSHA256
+	if !isSHA256(got) {
+		return Outcome{}, fmt.Errorf(
+			"%w: task %s %s: CMoA run header has invalid harness digest %q",
+			ErrRun, trial.Task, trial.Arm, got)
+	}
+	if got != trial.HarnessSHA256 {
+		return Outcome{}, fmt.Errorf(
+			"%w: task %s %s: the harness read a directory with digest %s, the render says %s",
+			ErrRun, trial.Task, trial.Arm, got, trial.HarnessSHA256)
 	}
 
 	args = []string{"select", "--task", trial.TaskDir, "--run", outcome.RunDir}
@@ -273,6 +287,17 @@ func (r CMoARunner) Run(ctx context.Context, trial Trial) (Outcome, error) {
 	r.logf("select %s %s -> %s", trial.Task, trial.Arm, outcome.SelectionKind)
 	outcome.RunDir = relativeTo(trial.SuiteDir, outcome.RunDir)
 	return finish(outcome)
+}
+
+// isSHA256 reports whether digest is a complete SHA-256 digest as the two
+// renderers record it. An absent or malformed digest cannot establish that the
+// prompt CMoA read was the harness uzushio rendered.
+func isSHA256(digest string) bool {
+	if len(digest) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
 }
 
 func (r CMoARunner) logf(format string, a ...any) {
