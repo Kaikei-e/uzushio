@@ -56,3 +56,21 @@
 
 # Local saved-response comparison reports contain generated run details.
 /examples/suite-chat/cards/*-saved-comparison-*/
+
+# Private P1 evaluation data includes synthetic pilot content, its generators,
+# anonymized packets, human labels, holdout membership and execution artifacts.
+/local/
+/docs/internal/
+/data/
+/datasets/
+/evaluation-data/
+/private/
+/examples/p1-chat/
+/examples/p1-code/
+**/label-packets/
+**/holdout-registry/
+**/assessment-*/
+**/packet.md
+**/mapping.json
+**/answers.json
+**/annotations.json
