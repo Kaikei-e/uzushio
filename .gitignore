@@ -53,3 +53,6 @@
 # is a placeholder in every committed card (see examples/suite-chat/cards).
 /examples/suite-chat/cards/trial-*/
 /examples/suite-chat/cards/cmoa-*.json
+
+# Local saved-response comparison reports contain generated run details.
+/examples/suite-chat/cards/*-saved-comparison-*/
