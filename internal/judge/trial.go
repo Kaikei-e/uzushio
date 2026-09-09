@@ -1522,13 +1522,19 @@ func Trial(ctx context.Context, opts TrialOptions) (TrialResult, error) {
 				"or name another --out. A trial never re-runs a step it has recorded",
 			ErrJudge, journal, len(done))
 	}
+	if err := CheckPlan(opts.Card, opts.Manifests); err != nil {
+		return TrialResult{}, err
+	}
+	plan := opts.Plan()
+	// A results journal is meaningful only for the exact measurement that
+	// created it. Check and, on the first pass, persist that identity before
+	// opening the journal, preregistering, or launching any inference.
+	if err := ensureTrialResumeState(opts, plan, len(done) > 0); err != nil {
+		return TrialResult{}, err
+	}
 	completed := map[TrialStep]bool{}
 	for _, record := range done {
 		completed[record.Key()] = true
-	}
-
-	if err := CheckPlan(opts.Card, opts.Manifests); err != nil {
-		return TrialResult{}, err
 	}
 
 	run := &trialRun{
@@ -1550,7 +1556,6 @@ func Trial(ctx context.Context, opts TrialOptions) (TrialResult, error) {
 	}
 	run.loadSeconds = loaded.Sub(started).Seconds()
 
-	plan := opts.Plan()
 	// The order and the composition are written down before the first call.
 	// A set whose order is settled after the numbers are in is a set that was
 	// chosen for its answer, and the only way to tell the two apart later is

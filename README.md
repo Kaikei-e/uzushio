@@ -678,7 +678,11 @@ The resume unit is one **(item, condition)** step, because `Judge.Run` does not
 promise resumption inside a run. Each finished step is appended to
 `results.jsonl` and flushed, `--resume` skips every step already there and never
 asks about it again, and running without `--resume` over a non-empty journal is
-refused rather than silently redone.
+refused rather than silently redone. `resume.json` fingerprints the card inputs,
+condition configurations, and the condition binaries; all must still match before
+a journal can resume. A journal from an older trial therefore needs a new `--out`,
+not a resumed run. The budget may be extended when resuming, but `T_eval` remains
+the time for each completed pass, never a cumulative total across passes.
 
 The time box stops **new measured work** only; a reused base still runs, so
 items stay paired. What the budget dropped is in the report by name —

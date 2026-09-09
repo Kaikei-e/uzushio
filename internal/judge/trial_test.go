@@ -606,6 +606,157 @@ func TestTrialResumeNeverAsksTwice(t *testing.T) {
 	}
 }
 
+func TestTrialResumeRefusesChangedMeasurementInputs(t *testing.T) {
+	for _, row := range []struct {
+		name       string
+		withLabels bool
+		mutate     func(*trialFixture, *TrialOptions)
+	}{
+		{"suite input", false, func(f *trialFixture, _ *TrialOptions) {
+			trialWrite(f.t, filepath.Join(f.suite.Dir, "suite.json"), "{}\n")
+		}},
+		{"task declaration", false, func(f *trialFixture, _ *TrialOptions) {
+			trialWrite(f.t, filepath.Join(f.suite.TaskDir(taskOf(f.suite, "i1")), "task.json"), "{}\n")
+		}},
+		{"configuration bytes", false, func(f *trialFixture, opts *TrialOptions) {
+			trialJSON(f.t, opts.Card.Candidate.Config, map[string]any{"version": 2, "judge": judgeBlock(map[string]any{"max_tokens": 256})})
+		}},
+		{"candidate bytes", false, func(f *trialFixture, opts *TrialOptions) {
+			trialWrite(f.t, filepath.Join(f.suite.TaskDir(taskOf(f.suite, "i1")), "candidates", "c1.txt"), "changed answer\n")
+		}},
+		{"conversation bytes", false, func(f *trialFixture, opts *TrialOptions) {
+			trialWrite(f.t, filepath.Join(f.suite.TaskDir(taskOf(f.suite, "i1")), "conversation.json"), "[]\n")
+		}},
+		{"rubric bytes", false, func(f *trialFixture, opts *TrialOptions) {
+			trialWrite(f.t, filepath.Join(f.suite.TaskDir(taskOf(f.suite, "i1")), "rubric.md"), "changed rubric\n")
+		}},
+		{"gold bytes", false, func(f *trialFixture, _ *TrialOptions) {
+			trialJSON(f.t, filepath.Join(f.suite.TaskDir(taskOf(f.suite, "i1")), "gold.json"), map[string]any{"schema_version": 1, "gold": "c2"})
+		}},
+		{"label bytes", true, func(f *trialFixture, _ *TrialOptions) {
+			trialWrite(f.t, filepath.Join(f.root, "labels.jsonl"), "{\"schema_version\":1,\"item\":\"i1\",\"labeler\":\"owner\",\"choice\":\"c2\"}\n")
+		}},
+		{"plan", false, func(_ *trialFixture, opts *TrialOptions) {
+			opts.Manifests[0].Items[0], opts.Manifests[0].Items[1] = opts.Manifests[0].Items[1], opts.Manifests[0].Items[0]
+		}},
+		{"condition", false, func(_ *trialFixture, opts *TrialOptions) { opts.Card.Candidate.ID = "cand-2" }},
+		{"seed", false, func(_ *trialFixture, opts *TrialOptions) { opts.Card.Seed = 2 }},
+		{"build", false, func(_ *trialFixture, opts *TrialOptions) { opts.Card.Candidate.CMoA = "other-cmoa" }},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1"})
+			if row.withLabels {
+				trialWrite(t, filepath.Join(f.root, "labels.jsonl"), "{\"schema_version\":1,\"item\":\"i1\",\"labeler\":\"owner\",\"choice\":\"c1\"}\n")
+			}
+			card := f.card("resume-inputs", []string{"i1", "i2"}, func(m *map[string]any) {
+				(*m)["budget_seconds"] = 5
+				if row.withLabels {
+					(*m)["labels"] = []string{filepath.Join(f.root, "labels.jsonl")}
+				}
+			})
+			out := filepath.Join(t.TempDir(), "out")
+			opts := f.options(card, out)
+			if _, err := Trial(context.Background(), opts); err != nil {
+				t.Fatalf("first pass: %v", err)
+			}
+			calls := len(f.runner.Calls)
+			row.mutate(f, &opts)
+			opts.Resume = true
+			opts.Card.BudgetSeconds = 600 // execution budget may be extended.
+			if _, err := Trial(context.Background(), opts); err == nil || !strings.Contains(err.Error(), "different trial inputs") {
+				t.Fatalf("want changed-input refusal, got %v", err)
+			}
+			if len(f.runner.Calls) != calls {
+				t.Fatalf("changed resume asked a new question: %v", f.runner.Calls)
+			}
+		})
+	}
+}
+
+func TestTrialResumeWritesIdentityBeforeTheFirstInference(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1"})
+	card := f.card("resume-identity-first", []string{"i1"}, nil)
+	out := filepath.Join(t.TempDir(), "out")
+	f.runner.Before = func(_, _ string) {
+		if _, err := os.Stat(filepath.Join(out, trialResumeFile)); err != nil {
+			t.Fatalf("resume identity is absent before inference: %v", err)
+		}
+	}
+	if _, err := Trial(context.Background(), f.options(card, out)); err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+}
+
+func TestTrialResumeRefusesJournalWithoutIdentity(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1", "i2": "c1"})
+	card := f.card("resume-missing-identity", []string{"i1", "i2"}, func(m *map[string]any) { (*m)["budget_seconds"] = 5 })
+	out := filepath.Join(t.TempDir(), "out")
+	opts := f.options(card, out)
+	if _, err := Trial(context.Background(), opts); err != nil {
+		t.Fatalf("first pass: %v", err)
+	}
+	if err := os.Remove(filepath.Join(out, trialResumeFile)); err != nil {
+		t.Fatalf("remove identity: %v", err)
+	}
+	calls := len(f.runner.Calls)
+	opts.Resume = true
+	if _, err := Trial(context.Background(), opts); err == nil || !strings.Contains(err.Error(), "no resume identity") {
+		t.Fatalf("want missing-identity refusal, got %v", err)
+	}
+	if len(f.runner.Calls) != calls {
+		t.Fatalf("missing identity asked a new question: %v", f.runner.Calls)
+	}
+}
+
+func TestTrialResumeFingerprintHashesDefaultBinary(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1"})
+	card := f.card("resume-binary", []string{"i1"}, nil)
+	opts := f.options(card, filepath.Join(t.TempDir(), "out"))
+	binary := filepath.Join(f.root, "bin", "cmoa")
+	trialWrite(t, binary, "first build\n")
+	opts.Runner = CMoATrialRunner{Binary: binary}
+	first, err := resumeFingerprint(opts, opts.Plan())
+	if err != nil {
+		t.Fatalf("first fingerprint: %v", err)
+	}
+	trialWrite(t, binary, "second build\n")
+	second, err := resumeFingerprint(opts, opts.Plan())
+	if err != nil {
+		t.Fatalf("second fingerprint: %v", err)
+	}
+	if first.Fingerprint == second.Fingerprint {
+		t.Fatal("changing the default CMoA binary did not change the resume fingerprint")
+	}
+}
+
+func TestTrialResumeRefusesChangedCMoABinary(t *testing.T) {
+	f := newTrialFixture(t, map[string]string{"i1": "c1"})
+	card := f.card("resume-real-binary", []string{"i1"}, nil)
+	out := filepath.Join(t.TempDir(), "out")
+	opts := f.options(card, out)
+	binary := filepath.Join(f.root, "bin", "cmoa")
+	trialWrite(t, binary, "#!/bin/sh\nexit 0\n")
+	if err := os.Chmod(binary, 0o755); err != nil {
+		t.Fatalf("make fake binary executable: %v", err)
+	}
+	opts.Runner = CMoATrialRunner{Binary: binary}
+	plan := opts.Plan()
+	if err := ensureTrialResumeState(opts, plan, false); err != nil {
+		t.Fatalf("write resume identity: %v", err)
+	}
+	record := TrialRecord{Item: "i1", Set: SetD, Condition: ConditionCandidate}
+	body, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("marshal journal record: %v", err)
+	}
+	trialWrite(t, filepath.Join(out, TrialResultsFile), string(body)+"\n")
+	trialWrite(t, binary, "#!/bin/sh\necho changed\n")
+	opts.Resume = true
+	if _, err := Trial(context.Background(), opts); err == nil || !strings.Contains(err.Error(), "different trial inputs") {
+		t.Fatalf("want changed-binary refusal, got %v", err)
+	}
+}
+
 func TestTrialReusesOnlyAMatchingKey(t *testing.T) {
 	for _, row := range []struct {
 		name     string
