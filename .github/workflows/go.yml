@@ -57,7 +57,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install docdag
-        run: go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.4.0
+        run: go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.4.1
       - name: Validate the specification vault
         run: docdag validate
       # --all is the configuration, the corpus and the fixtures in one report;

@@ -30,9 +30,9 @@ jobs:
         if: github.event_name == 'schedule'
         shell: bash
         run: echo "DOCDAG_AS_OF=$(date -I)" >> "$GITHUB_ENV"
-      - uses: Kaikei-e/DocDag@v0.4.0
+      - uses: Kaikei-e/DocDag@v0.4.1
         with:
-          version: v0.4.0
+          version: v0.4.1
           args: validate --format github
       - if: always()
         shell: bash
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Kaikei-e/DocDag@v0.4.0
+      - uses: Kaikei-e/DocDag@v0.4.1
         with:
-          version: v0.4.0
+          version: v0.4.1
           args: lint --all --format github

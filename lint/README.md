@@ -63,8 +63,8 @@ and one per projection whose truth a rule or the binding set reads:
 
 These are **byte copies** of the fixtures DocDag ships for the `spec` preset's
 own rules and structural checks, taken from
-[`testdata/lint/spec/`](https://github.com/Kaikei-e/DocDag/tree/v0.4.0/testdata/lint/spec)
-at **v0.4.0**:
+[`testdata/lint/spec/`](https://github.com/Kaikei-e/DocDag/tree/v0.4.1/testdata/lint/spec)
+at **v0.4.1**:
 
 ```
 deviation_pressure  excepts_strict     interop_not_must  may_without_interop

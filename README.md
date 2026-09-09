@@ -1124,7 +1124,7 @@ regression is rejected either way.
 
 ## The specification is a graph
 
-The corpus is a [DocDag](https://github.com/Kaikei-e/DocDag) v0.4.0 `spec`
+The corpus is a [DocDag](https://github.com/Kaikei-e/DocDag) v0.4.1 `spec`
 graph: clauses with a BCP 14 modality, the conformance tests that enforce
 them, and the topics, principles, premises and post-mortems they rest on.
 `docdag.yaml` is `preset: spec`; kind directories live under `spec/`.
@@ -1192,7 +1192,7 @@ separate corpus with its own `docs/adr/docdag.yaml`
 
 ```sh
 go install github.com/Kaikei-e/uzushio/cmd/uzushio@latest
-go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.4.0
+go install github.com/Kaikei-e/DocDag/cmd/docdag@v0.4.1
 ```
 
 Both install into `$(go env GOPATH)/bin`. From a checkout:
@@ -1207,7 +1207,7 @@ make e2e        # the health check against real docker and a real cmoa
 `go test ./...` needs neither docker nor a `cmoa`: the health check is driven
 through a fake runner, and the one test that uses the real thing is gated on
 `UZUSHIO_E2E=1`. CI runs `go vet`, `go test`, `go build`, golangci-lint and `make check`, then
-installs DocDag v0.4.0 from source and runs `validate`, `lint --all` and every
+installs DocDag v0.4.1 from source and runs `validate`, `lint --all` and every
 conformance test under `tests/conform/`. On a pull request it also refuses a
 rewritten or deleted record. Locally, `pre-commit install` runs `validate` and
 `lint` on Markdown and `docdag.yaml` edits; the hook builds `docdag` from

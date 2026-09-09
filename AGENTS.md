@@ -40,7 +40,7 @@ CIの詳細は `.github/workflows/` を参照する。
 | 案内文書のみ | 参照先・記載コマンド・差分を確認。Goテストや再生成は不要 |
 
 - `make build` は `bin/uzushio` を作る。`./bin/uzushio --help` でCLIを確認する。
-- `make lint` にはgolangci-lintが必要。DocDagはこのリポジトリの依存・CIに合わせたv0.4.0を使う。隣接するCMoAの指定バージョンとは区別する。
+- `make lint` にはgolangci-lintが必要。DocDagはこのリポジトリの依存・CIに合わせたv0.4.1を使う。隣接するCMoAの指定バージョンとは区別する。
 - `make docdag` は `docdag validate`、`docdag lint --all`、`docdag validate --config docs/adr/docdag.yaml` を実行する。ADR corpusには仕様用の `lint --all` を適用しない。
 - 履歴を変更する作業では、`origin/main` が利用可能なら `docdag validate --immutable-since origin/main` とCIの履歴チェックも確認する。ブランチ間diffだけでは未コミット変更を検証できないため、作業ツリーの差分も読む。
 - 通常の `go test ./...` は実E2Eを除外する。実CMoA・Dockerを通すdoctorの確認は `make e2e CMOA=/path/to/cmoa`。モデルを使う校正・改善の実行はREADMEの前提を満たす統合作業で行う。
