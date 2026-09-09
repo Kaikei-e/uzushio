@@ -334,6 +334,34 @@ func TestConvertsAMemoryDiffIntoAnEditWhoseBodyIsTheFile(t *testing.T) {
 	}
 }
 
+func TestConvertsAMemoryDiffWithRelativeWork(t *testing.T) {
+	requireGit(t)
+	dir := harness(t, nil)
+	work := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relativeWork, err := filepath.Rel(wd, work)
+	if err != nil {
+		t.Skipf("no relative path to work: %v", err)
+	}
+	runner := newFakeRunner(t, map[string]string{"alpha": newFileDiff("memory/relative-work.md", "relative work is valid\n")}, nil)
+	candidates, err := proposeedit.Candidates(runner.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposals, refusals, err := proposeedit.Convert(context.Background(), candidates, proposeedit.ConvertOptions{
+		Harness: dir, Pattern: pattern(), Day: "2026-09-05", Work: relativeWork,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refusals) != 0 || len(proposals) != 1 {
+		t.Fatalf("proposals %d refusals %+v", len(proposals), refusals)
+	}
+}
+
 func TestConvertsASystemPromptDiffIntoASidecar(t *testing.T) {
 	requireGit(t)
 	dir := harness(t, map[string]string{"system-prompt.md": "Be careful.\n"})

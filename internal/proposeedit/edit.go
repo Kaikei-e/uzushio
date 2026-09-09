@@ -112,7 +112,11 @@ func convertOne(ctx context.Context, candidate Candidate, o ConvertOptions, work
 	if err := os.WriteFile(diffPath, candidate.Diff, 0o644); err != nil {
 		return Proposal{}, "", fmt.Errorf("%w: %w", ErrPropose, err)
 	}
-	if _, err := git(ctx, repo, "apply", "--index", "--whitespace=nowarn", diffPath); err != nil {
+	absoluteDiffPath, err := filepath.Abs(diffPath)
+	if err != nil {
+		return Proposal{}, "", fmt.Errorf("%w: make candidate diff path absolute: %w", ErrPropose, err)
+	}
+	if _, err := git(ctx, repo, "apply", "--index", "--whitespace=nowarn", absoluteDiffPath); err != nil {
 		return Proposal{}, "the diff does not apply to the rendered harness", nil
 	}
 	changes, reason, err := changedPaths(ctx, repo)
